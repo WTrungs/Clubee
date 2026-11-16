@@ -1,2 +1,2 @@
-# SE100-TopClub
+# Clubee
 This is an academic project.
