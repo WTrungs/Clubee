@@ -1,0 +1,20 @@
+name: Check source branch
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, reopened, synchronize, edited]
+
+jobs:
+  check-source:
+    name: check-source
+    runs-on: ubuntu-latest
+    steps:
+      - name: Only allow dev -> main
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          if [ "$HEAD_REF" != "dev" ]; then
+            echo "::error::Chỉ được merge PR từ nhánh dev vào main (hiện tại: $HEAD_REF)"
+            exit 1
+          fi
