@@ -1,0 +1,235 @@
+import { CheckCheck, CircleCheck, Info, ListChecks, TriangleAlert, UserRoundCog } from 'lucide-react'
+import { formatEventTime, eventStatusDisplay } from '@/features/event/viewModel/eventDisplay'
+import { taskStatusDisplay } from '@/features/task/viewModel/taskDisplay'
+import { formatDateTime } from '@/shared/format/formatDate'
+import { formatMoney } from '@/shared/format/formatMoney'
+import { cn } from '@/shared/lib/cn'
+import { Badge } from '@/shared/ui/Badge'
+import { Button } from '@/shared/ui/Button'
+import { ConfirmDialog } from '@/shared/ui/ConfirmDialog'
+import { FilterChip, Pagination } from '@/shared/ui/ListControls'
+import { ProgressBar } from '@/shared/ui/ProgressBar'
+import { Skeleton } from '@/shared/ui/Skeleton'
+import { EmptyState, ErrorState } from '@/shared/ui/StateViews'
+import { Tabs, TabsBar } from '@/shared/ui/Tabs'
+import type { Handover, HandoverItem } from '../model/handoverTypes'
+import { canConfirmItem, eventLeadText, handoverItemStatusDisplay, needsDecisionDialog, progressText } from '../viewModel/handoverDisplay'
+import { useHandoverItemsViewModel, type HandoverItemsViewModel } from '../viewModel/useHandoverItemsViewModel'
+import { EventLeadDecisionDialog } from './EventLeadDecisionDialog'
+
+function ItemFacts({ item }: { item: HandoverItem }) {
+  if (item.fund) {
+    return (
+      <p className="text-sm text-muted-foreground">
+        Số dư <span className="font-semibold text-foreground tabular-nums">{formatMoney(item.fund.balance)}</span>
+        {' · '}
+        {item.fund.pendingCount > 0 ? (
+          <span className="font-medium text-status-warning">{item.fund.pendingCount} khoản chờ duyệt hoặc chờ ghi sổ</span>
+        ) : (
+          'Không có khoản chờ'
+        )}
+      </p>
+    )
+  }
+  if (item.event) {
+    return (
+      <div className="space-y-0.5 text-sm text-muted-foreground">
+        <p>
+          {eventStatusDisplay[item.event.status].label} · {formatEventTime(item.event)}
+        </p>
+        <p>
+          Trưởng BTC: <span className="font-medium text-foreground">{item.event.lead?.fullName ?? 'chưa có'}</span>
+          {item.event.openTaskCount > 0 && ` · ${item.event.openTaskCount} việc của tiểu ban chưa xong`}
+        </p>
+      </div>
+    )
+  }
+  if (item.task) {
+    return (
+      <div className="space-y-0.5 text-sm text-muted-foreground">
+        <p>
+          Ban {item.task.departmentName} · {taskStatusDisplay[item.task.status].label}
+        </p>
+        <p>
+          Người làm <span className="font-medium text-foreground">{item.task.owner.fullName}</span> · Người giao {item.task.assigner.fullName}
+        </p>
+        <p>
+          Hạn {formatDateTime(item.task.dueAt)}
+          {item.task.overdue && <span className="font-medium text-status-danger"> · Quá hạn</span>}
+        </p>
+      </div>
+    )
+  }
+  return null
+}
+
+function ItemAction({ item, vm }: { item: HandoverItem; vm: HandoverItemsViewModel }) {
+  if (!canConfirmItem(item)) return null
+  const decision = needsDecisionDialog(item)
+  const label = !decision ? 'Xác nhận' : item.status === 'CONFIRMED' ? 'Đổi quyết định' : 'Giữ hoặc thay Trưởng BTC'
+  return (
+    <Button
+      variant={item.status === 'CONFIRMED' ? 'outline' : 'primary'}
+      className="w-full sm:w-auto"
+      loading={vm.isConfirming(item.id)}
+      disabled={vm.locked}
+      onClick={() => vm.confirmItem(item)}
+      aria-label={`${label}: ${item.title}`}
+    >
+      {decision ? <UserRoundCog aria-hidden /> : <CircleCheck aria-hidden />}
+      {label}
+    </Button>
+  )
+}
+
+function ItemRow({ item, vm }: { item: HandoverItem; vm: HandoverItemsViewModel }) {
+  const status = handoverItemStatusDisplay[item.status]
+  return (
+    <li className="flex flex-col gap-3 p-4 sm:flex-row sm:items-start sm:justify-between">
+      <div className="min-w-0 flex-1 space-y-1.5">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <p className="text-sm font-semibold break-words">{item.title}</p>
+          <Badge tone={status.tone} dot>
+            {status.label}
+          </Badge>
+        </div>
+        <ItemFacts item={item} />
+        {item.eventLead && (
+          <p className="text-sm font-medium">
+            {eventLeadText(item.eventLead)}
+            <span className="font-normal text-muted-foreground"> (áp dụng khi bàn giao hoàn tất)</span>
+          </p>
+        )}
+        {item.note && (
+          <p
+            className={cn(
+              'flex items-start gap-2 rounded-lg p-2.5 text-sm',
+              item.status === 'PENDING' ? 'bg-status-warning-soft font-medium text-status-warning' : 'bg-muted text-muted-foreground',
+            )}
+          >
+            {item.status === 'PENDING' ? <TriangleAlert aria-hidden className="mt-0.5 size-4 shrink-0" /> : <Info aria-hidden className="mt-0.5 size-4 shrink-0" />}
+            {item.note}
+          </p>
+        )}
+        {item.confirmedBy && item.confirmedAt && (
+          <p className="text-xs text-muted-foreground">
+            Xác nhận bởi {item.confirmedBy.fullName} · {formatDateTime(item.confirmedAt)}
+          </p>
+        )}
+      </div>
+      <ItemAction item={item} vm={vm} />
+    </li>
+  )
+}
+
+function ItemList({ vm }: { vm: HandoverItemsViewModel }) {
+  if (vm.loading) {
+    return (
+      <div role="status" aria-label="Đang tải danh mục bàn giao" className="space-y-2">
+        <Skeleton className="h-24 rounded-xl" />
+        <Skeleton className="h-24 rounded-xl" />
+      </div>
+    )
+  }
+  if (vm.error) return <ErrorState error={vm.error} onRetry={vm.refetch} />
+  if (vm.items.length === 0) {
+    return (
+      <EmptyState
+        icon={ListChecks}
+        title={vm.status === '' ? `Không có mục ${vm.kindLabel.toLowerCase()} nào` : 'Không có mục nào ở trạng thái này'}
+        description={vm.status === '' ? 'Danh mục tự cập nhật theo dữ liệu hiện tại của CLB.' : 'Chọn bộ lọc khác để xem các mục còn lại.'}
+      />
+    )
+  }
+  return (
+    <ul aria-label={`Mục bàn giao: ${vm.kindLabel}`} className="divide-y rounded-xl border">
+      {vm.items.map((item) => (
+        <ItemRow key={item.id} item={item} vm={vm} />
+      ))}
+    </ul>
+  )
+}
+
+function BatchBar({ vm }: { vm: HandoverItemsViewModel }) {
+  if (!vm.canConfirm || vm.batch.length === 0) return null
+  return (
+    <div className="flex flex-col gap-3 rounded-xl bg-muted p-3 sm:flex-row sm:items-center sm:justify-between">
+      <p className="text-sm">
+        <span className="font-semibold">{vm.batch.length} mục</span> chờ xác nhận ở trang này
+        {vm.batchSkipped > 0 && `; ${vm.batchSkipped} sự kiện cần chọn Trưởng BTC nên xác nhận riêng`}.
+      </p>
+      <Button variant="outline" className="w-full sm:w-auto" disabled={vm.locked} onClick={vm.openBatch}>
+        <CheckCheck aria-hidden />
+        Xác nhận các mục đang hiện
+      </Button>
+    </div>
+  )
+}
+
+/** FR-TERM-04, 05: danh mục bàn giao theo loại, người được bầu vào ban chủ nhiệm mới xác nhận từng mục. */
+export function HandoverItemsSection({ handover }: { handover: Handover }) {
+  const vm = useHandoverItemsViewModel(handover)
+  const progress = { pending: handover.counts.pending, confirmed: handover.counts.confirmed }
+  const open = handover.status === 'OPEN'
+
+  return (
+    <section aria-labelledby="handover-items-title" className="space-y-4 rounded-2xl border bg-card p-5 shadow-sm">
+      <div className="space-y-1">
+        <h2 id="handover-items-title" className="text-base font-bold">
+          Danh mục bàn giao
+        </h2>
+        <p className="text-sm text-muted-foreground">
+          {!open
+            ? 'Danh mục giữ nguyên như lúc bàn giao hoàn tất.'
+            : vm.canConfirm
+              ? 'Xem từng mục rồi xác nhận đã nhận bàn giao. Mục đổi sau khi xác nhận sẽ quay về Chờ xác nhận.'
+              : 'Người được bầu Chủ nhiệm, Phó chủ nhiệm, Thủ quỹ mới xác nhận từng mục. Mục đổi sau khi xác nhận sẽ quay về Chờ xác nhận.'}
+        </p>
+      </div>
+
+      <div className="space-y-2">
+        <p className="text-sm font-medium">{progressText(progress)}</p>
+        <ProgressBar value={progress.confirmed} max={progress.pending + progress.confirmed} label="Tiến độ xác nhận bàn giao" tone="success" />
+      </div>
+
+      <Tabs value={vm.kind} onValueChange={vm.setKind}>
+        <TabsBar items={vm.kindTabs} active={vm.kind} aria-label="Loại mục bàn giao (số mục chờ xác nhận)" />
+      </Tabs>
+
+      <div role="group" aria-label="Lọc theo trạng thái" className="flex flex-wrap gap-2">
+        {vm.statusFilters.map((filter) => (
+          <FilterChip key={filter.value || 'ALL'} label={filter.label} count={filter.count} selected={vm.status === filter.value} onToggle={() => vm.setStatus(filter.value)} />
+        ))}
+      </div>
+
+      <div role="status" aria-atomic="true">
+        {vm.notice && (
+          <p
+            className={cn(
+              'flex items-start gap-2 rounded-xl p-3 text-sm font-medium',
+              vm.notice.tone === 'warning' ? 'bg-status-warning-soft text-status-warning' : 'bg-status-danger-soft text-status-danger',
+            )}
+          >
+            <TriangleAlert aria-hidden className="mt-0.5 size-4 shrink-0" />
+            {vm.notice.message}
+          </p>
+        )}
+      </div>
+
+      <BatchBar vm={vm} />
+      <ItemList vm={vm} />
+      <Pagination page={vm.page} totalPages={vm.totalPages} totalElements={vm.totalElements} pageSize={vm.pageSize} onPageChange={vm.setPage} />
+
+      <ConfirmDialog
+        open={vm.batchOpen}
+        onOpenChange={(next) => !next && vm.closeBatch()}
+        title="Xác nhận các mục đang hiện"
+        description={`Xác nhận đã nhận bàn giao ${vm.batch.length} mục ${vm.kindLabel.toLowerCase()} đang hiện ở trang này. Mục nào đổi sau khi xác nhận sẽ quay về Chờ xác nhận.`}
+        confirmLabel={`Xác nhận ${vm.batch.length} mục`}
+        pending={vm.batchPending}
+        onConfirm={vm.confirmBatch}
+      />
+      <EventLeadDecisionDialog items={vm} />
+    </section>
+  )
+}
