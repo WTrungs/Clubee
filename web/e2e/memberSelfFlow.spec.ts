@@ -1,0 +1,65 @@
+import { expect, test } from '@playwright/test'
+import { loginAs, openNavLink, settleToast as settle, snap, switchUser } from './helpers.ts'
+
+test.describe('Tư cách của tôi', () => {
+  test('xin tạm nghỉ, ban chủ nhiệm duyệt, rồi tự quay lại; còn việc thì chưa rời được', async ({ page }, testInfo) => {
+    await loginAs(page, 'ha.le@demo.test')
+    await page.goto('/clubs/c-guitar/members')
+    const card = page.getByRole('region', { name: 'Tư cách của tôi' })
+    await expect(card.getByText('Chính thức')).toBeVisible()
+
+    await card.getByRole('button', { name: 'Xin rời CLB' }).click()
+    const resign = page.getByRole('dialog', { name: 'Xin rời CLB' })
+    await expect(resign.getByText(/^Việc bạn đang làm \(\d+\)$/)).toBeVisible()
+    await expect(resign.getByRole('button', { name: 'Rời CLB' })).toHaveCount(0)
+    await snap(page, testInfo, 'resignBlocked', { fullPage: false })
+    await resign.getByRole('button', { name: 'Đóng' }).first().click()
+
+    await card.getByRole('button', { name: 'Xin tạm nghỉ' }).click()
+    const ask = page.getByRole('dialog', { name: 'Xin tạm nghỉ' })
+    await ask.getByRole('textbox', { name: 'Lý do' }).fill('Ôn thi cuối kỳ trong một tháng.')
+    await ask.getByRole('button', { name: 'Gửi yêu cầu' }).click()
+    await settle(page, 'Đã gửi yêu cầu tạm nghỉ. Ban chủ nhiệm sẽ xem xét.')
+    await expect(card.getByText('Chờ duyệt')).toBeVisible()
+    await expect(card.getByRole('button', { name: 'Rút yêu cầu tạm nghỉ' })).toBeVisible()
+    await snap(page, testInfo, 'myMembershipPending')
+
+    await switchUser(page, 'Lê Thu Hà', 'anh.nguyen@demo.test')
+    await openNavLink(page, 'Thành viên')
+    await page.getByRole('tab', { name: /Xin tạm nghỉ/ }).click()
+    const request = page.getByRole('listitem').filter({ has: page.getByRole('heading', { name: 'Lê Thu Hà' }) })
+    await expect(request.getByText('Ôn thi cuối kỳ trong một tháng.')).toBeVisible()
+    await snap(page, testInfo, 'leaveRequests')
+    await request.getByRole('button', { name: 'Duyệt' }).click()
+    await page.getByRole('dialog', { name: 'Duyệt tạm nghỉ' }).getByRole('button', { name: 'Duyệt' }).click()
+    await settle(page, 'Lê Thu Hà đã chuyển sang Tạm nghỉ.')
+    await expect(request).toHaveCount(0)
+
+    await switchUser(page, 'Nguyễn Minh Anh', 'ha.le@demo.test')
+    await openNavLink(page, 'Thành viên')
+    await expect(card.getByText('Tạm nghỉ', { exact: true })).toBeVisible()
+    await card.getByRole('button', { name: 'Quay lại sinh hoạt' }).click()
+    await page.getByRole('dialog', { name: 'Quay lại sinh hoạt' }).getByRole('button', { name: 'Quay lại' }).click()
+    await expect(page.getByText('Chào mừng bạn quay lại sinh hoạt.')).toBeVisible()
+    await expect(card.getByText('Chính thức')).toBeVisible()
+  })
+
+  test('không còn tồn thì xin rời có hiệu lực ngay và CLB biến khỏi danh sách', async ({ page }, testInfo) => {
+    await loginAs(page, 'tram.ngo@demo.test')
+    await page.goto('/clubs/c-guitar/members')
+    const card = page.getByRole('region', { name: 'Tư cách của tôi' })
+    await card.getByRole('button', { name: 'Xin rời CLB' }).click()
+    const resign = page.getByRole('dialog', { name: 'Xin rời CLB' })
+    await resign.getByRole('button', { name: 'Rời CLB' }).click()
+    await expect(resign.getByText('Vui lòng nhập ít nhất 5 ký tự.')).toBeVisible()
+    await resign.getByRole('textbox', { name: 'Lý do rời' }).fill('Chuyển trường vào học kỳ sau.')
+    await snap(page, testInfo, 'resignDialog', { fullPage: false })
+    await resign.getByRole('button', { name: 'Rời CLB' }).click()
+    await expect(page.getByText('Bạn đã rời CLB Guitar Sinh viên.')).toBeVisible()
+    await page.waitForURL('**/clubs')
+    // Trâm chỉ thuộc CLB Guitar, nên rời xong thì danh sách CLB của tôi rỗng.
+    await expect(page.getByRole('heading', { name: 'CLB của tôi' })).toBeVisible()
+    await expect(page.getByText('Bạn chưa tham gia CLB nào')).toBeVisible()
+    await expect(page.getByRole('button', { name: /CLB Guitar Sinh viên/ })).toHaveCount(0)
+  })
+})
