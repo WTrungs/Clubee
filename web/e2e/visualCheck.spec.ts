@@ -1,10 +1,18 @@
 import { expect, test } from '@playwright/test'
-import { loginAs, snap, useDarkTheme } from './helpers.ts'
+import { expectNoVerticalScroll, loginAs, snap, useDarkTheme } from './helpers.ts'
 
 test.describe('Tài khoản', () => {
   test('các trang khách', async ({ page }, testInfo) => {
     await page.goto('/login')
     await expect(page.getByRole('heading', { name: 'Chào mừng trở lại' })).toBeVisible()
+    await expectNoVerticalScroll(page)
+    const viewport = page.viewportSize()
+    if (viewport) {
+      // Trang đăng nhập vừa cả màn thấp: điện thoại 360×700, laptop 1366×768.
+      await page.setViewportSize(viewport.width < 768 ? { width: 360, height: 700 } : { width: 1366, height: 768 })
+      await expectNoVerticalScroll(page)
+      await page.setViewportSize(viewport)
+    }
     await snap(page, testInfo, 'login')
 
     await page.goto('/register')

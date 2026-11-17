@@ -24,6 +24,13 @@ export async function expectNoHorizontalScroll(page: Page): Promise<void> {
   expect(overflow, 'trang bị cuộn ngang').toBeLessThanOrEqual(0)
 }
 
+/** Trang vừa một màn hình; chờ qua hiệu ứng xuất hiện vì phần tử đang trượt vào có thể tạm làm trang dài hơn. */
+export async function expectNoVerticalScroll(page: Page): Promise<void> {
+  await expect
+    .poll(() => page.evaluate(() => document.documentElement.scrollHeight - document.documentElement.clientHeight), { message: 'trang bị cuộn dọc' })
+    .toBeLessThanOrEqual(0)
+}
+
 export async function useDarkTheme(page: Page): Promise<void> {
   await page.addInitScript(() => {
     try {
