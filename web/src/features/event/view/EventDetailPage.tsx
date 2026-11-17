@@ -122,7 +122,7 @@ export function EventDetailPage() {
         </div>
       )}
 
-      <EventLifecycle steps={vm.steps} cancelled={event.status === 'CANCELLED'} />
+      <EventLifecycle steps={vm.steps} cancelled={event.status === 'CANCELLED'} hint={vm.closeHint} />
 
       <Tabs value={vm.tab} onValueChange={vm.setTab}>
         <TabsBar items={vm.tabs.map((tab) => ({ value: tab.value, label: tab.label }))} active={vm.tab} aria-label="Nội dung sự kiện" />

@@ -1,12 +1,12 @@
 import { motion } from 'motion/react'
-import { Check, XCircle } from 'lucide-react'
+import { Check, Info, XCircle } from 'lucide-react'
 import { cn } from '@/shared/lib/cn'
 import { softSpring } from '@/shared/motion/presets'
 import { ProgressBar } from '@/shared/ui/ProgressBar'
 import type { LifecycleStep } from '../viewModel/eventDisplay'
 
 /** Vòng đời ST-EVT: ngang ở màn rộng, gọn thành thanh tiến trình ở màn hẹp để không cuộn ngang. */
-export function EventLifecycle({ steps, cancelled }: { steps: LifecycleStep[]; cancelled: boolean }) {
+export function EventLifecycle({ steps, cancelled, hint = null }: { steps: LifecycleStep[]; cancelled: boolean; hint?: string | null }) {
   const currentIndex = steps.findIndex((step) => step.state === 'current')
   const doneCount = steps.filter((step) => step.state === 'done').length
   const reached = currentIndex >= 0 ? currentIndex + 1 : doneCount
@@ -61,6 +61,12 @@ export function EventLifecycle({ steps, cancelled }: { steps: LifecycleStep[]; c
         <p className="mt-3 hidden items-center justify-center gap-1.5 text-sm font-semibold text-status-danger md:flex">
           <XCircle aria-hidden className="size-4" />
           Sự kiện đã hủy, không khôi phục được.
+        </p>
+      )}
+      {hint && (
+        <p className="mt-3 flex items-start gap-1.5 text-sm text-muted-foreground md:justify-center">
+          <Info aria-hidden className="mt-0.5 size-4 shrink-0" />
+          {hint}
         </p>
       )}
     </section>

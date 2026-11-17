@@ -144,6 +144,11 @@ test.describe('Tài chính', () => {
     await page.waitForURL((url) => url.pathname === '/clubs/c-guitar/events/e-exchange' && url.searchParams.get('tab') === 'fund')
     const fundCard = page.getByRole('region', { name: 'Số dư Quỹ Giao lưu guitar cùng CLB bạn' })
     await expect(fundCard.getByText('750.000')).toBeVisible()
+    const closeHint = page.getByText('Cần quyết toán quỹ sự kiện trước khi đóng sự kiện.')
+    await expect(closeHint).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Đóng sự kiện' })).toHaveCount(0)
+    await closeHint.scrollIntoViewIfNeeded()
+    await snap(page, testInfo, 'eventCloseHint', { fullPage: false })
     await fundCard.getByRole('button', { name: 'Quyết toán quỹ' }).click()
     const confirm = page.getByRole('dialog', { name: 'Quyết toán quỹ sự kiện' })
     await expect(confirm.getByText('750.000 đ')).toBeVisible()
@@ -151,8 +156,9 @@ test.describe('Tài chính', () => {
     await confirm.getByRole('button', { name: 'Quyết toán' }).click()
     await expect(page.getByText('Đã quyết toán quỹ, chuyển 750.000 đ về Quỹ chung.')).toBeVisible()
     await expect(fundCard.getByText(/Đã quyết toán ngày/)).toBeVisible()
-    // Sự kiện tự sang Đã quyết toán nên ban chủ nhiệm (gồm Thủ quỹ) thấy ngay nút đóng sự kiện.
+    // Sự kiện vẫn Đã kết thúc; quỹ đã quyết toán nên ban chủ nhiệm (gồm Thủ quỹ) thấy ngay nút đóng sự kiện.
     await expect(page.getByRole('button', { name: 'Đóng sự kiện' })).toBeVisible()
+    await expect(closeHint).toHaveCount(0)
 
     await openNavLink(page, 'Tài chính')
     await expect(page.getByRole('region', { name: 'Số dư Quỹ chung' }).getByText('6.220.000')).toBeVisible()

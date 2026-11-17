@@ -262,7 +262,7 @@ export function FundPanel({ fundId }: { fundId: string }) {
           description={
             vm.fund.event?.status === 'CANCELLED'
               ? 'Sau khi quyết toán, quỹ không nhận thêm giao dịch. Sự kiện đã hủy giữ nguyên trạng thái.'
-              : 'Sau khi quyết toán, quỹ không nhận thêm giao dịch. Sự kiện sẽ chuyển sang Đã quyết toán để ban chủ nhiệm hoặc Trưởng BTC đóng.'
+              : 'Sau khi quyết toán, quỹ không nhận thêm giao dịch. Ban chủ nhiệm hoặc Trưởng BTC đóng được sự kiện ngay sau đó.'
           }
           confirmLabel="Quyết toán"
           pending={vm.settling}

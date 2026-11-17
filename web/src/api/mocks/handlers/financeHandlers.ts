@@ -99,11 +99,10 @@ function settleBlocker(fund: DbFund): Response | null {
   return null
 }
 
-/** Chuyển số dư còn lại về Quỹ chung, quỹ sang Đã quyết toán; sự kiện Đã kết thúc tự sang Đã quyết toán (SRS 4.2). */
+/** Chuyển số dư còn lại về Quỹ chung, quỹ sang Đã quyết toán; sự kiện giữ nguyên trạng thái, nút đóng mở theo quỹ (BR-EVT-05). */
 function settleFund(fund: DbFund, userId: string): void {
   const balance = fundBalance(fund.id)
   const now = nowIso()
-  const event = eventOfFund(fund)
   if (balance > 0) {
     newTransaction({
       clubId: fund.clubId,
@@ -123,7 +122,6 @@ function settleFund(fund: DbFund, userId: string): void {
     })
   }
   Object.assign(fund, { status: 'SETTLED', settledAt: now, settledBy: userId, version: fund.version + 1 })
-  if (event?.status === 'ENDED') Object.assign(event, { status: 'SETTLED', version: event.version + 1 })
 }
 
 const receiptThresholdOf = (clubId: string) => db.clubs.find((club) => club.id === clubId)?.expenseReceiptThreshold ?? DEFAULT_RECEIPT_THRESHOLD

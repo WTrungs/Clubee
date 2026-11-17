@@ -11,7 +11,7 @@ import { DateBlock, EventPlace, EventStatusBadge, RegistrationBadge } from './Ev
 
 export function EventCard({ event }: { event: EventSummary }) {
   const seats = seatInfo(event)
-  const inactive = event.status === 'CANCELLED' || event.status === 'ENDED' || event.status === 'CLOSED' || event.status === 'SETTLED'
+  const inactive = event.status === 'CANCELLED' || event.status === 'ENDED' || event.status === 'CLOSED'
 
   return (
     <motion.li variants={itemVariants} layout>

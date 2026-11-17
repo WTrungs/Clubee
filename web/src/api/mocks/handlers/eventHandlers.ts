@@ -51,7 +51,6 @@ const statusLabel: Record<EventStatus, string> = {
   REGISTRATION_OPEN: 'Mở đăng ký',
   ONGOING: 'Đang diễn ra',
   ENDED: 'Đã kết thúc',
-  SETTLED: 'Đã quyết toán',
   CLOSED: 'Đã đóng',
   CANCELLED: 'Đã hủy',
 }
@@ -79,6 +78,10 @@ function myRegistration(userId: string, event: DbEvent): MyRegistration | null {
 
 const eventScope = (event: DbEvent) => ({ type: 'EVENT', id: event.id }) as const
 
+/** BR-EVT-05: quỹ sự kiện đã quyết toán; chưa có tạm ứng (FR-FIN-07, P1) nên điều kiện tạm ứng mở luôn đúng. */
+const fundSettled = (event: DbEvent) => eventFundOf(event.id)?.status === 'SETTLED'
+const closable = (event: DbEvent) => event.status === 'ENDED' && fundSettled(event)
+
 function eventActions(userId: string, event: DbEvent): EventAction[] {
   const board = isBoardMember(userId, event.clubId)
   const lead = isEventLead(userId, event)
@@ -89,7 +92,7 @@ function eventActions(userId: string, event: DbEvent): EventAction[] {
   if (event.status === 'APPROVED' && runs) actions.push('OPEN_REGISTRATION')
   if (registrationsEditable(event) && runs) actions.push('RESCHEDULE')
   if (CANCELLABLE.includes(event.status) && can(userId, event.clubId, 'CREATE_EVENT')) actions.push('CANCEL')
-  if (event.status === 'SETTLED' && runs) actions.push('CLOSE')
+  if (closable(event) && runs) actions.push('CLOSE')
   if (STAFF_ACTIVE.includes(event.status) && can(userId, event.clubId, 'MANAGE_EVENT_STAFF', eventScope(event))) actions.push('MANAGE_SUBCOMMITTEES')
   if (registrationOpen(event) && isActiveMember(userId, event.clubId) && !myRegistration(userId, event)) actions.push('REGISTER')
   if (board || lead || isEventStaff(userId, event)) actions.push('VIEW_STAFF', 'VIEW_REGISTRATIONS')
@@ -123,6 +126,7 @@ function toSummary(event: DbEvent, userId: string): EventSummary {
 }
 
 function toDetail(event: DbEvent, userId: string): EventDetail {
+  const fund = eventFundOf(event.id)
   return {
     ...toSummary(event, userId),
     description: event.description,
@@ -135,7 +139,8 @@ function toDetail(event: DbEvent, userId: string): EventDetail {
     version: event.version,
     createdAt: event.createdAt,
     statusBeforeCancel: event.statusBeforeCancel,
-    fundId: eventFundOf(event.id)?.id ?? null,
+    fundId: fund?.id ?? null,
+    fundStatus: fund && canViewFund(userId, fund) ? fund.status : null,
     lastScheduleChange: toScheduleChange(event.scheduleChanges.at(-1)),
   }
 }
@@ -400,10 +405,9 @@ export const eventHandlers = [
         endEventPositions(event.id, 'Sự kiện đã hủy.')
         break
       case 'CLOSE': {
-        if (event.status !== 'SETTLED') return invalid()
+        if (event.status !== 'ENDED') return invalid()
         if (!runs) return forbidden(clubId, 'RUN_EVENT', 'đóng sự kiện', eventScope(event))
-        // BR-EVT-05: quỹ sự kiện phải Đã quyết toán; chưa có tạm ứng (FR-FIN-07, P1) nên điều kiện tạm ứng mở luôn đúng.
-        if (eventFundOf(event.id)?.status === 'OPEN') return problem(422, 'Quỹ sự kiện chưa quyết toán nên chưa đóng được sự kiện.', 'FUND_NOT_SETTLED')
+        if (!fundSettled(event)) return problem(422, 'Quỹ sự kiện chưa quyết toán nên chưa đóng được sự kiện.', 'FUND_NOT_SETTLED')
         event.status = 'CLOSED'
         endEventPositions(event.id, 'Sự kiện đã đóng.')
         break
