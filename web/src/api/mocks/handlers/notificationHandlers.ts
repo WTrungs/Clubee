@@ -2,6 +2,7 @@ import { http, HttpResponse } from 'msw'
 import type { NotificationCategory, NotificationDetail, NotificationSummary } from '@/features/notification/model/notificationTypes'
 import { db, type DbNotification, type DbNotificationRecipient } from '../db'
 import { API, currentUser, matchesKeyword, networkDelay, paginate, problem, writer } from '../mockHttp'
+import { canViewAdvance } from '../mockAdvances'
 import { canViewTransaction } from '../mockFinance'
 import { isInAudience } from '../mockAnnouncements'
 import { canAccessClub, personRef } from '../mockMembers'
@@ -91,6 +92,11 @@ export const notificationHandlers = [
     const transaction = notification.target?.type === 'FINANCE' ? db.transactions.find((candidate) => candidate.id === notification.target?.id) : undefined
     if (transaction && !canViewTransaction(user.value.id, transaction)) {
       return problem(403, 'Bạn không còn quyền xem khoản thu chi này nên không xem được nội dung thông báo.', 'FORBIDDEN')
+    }
+    // Thông báo tạm ứng cũng nêu số tiền, mục đích, người ứng: chỉ mở khi còn xem được tạm ứng đó.
+    const advance = notification.target?.type === 'ADVANCE' ? db.advances.find((candidate) => candidate.id === notification.target?.id) : undefined
+    if (advance && !canViewAdvance(user.value.id, advance)) {
+      return problem(403, 'Bạn không còn quyền xem tạm ứng này nên không xem được nội dung thông báo.', 'FORBIDDEN')
     }
     const detail: NotificationDetail = {
       ...toSummary(notification, recipient),

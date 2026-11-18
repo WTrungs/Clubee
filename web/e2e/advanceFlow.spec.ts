@@ -1,0 +1,55 @@
+import { expect, test } from '@playwright/test'
+import { expectNoHorizontalScroll, loginAs, openNotification, settleToast, snap, switchUser } from './helpers.ts'
+
+test.describe('Tạm ứng', () => {
+  test('trưởng ban đề xuất tạm ứng, chủ nhiệm duyệt, thủ quỹ ghi đã ứng và sổ quỹ có khoản chi', async ({ page }, testInfo) => {
+    await loginAs(page, 'linh.dang@demo.test')
+    await page.goto('/clubs/c-guitar/finance')
+    const balance = page.getByRole('region', { name: 'Số dư Quỹ chung' })
+    await balance.getByRole('button', { name: 'Đề xuất tạm ứng' }).click()
+    const sheet = page.getByRole('dialog', { name: 'Đề xuất tạm ứng' })
+    await expect(sheet.getByRole('textbox', { name: /Hạn quyết toán/ })).not.toHaveValue('')
+    await sheet.getByRole('textbox', { name: /Số tiền/ }).fill('350000')
+    await sheet.getByRole('combobox', { name: /Hạng mục/ }).selectOption({ label: 'In ấn, truyền thông' })
+    await sheet.getByRole('textbox', { name: /Mục đích/ }).fill('In băng rôn cho buổi biểu diễn')
+    await snap(page, testInfo, 'proposeAdvance', { fullPage: false })
+    await sheet.getByRole('button', { name: 'Gửi đề xuất' }).click()
+    await settleToast(page, 'Đã gửi đề xuất tạm ứng 350.000 đ. Ban chủ nhiệm sẽ được báo để duyệt.')
+
+    await page.getByRole('tab', { name: 'Tạm ứng' }).click()
+    await expect(page.getByRole('button', { name: /Tạm ứng In băng rôn cho buổi biểu diễn/ })).toBeVisible()
+    await expectNoHorizontalScroll(page)
+    await snap(page, testInfo, 'advanceList')
+
+    // Không tải lại trang: mock chạy trong trình duyệt nên tải lại là mất đề xuất vừa gửi.
+    await switchUser(page, 'Đặng Khánh Linh', 'anh.nguyen@demo.test')
+    await openNotification(page, /Tạm ứng chờ duyệt: In băng rôn cho buổi biểu diễn/)
+    await page.waitForURL((url) => url.pathname === '/clubs/c-guitar/finance' && url.searchParams.has('adv'))
+    const toApprove = page.getByRole('dialog', { name: 'Tạm ứng' })
+    await expect(toApprove.getByText('Chờ duyệt')).toBeVisible()
+    await snap(page, testInfo, 'advanceToApprove', { fullPage: false })
+    await toApprove.getByRole('button', { name: 'Duyệt' }).click()
+    await settleToast(page, 'Đã duyệt tạm ứng. Thủ quỹ sẽ được báo để ghi đã ứng.')
+    await expect(toApprove.getByText('Chờ ghi đã ứng')).toBeVisible()
+    await page.keyboard.press('Escape')
+    await expect(toApprove).toHaveCount(0)
+
+    await switchUser(page, 'Nguyễn Minh Anh', 'mai.vo@demo.test')
+    await openNotification(page, /Tạm ứng chờ ghi đã ứng: In băng rôn cho buổi biểu diễn/)
+    const toDisburse = page.getByRole('dialog', { name: 'Tạm ứng' })
+    await toDisburse.getByRole('button', { name: 'Ghi đã ứng' }).click()
+    const confirm = page.getByRole('dialog', { name: 'Ghi đã ứng' })
+    await expect(confirm.getByRole('status')).toContainText('sau khi ứng còn')
+    await snap(page, testInfo, 'disburseAdvance', { fullPage: false })
+    await confirm.getByRole('button', { name: 'Ghi đã ứng' }).click()
+    await settleToast(page, 'Đã ghi đã ứng 350.000 đ.')
+    await expect(toDisburse.getByText('Đã ứng', { exact: true })).toBeVisible()
+    await toDisburse.getByRole('button', { name: 'Xem khoản chi đã ghi sổ' }).click()
+    await page.waitForURL((url) => url.searchParams.has('tx') && !url.searchParams.has('adv'))
+    await expect(page.getByRole('dialog').getByText('In băng rôn cho buổi biểu diễn').first()).toBeVisible()
+    await page.keyboard.press('Escape')
+
+    await expect(page.getByRole('button', { name: /Tạm ứng: In băng rôn cho buổi biểu diễn \(Đặng Khánh Linh\)/ })).toBeVisible()
+    await expect(page.getByRole('region', { name: 'Số dư Quỹ chung' }).getByText('5.120.000')).toBeVisible()
+  })
+})

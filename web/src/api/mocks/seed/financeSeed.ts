@@ -42,6 +42,8 @@ export interface DbTransaction {
   cancelledAt: string | null
   cancellationReason: string | null
   version: number
+  /** Khoản chi sinh ra khi ghi Đã ứng một tạm ứng (FR-FIN-07). */
+  advanceId?: string
 }
 
 /** Ngưỡng chi bắt buộc chứng từ mặc định (SRS 9.2). */

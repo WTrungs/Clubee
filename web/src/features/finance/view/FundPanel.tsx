@@ -1,5 +1,5 @@
 import { motion } from 'motion/react'
-import { BookOpenText, ClipboardCheck, FilePlus2, Landmark, Plus, ReceiptText, SearchX, Wallet } from 'lucide-react'
+import { BookOpenText, ClipboardCheck, FilePlus2, HandCoins, Landmark, Plus, ReceiptText, SearchX, Wallet } from 'lucide-react'
 import { useId } from 'react'
 import { formatDate } from '@/shared/format/formatDate'
 import { formatMoney } from '@/shared/format/formatMoney'
@@ -28,7 +28,11 @@ import {
   type RequestFilter,
 } from '../viewModel/financeDisplay'
 import { SHARE_NOTE_MAX, useFundPanelViewModel, type FundPanelViewModel } from '../viewModel/useFundPanelViewModel'
+import { useAdvanceListViewModel } from '../viewModel/useAdvanceListViewModel'
+import { AdvanceDetailSheet } from './AdvanceDetailSheet'
+import { AdvanceList } from './AdvanceList'
 import { LedgerRow, RequestRow } from './FinanceMeta'
+import { ProposeAdvanceSheet } from './ProposeAdvanceSheet'
 import { ProposeExpenseSheet } from './ProposeExpenseSheet'
 import { RecordIncomeSheet } from './RecordIncomeSheet'
 import { TransactionDetailSheet } from './TransactionDetailSheet'
@@ -65,7 +69,7 @@ function BalanceCard({ fund, vm }: { fund: FundDetail; vm: FundPanelViewModel })
           Còn {vm.pendingBlocksSettle} khoản chờ duyệt hoặc chờ ghi sổ. Xử lý xong mới quyết toán được quỹ này.
         </p>
       )}
-      {(vm.canRecordIncome || vm.canProposeExpense || vm.canSettle) && (
+      {(vm.canRecordIncome || vm.canProposeExpense || vm.canProposeAdvance || vm.canSettle) && (
         <div className="mt-5 flex flex-wrap gap-2">
           {vm.canSettle && (
             <Button variant="secondary" size="sm" onClick={vm.openSettle}>
@@ -83,6 +87,12 @@ function BalanceCard({ fund, vm }: { fund: FundDetail; vm: FundPanelViewModel })
             <Button variant="secondary" size="sm" onClick={vm.openPropose}>
               <FilePlus2 aria-hidden />
               Đề xuất chi
+            </Button>
+          )}
+          {vm.canProposeAdvance && (
+            <Button variant="secondary" size="sm" onClick={vm.openProposeAdvance}>
+              <HandCoins aria-hidden />
+              Đề xuất tạm ứng
             </Button>
           )}
         </div>
@@ -213,6 +223,7 @@ function Ledger({ vm }: { vm: FundPanelViewModel }) {
 /** Một quỹ (chung hoặc sự kiện): thẻ số dư, sổ quỹ và các thao tác máy chủ cho phép. */
 export function FundPanel({ fundId }: { fundId: string }) {
   const vm = useFundPanelViewModel(fundId)
+  const advances = useAdvanceListViewModel(fundId, vm.tab === 'advances')
   const ledger = (
     <>
       <Ledger vm={vm} />
@@ -227,24 +238,32 @@ export function FundPanel({ fundId }: { fundId: string }) {
       {vm.fundError && !vm.fundLoading && <ErrorState error={vm.fundError} onRetry={vm.retryFund} />}
       {vm.fund && <BalanceCard fund={vm.fund} vm={vm} />}
 
-      {!vm.fundError && !vm.canViewRequests && ledger}
-      {!vm.fundError && vm.canViewRequests && (
+      {!vm.fundError && !vm.canViewRequests && !vm.canViewAdvances && ledger}
+      {!vm.fundError && (vm.canViewRequests || vm.canViewAdvances) && (
         <Tabs value={vm.tab} onValueChange={vm.setTab}>
           <TabsBar
             aria-label="Nội dung quỹ"
             active={vm.tab}
             items={[
               { value: 'ledger', label: 'Sổ quỹ' },
-              { value: 'requests', label: 'Khoản chi', count: vm.fund?.pendingCount ?? undefined },
+              ...(vm.canViewRequests ? [{ value: 'requests', label: 'Khoản chi', count: vm.fund?.pendingCount ?? undefined }] : []),
+              ...(vm.canViewAdvances ? [{ value: 'advances', label: 'Tạm ứng' }] : []),
             ]}
           />
           <TabsContent value="ledger" className="space-y-5 pt-5">
             {ledger}
           </TabsContent>
-          <TabsContent value="requests" className="space-y-5 pt-5">
-            <Requests vm={vm} />
-            <Pagination page={vm.requestPage} totalPages={vm.requestTotalPages} totalElements={vm.requestTotalElements} pageSize={vm.pageSize} onPageChange={vm.setRequestPage} />
-          </TabsContent>
+          {vm.canViewRequests && (
+            <TabsContent value="requests" className="space-y-5 pt-5">
+              <Requests vm={vm} />
+              <Pagination page={vm.requestPage} totalPages={vm.requestTotalPages} totalElements={vm.requestTotalElements} pageSize={vm.pageSize} onPageChange={vm.setRequestPage} />
+            </TabsContent>
+          )}
+          {vm.canViewAdvances && (
+            <TabsContent value="advances" className="space-y-5 pt-5">
+              <AdvanceList vm={advances} />
+            </TabsContent>
+          )}
         </Tabs>
       )}
 
@@ -253,10 +272,13 @@ export function FundPanel({ fundId }: { fundId: string }) {
         transactionId={vm.openedTransactionId}
         fundId={fundId}
         onOpenTransaction={vm.switchTransaction}
+        onOpenAdvance={vm.canViewAdvances ? advances.openAdvance : undefined}
         onClose={vm.closeTransaction}
       />
       {vm.fund && <RecordIncomeSheet open={vm.incomeOpen} fundId={vm.fund.id} fundName={vm.fund.name} onClose={vm.closeIncome} />}
       {vm.fund && <ProposeExpenseSheet open={vm.proposeOpen} fund={vm.fund} onClose={vm.closePropose} />}
+      {vm.fund && <ProposeAdvanceSheet open={vm.advanceOpen} fund={vm.fund} onClose={vm.closeProposeAdvance} />}
+      <AdvanceDetailSheet advanceId={advances.openedAdvanceId} onClose={advances.closeAdvance} onOpenTransaction={advances.openLinkedTransaction} />
       {vm.fund && (
         <ConfirmDialog
           open={vm.settleOpen}

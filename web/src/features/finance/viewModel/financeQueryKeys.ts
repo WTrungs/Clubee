@@ -1,3 +1,4 @@
+import type { AdvanceQuery } from '../model/advanceTypes'
 import type { FundQuery, TransactionQuery } from '../model/financeTypes'
 
 export const financeQueryKeys = {
@@ -9,4 +10,6 @@ export const financeQueryKeys = {
   /** Mọi bản chi tiết của một giao dịch, dù xem từ quỹ nào. */
   transactionAll: (clubId: string, transactionId: string) => ['finance', 'transaction', clubId, transactionId] as const,
   transaction: (clubId: string, transactionId: string, fundId: string | null) => ['finance', 'transaction', clubId, transactionId, fundId] as const,
+  advanceList: (clubId: string, query: AdvanceQuery) => ['finance', 'advances', clubId, query] as const,
+  advance: (clubId: string, advanceId: string) => ['finance', 'advance', clubId, advanceId] as const,
 }

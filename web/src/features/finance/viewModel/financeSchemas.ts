@@ -6,10 +6,10 @@ import { EXPENSE_CATEGORIES, INCOME_CATEGORIES } from '../model/financeTypes'
 /** Trần số tiền một giao dịch, khớp với máy chủ. */
 export const MAX_TRANSACTION_AMOUNT = 1_000_000_000
 
-const DATE_TEXT = /^\d{2}\/\d{2}\/\d{4}$/
+export const DATE_TEXT = /^\d{2}\/\d{2}\/\d{4}$/
 
 /** Số nguyên dương, đơn vị VND (BR-FIN-04); mỗi ô chỉ báo một lỗi. */
-const amountText = z
+export const amountText = z
   .string()
   .trim()
   .superRefine((text, context) => {

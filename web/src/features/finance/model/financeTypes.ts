@@ -7,7 +7,8 @@ export type FundKind = 'GENERAL' | 'EVENT'
 /** Quỹ sự kiện sang Đã quyết toán sau FR-FIN-11; Quỹ chung luôn mở. */
 export type FundStatus = 'OPEN' | 'SETTLED'
 
-export type FundAction = 'RECORD_INCOME' | 'PROPOSE_EXPENSE' | 'VIEW_REQUESTS' | 'SETTLE'
+/** `PROPOSE_ADVANCE`, `VIEW_ADVANCES`: tạm ứng ở quỹ này (FR-FIN-07). */
+export type FundAction = 'RECORD_INCOME' | 'PROPOSE_EXPENSE' | 'PROPOSE_ADVANCE' | 'VIEW_REQUESTS' | 'VIEW_ADVANCES' | 'SETTLE'
 
 export type TransactionType = 'INCOME' | 'EXPENSE' | 'ADJUSTMENT' | 'TRANSFER'
 
@@ -57,6 +58,8 @@ export interface FundDetail extends FundSummary {
   settledBy: PersonRef | null
   /** CLB đồng tổ chức đang Chấp nhận của sự kiện, để chia khi quyết toán (FR-FIN-11); rỗng với Quỹ chung. */
   coHosts: Array<{ id: string; name: string }>
+  /** Số ngày gợi ý cho hạn quyết toán tạm ứng (tham số CLB, SRS 9.2). */
+  advanceSettleDays: number
   allowedActions: FundAction[]
   version: number
 }
@@ -103,6 +106,8 @@ export interface TransactionDetail extends TransactionSummary {
   cancelledBy: PersonRef | null
   cancelledAt: string | null
   cancellationReason: string | null
+  /** Tạm ứng sinh ra khoản chi này khi ghi Đã ứng (FR-FIN-07); null với giao dịch khác. */
+  advanceId: string | null
   allowedActions: TransactionAction[]
   version: number
 }

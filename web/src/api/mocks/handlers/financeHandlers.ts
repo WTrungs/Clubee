@@ -45,6 +45,7 @@ import { API, currentUser, matchesKeyword, networkDelay, newId, paginate, proble
 import { personRef } from '../mockMembers'
 import { isBoardMember } from '../mockPermissions'
 import { financeTarget, notify, sharedEventsTarget } from '../mockNotifications'
+import { canListAdvances } from '../mockAdvances'
 import { clubNameOf, coHostDeciders } from '../mockCoHosts'
 import { isRealDate, nowIso, vnToday } from '../mockTime'
 import { DEFAULT_RECEIPT_THRESHOLD, generalFundId } from '../seed/financeSeed'
@@ -82,9 +83,10 @@ function fundActions(userId: string, fund: DbFund): FundAction[] {
   const open = fund.status === 'OPEN'
   const proposer = canProposeIn(userId, fund)
   if (open && keepsLedger(userId, fund.clubId)) actions.push('RECORD_INCOME')
-  if (open && proposer) actions.push('PROPOSE_EXPENSE')
+  if (open && proposer) actions.push('PROPOSE_EXPENSE', 'PROPOSE_ADVANCE')
   // Người đề xuất được thấy tab khoản chi để theo dõi khoản của mình.
   if (proposer || canViewRequests(userId, fund)) actions.push('VIEW_REQUESTS')
+  if (canListAdvances(userId, fund)) actions.push('VIEW_ADVANCES')
   if (settleBlocker(fund) === null && keepsLedger(userId, fund.clubId)) actions.push('SETTLE')
   return actions
 }
@@ -222,6 +224,7 @@ function toFundDetail(fund: DbFund, userId: string): FundDetail {
     settledAt: fund.settledAt,
     settledBy: fund.settledBy ? personRef(fund.settledBy) : null,
     coHosts: coHostsOfFund(fund),
+    advanceSettleDays: db.clubs.find((club) => club.id === fund.clubId)?.advanceSettleDays ?? 14,
     allowedActions: fundActions(userId, fund),
     version: fund.version,
   }
@@ -311,6 +314,7 @@ function toDetail(transaction: DbTransaction, userId: string, perspectiveFundId?
     cancelledBy: transaction.cancelledBy ? personRef(transaction.cancelledBy) : null,
     cancelledAt: transaction.cancelledAt,
     cancellationReason: transaction.cancellationReason,
+    advanceId: transaction.advanceId ?? null,
     allowedActions: transactionActions(userId, transaction),
     version: transaction.version,
   }

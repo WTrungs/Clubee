@@ -48,7 +48,7 @@ describe('settling an event fund (FR-FIN-11)', () => {
     const eventVersion = eventOf('e-exchange')?.version ?? 0
     const settled = await settle(exchange)
     // Hết các thao tác ghi; ban chủ nhiệm vẫn xem được lịch sử khoản chi của quỹ.
-    expect(settled).toMatchObject({ status: 'SETTLED', balance: 0, settledBy: { id: 'u-mai' }, allowedActions: ['VIEW_REQUESTS'] })
+    expect(settled).toMatchObject({ status: 'SETTLED', balance: 0, settledBy: { id: 'u-mai' }, allowedActions: ['VIEW_REQUESTS', 'VIEW_ADVANCES'] })
     expect(fundBalance(guitar)).toBe(6_220_000)
     // Quyết toán là trạng thái của quỹ; sự kiện vẫn Đã kết thúc.
     expect(eventOf('e-exchange')).toMatchObject({ status: 'ENDED', version: eventVersion })

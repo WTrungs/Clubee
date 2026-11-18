@@ -1,5 +1,6 @@
 import type { PermissionKey } from '@/features/org/model/permissionTypes'
 import type { DbAuditLog } from './mockAudit'
+import { createAdvanceSeed, type DbAdvance } from './seed/advanceSeed'
 import type { DbPermissionMatrixMeta } from './mockPermissionMatrix'
 import type { DbTransferRequest } from './mockTransfers'
 import {
@@ -35,6 +36,7 @@ import type { DbHandover, DbHandoverItem } from './seed/termSeed'
 /** Dữ liệu tổng hợp, không phải người thật (security.md); bản ghi ở dạng phía máy chủ, handler map sang DTO. */
 export type { DbAttendance, DbAttendanceCode, DbAttendanceSheet, DbSession } from './seed/attendanceSeed'
 export type { DbClub } from './seed/clubSeed'
+export type { DbAdvance } from './seed/advanceSeed'
 export type { DbFund, DbTransaction } from './seed/financeSeed'
 export type { DbInvitation } from './seed/invitationSeed'
 export type { DbAuditLog } from './mockAudit'
@@ -93,6 +95,7 @@ export interface MockDb {
   notificationRecipients: DbNotificationRecipient[]
   funds: DbFund[]
   transactions: DbTransaction[]
+  advances: DbAdvance[]
   sessions: DbSession[]
   attendance: DbAttendance[]
   attendanceSheets: DbAttendanceSheet[]
@@ -129,6 +132,7 @@ export function createSeed(): MockDb {
     notificationRecipients: notifications.recipients,
     funds: createFundSeed(),
     transactions: createTransactionSeed(),
+    advances: createAdvanceSeed(),
     sessions: createSessionSeed(),
     attendance: createAttendanceSeed(),
     attendanceSheets: createAttendanceSheetSeed(),

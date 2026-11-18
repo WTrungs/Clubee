@@ -18,7 +18,7 @@ const PAGE_SIZE = 20
 /** Mã giao dịch đang mở trong sheet nằm trên URL để thông báo dẫn thẳng tới được. */
 export const TRANSACTION_PARAM = 'tx'
 
-export type FundTab = 'ledger' | 'requests'
+export type FundTab = 'ledger' | 'requests' | 'advances'
 
 /** Số khoản còn treo khi quỹ sự kiện đã đến lúc quyết toán (sự kiện kết thúc hoặc hủy); 0 khi không cần báo. */
 export function settlePendingCount(fund: Pick<FundDetail, 'kind' | 'status' | 'event' | 'pendingCount'> | undefined): number {
@@ -82,6 +82,7 @@ export function useFundPanelViewModel(fundId: string) {
   const [today] = useState(() => toVnDateKey(new Date()))
   const [incomeOpen, setIncomeOpen] = useState(false)
   const [proposeOpen, setProposeOpen] = useState(false)
+  const [advanceOpen, setAdvanceOpen] = useState(false)
   const [tab, setTab] = useState<FundTab>('ledger')
   const [requestFilter, setRequestFilter] = useState<RequestFilter>('PENDING')
   const [mineOnly, setMineOnly] = useState(false)
@@ -132,7 +133,8 @@ export function useFundPanelViewModel(fundId: string) {
     },
   })
   const canViewRequests = allowed.includes('VIEW_REQUESTS')
-  const activeTab: FundTab = canViewRequests ? tab : 'ledger'
+  const canViewAdvances = allowed.includes('VIEW_ADVANCES')
+  const activeTab: FundTab = tab === 'requests' && canViewRequests ? 'requests' : tab === 'advances' && canViewAdvances ? 'advances' : 'ledger'
   const query: TransactionQuery = {
     fundId,
     status: ['POSTED'],
@@ -232,7 +234,13 @@ export function useFundPanelViewModel(fundId: string) {
     canProposeExpense: allowed.includes('PROPOSE_EXPENSE'),
     canViewRequests,
     tab: activeTab,
-    setTab: (value: string) => setTab(value === 'requests' ? 'requests' : 'ledger'),
+    setTab: (value: string) => setTab(value === 'requests' || value === 'advances' ? value : 'ledger'),
+    /** FR-FIN-07: tab Tạm ứng và nút đề xuất tạm ứng theo `allowedActions` của quỹ. */
+    canViewAdvances,
+    canProposeAdvance: allowed.includes('PROPOSE_ADVANCE'),
+    advanceOpen,
+    openProposeAdvance: () => setAdvanceOpen(true),
+    closeProposeAdvance: () => setAdvanceOpen(false),
 
     keyword,
     setKeyword: (value: string) => {

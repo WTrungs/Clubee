@@ -59,7 +59,7 @@ async function clubWrapper(clubId: string) {
 describe('proposing an expense (FR-FIN-02)', () => {
   it('lets a department head propose from the general fund and tells the board, not the proposer', async () => {
     signInAs('u-linh')
-    expect((await financeRepository.fund('c-guitar', guitar)).allowedActions).toEqual(['PROPOSE_EXPENSE', 'VIEW_REQUESTS'])
+    expect((await financeRepository.fund('c-guitar', guitar)).allowedActions).toEqual(['PROPOSE_EXPENSE', 'PROPOSE_ADVANCE', 'VIEW_REQUESTS', 'VIEW_ADVANCES'])
     const created = await financeRepository.create('c-guitar', expense())
     expect(created).toMatchObject({ status: 'PROPOSED', flow: 'OUT', occurredOn: null, allowedActions: ['WITHDRAW'] })
     for (const userId of ['u-anh', 'u-huy', 'u-mai']) expect(await titlesOf(userId)).toContain('Khoản chi cần duyệt: In tờ rơi giới thiệu CLB')
@@ -73,7 +73,7 @@ describe('proposing an expense (FR-FIN-02)', () => {
     expect(headOnEvent).toMatchObject({ status: 403, detail: expect.stringContaining('chỉ đề xuất chi từ Quỹ chung') })
 
     signInAs('u-bao')
-    expect((await financeRepository.fund('c-guitar', winter)).allowedActions).toEqual(['PROPOSE_EXPENSE', 'VIEW_REQUESTS'])
+    expect((await financeRepository.fund('c-guitar', winter)).allowedActions).toEqual(['PROPOSE_EXPENSE', 'PROPOSE_ADVANCE', 'VIEW_REQUESTS', 'VIEW_ADVANCES'])
     expect((await financeRepository.create('c-guitar', expense({ fundId: winter }))).status).toBe('PROPOSED')
     expect((await fail(financeRepository.create('c-guitar', expense())))?.status).toBe(403)
 
