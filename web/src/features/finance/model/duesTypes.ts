@@ -48,6 +48,17 @@ export interface DuesCampaignDetail extends DuesCampaignSummary {
   version: number
 }
 
+/** Một lần xác nhận đã nộp (FR-FIN-10); mỗi lần sinh một khoản thu Đã ghi sổ ở Quỹ chung. */
+export interface DuesPayment {
+  id: string
+  amount: number
+  /** Ngày nộp, yyyy-mm-dd. */
+  paidOn: string
+  confirmedBy: PersonRef
+  confirmedAt: string
+  transactionId: string
+}
+
 export interface DuesItem {
   id: string
   /** Họ tên chụp lúc mở đợt (BR-DATA-02). */
@@ -58,6 +69,17 @@ export interface DuesItem {
   paidAmount: number
   status: DuesItemStatus
   exemption: DuesExemption | null
+  /** Các lần nộp, mới nhất trước. */
+  payments: DuesPayment[]
+  version: number
+}
+
+export interface RecordDuesPaymentRequest {
+  /** Từ 1 tới số còn thiếu. */
+  amount: number
+  /** Không sau hôm nay. */
+  paidOn: string
+  /** Phiên bản của dòng: bấm hai lần không sinh hai khoản thu (NFR-REL-01). */
   version: number
 }
 

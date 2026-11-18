@@ -1,8 +1,14 @@
+import { DUES_REMIND_DAYS, remainingDue } from '@/features/finance/model/duesRules'
 import type { DuesCampaignAction, DuesCampaignDetail, DuesCampaignSummary, DuesItem, DuesItemStatus } from '@/features/finance/model/duesTypes'
+import { formatDate } from '@/shared/format/formatDate'
+import { formatMoney } from '@/shared/format/formatMoney'
 import { db } from './db'
 import { keepsLedger } from './mockFinance'
 import { personRef } from './mockMembers'
+import { notify } from './mockNotifications'
 import { isBoardMember } from './mockPermissions'
+import { registerJob, SYSTEM_ACTOR } from './mockSchedule'
+import { nowIso, shiftDate, vnToday } from './mockTime'
 import type { DbDuesCampaign, DbDuesItem } from './seed/duesSeed'
 
 /** Số đã nộp của một người trong đợt. */
@@ -30,6 +36,7 @@ export function toDuesItem(item: DbDuesItem): DuesItem {
     paidAmount: paidOf(item),
     status: duesItemStatus(item),
     exemption: item.exemption ? { kind: item.exemption.kind, reason: item.exemption.reason, by: personRef(item.exemption.by), at: item.exemption.at } : null,
+    payments: item.payments.toReversed().map((payment) => ({ ...payment, confirmedBy: personRef(payment.confirmedBy) })),
     version: item.version,
   }
 }
@@ -77,3 +84,34 @@ export function toDuesDetail(campaign: DbDuesCampaign, userId: string): DuesCamp
  * trang tự về sổ Quỹ chung; nội dung thông báo đã nêu kỳ, mức, hạn của chính họ.
  */
 export const duesTarget = (campaign: Pick<DbDuesCampaign, 'clubId' | 'id'>) => ({ type: 'DUES' as const, clubId: campaign.clubId, id: campaign.id })
+
+/** Số còn thiếu của một người. */
+export const owedOf = (item: Pick<DbDuesItem, 'amountDue' | 'payments'>) => remainingDue({ amountDue: item.amountDue, paidAmount: paidOf(item) })
+
+/**
+ * FR-FIN-10: nhắc người còn thiếu một lần khi còn `DUES_REMIND_DAYS` ngày tới hạn và một lần khi quá hạn. Đợt đã đóng, người được
+ * miễn hoặc đã nộp đủ thì không nhắc.
+ */
+export function runDuesReminders(): void {
+  const today = vnToday()
+  for (const campaign of db.duesCampaigns) {
+    if (campaign.status !== 'OPEN') continue
+    const soon = campaign.dueOn >= today && campaign.dueOn <= shiftDate(today, DUES_REMIND_DAYS)
+    const overdue = campaign.dueOn < today
+    if (!soon && !overdue) continue
+    for (const item of itemsOf(campaign.id)) {
+      const owed = owedOf(item)
+      if (owed === 0) continue
+      const base = { clubId: campaign.clubId, category: 'FINANCE' as const, target: duesTarget(campaign), actorId: SYSTEM_ACTOR }
+      if (overdue && item.remindedOverdueAt === null) {
+        item.remindedOverdueAt = nowIso()
+        notify([item.userId], { ...base, title: `Quá hạn đóng quỹ: ${campaign.name}`, body: `Bạn còn thiếu ${formatMoney(owed)}, hạn nộp đã qua ngày ${formatDate(campaign.dueOn)}.` })
+      } else if (soon && item.remindedSoonAt === null) {
+        item.remindedSoonAt = nowIso()
+        notify([item.userId], { ...base, title: `Sắp tới hạn đóng quỹ: ${campaign.name}`, body: `Bạn còn thiếu ${formatMoney(owed)}, hạn nộp ${formatDate(campaign.dueOn)}.` })
+      }
+    }
+  }
+}
+
+registerJob('duesReminders', runDuesReminders)

@@ -1,5 +1,7 @@
-import { ArrowLeft, Lock, Pencil, Users } from 'lucide-react'
+import { ArrowLeft, Check, Lock, Pencil, Users } from 'lucide-react'
 import { useId } from 'react'
+import { Link } from 'react-router'
+import { useCurrentClub } from '@/features/club/viewModel/clubContext'
 import { formatDate, formatDateTime } from '@/shared/format/formatDate'
 import { formatMoney } from '@/shared/format/formatMoney'
 import { Badge } from '@/shared/ui/Badge'
@@ -13,10 +15,13 @@ import { MoneyInput } from '@/shared/ui/MoneyInput'
 import { ProgressBar } from '@/shared/ui/ProgressBar'
 import { Skeleton } from '@/shared/ui/Skeleton'
 import { EmptyState, ErrorState } from '@/shared/ui/StateViews'
+import { remainingDue } from '../model/duesRules'
 import type { DuesCampaignDetail, DuesItem } from '../model/duesTypes'
 import { duesCampaignStatusDisplay, duesDeadlineText, duesDueText, duesItemStatusDisplay, duesProgressText } from '../viewModel/duesDisplay'
 import { DUES_NAME_MAX } from '../viewModel/duesSchemas'
+import { useConfirmPaymentViewModel, type ConfirmPaymentViewModel } from '../viewModel/useConfirmPaymentViewModel'
 import { useDuesItemsViewModel, type DuesItemsViewModel } from '../viewModel/useDuesItemsViewModel'
+import { ConfirmPaymentDialog } from './ConfirmPaymentDialog'
 import { ExemptionDialog } from './ExemptionDialog'
 
 function EditDuesDialog({ vm }: { vm: DuesItemsViewModel }) {
@@ -98,16 +103,47 @@ function ExemptionNote({ item }: { item: DuesItem }) {
   return <span className="block text-xs break-words text-muted-foreground">Lý do: {item.exemption.reason}</span>
 }
 
-function ItemAction({ item, vm }: { item: DuesItem; vm: DuesItemsViewModel }) {
-  if (!vm.canExempt) return null
+/** Các lần nộp, mỗi lần dẫn tới khoản thu trong sổ Quỹ chung. */
+function PaymentHistory({ item, clubId }: { item: DuesItem; clubId: string }) {
+  if (item.payments.length === 0) return null
   return (
-    <Button variant="ghost" size="sm" onClick={() => vm.openExemption(item)} aria-label={`Miễn giảm cho ${item.member.fullName}`}>
-      Miễn giảm
-    </Button>
+    <ul className="mt-1 space-y-0.5 text-xs text-muted-foreground" aria-label={`Các lần nộp của ${item.member.fullName}`}>
+      {item.payments.map((payment) => (
+        <li key={payment.id}>
+          Nộp {formatMoney(payment.amount)} ngày {formatDate(payment.paidOn)} ·{' '}
+          <Link
+            to={`/clubs/${encodeURIComponent(clubId)}/finance?tx=${encodeURIComponent(payment.transactionId)}`}
+            aria-label={`Xem khoản thu ${formatMoney(payment.amount)} ngày ${formatDate(payment.paidOn)}`}
+            className="font-semibold text-primary underline-offset-2 hover:underline">
+            Xem khoản thu
+          </Link>
+        </li>
+      ))}
+    </ul>
   )
 }
 
-function ItemList({ vm, fullAmount }: { vm: DuesItemsViewModel; fullAmount: number }) {
+function ItemAction({ item, vm, pay }: { item: DuesItem; vm: DuesItemsViewModel; pay: ConfirmPaymentViewModel }) {
+  const owes = remainingDue(item) > 0
+  if (!vm.canExempt && !(vm.canRecordPayment && owes)) return null
+  return (
+    <span className="inline-flex flex-wrap justify-end gap-1">
+      {vm.canRecordPayment && owes && (
+        <Button variant="outline" size="sm" onClick={() => pay.open(item)} aria-label={`Xác nhận đã nộp: ${item.member.fullName}`}>
+          <Check aria-hidden />
+          Xác nhận đã nộp
+        </Button>
+      )}
+      {vm.canExempt && (
+        <Button variant="ghost" size="sm" onClick={() => vm.openExemption(item)} aria-label={`Miễn giảm cho ${item.member.fullName}`}>
+          Miễn giảm
+        </Button>
+      )}
+    </span>
+  )
+}
+
+function ItemList({ vm, pay, fullAmount, clubId }: { vm: DuesItemsViewModel; pay: ConfirmPaymentViewModel; fullAmount: number; clubId: string }) {
   return (
     <>
       {/* Màn rộng: bảng; màn hẹp: thẻ. */}
@@ -144,12 +180,15 @@ function ItemList({ vm, fullAmount }: { vm: DuesItemsViewModel; fullAmount: numb
                   {duesDueText(item, fullAmount)}
                   <ExemptionNote item={item} />
                 </td>
-                <td className="px-3 py-2 text-right tabular-nums">{formatMoney(item.paidAmount)}</td>
+                <td className="px-3 py-2 text-right tabular-nums">
+                  {formatMoney(item.paidAmount)}
+                  <PaymentHistory item={item} clubId={clubId} />
+                </td>
                 <td className="px-3 py-2">
                   <Badge tone={status.tone}>{status.label}</Badge>
                 </td>
                 <td className="px-3 py-2 text-right">
-                  <ItemAction item={item} vm={vm} />
+                  <ItemAction item={item} vm={vm} pay={pay} />
                 </td>
               </tr>
             )
@@ -172,7 +211,8 @@ function ItemList({ vm, fullAmount }: { vm: DuesItemsViewModel; fullAmount: numb
                 {duesDueText(item, fullAmount)} · đã nộp <span className="tabular-nums">{formatMoney(item.paidAmount)}</span>
               </p>
               <ExemptionNote item={item} />
-              <ItemAction item={item} vm={vm} />
+              <PaymentHistory item={item} clubId={clubId} />
+              <ItemAction item={item} vm={vm} pay={pay} />
             </li>
           )
         })}
@@ -184,6 +224,8 @@ function ItemList({ vm, fullAmount }: { vm: DuesItemsViewModel; fullAmount: numb
 /** Một đợt đóng quỹ (FR-FIN-09): tiến độ, người phải đóng, miễn giảm, sửa và đóng đợt. */
 export function DuesCampaignPanel({ campaignId, onBack }: { campaignId: string; onBack: () => void }) {
   const vm = useDuesItemsViewModel(campaignId)
+  const pay = useConfirmPaymentViewModel(campaignId)
+  const { clubId } = useCurrentClub()
   const campaign = vm.campaign
   const listId = useId()
   return (
@@ -225,12 +267,13 @@ export function DuesCampaignPanel({ campaignId, onBack }: { campaignId: string; 
               {!vm.itemsLoading && !vm.itemsError && vm.items.length === 0 && (
                 <EmptyState icon={Users} title="Không có ai phù hợp" description="Thử đổi bộ lọc hoặc từ khóa." className="border-0" />
               )}
-              {!vm.itemsError && vm.items.length > 0 && <ItemList vm={vm} fullAmount={campaign.amount} />}
+              {!vm.itemsError && vm.items.length > 0 && <ItemList vm={vm} pay={pay} fullAmount={campaign.amount} clubId={clubId} />}
             </div>
           </section>
           <Pagination page={vm.page} totalPages={vm.totalPages} totalElements={vm.totalElements} pageSize={vm.pageSize} onPageChange={vm.setPage} />
           <EditDuesDialog vm={vm} />
           <ExemptionDialog vm={vm} />
+          <ConfirmPaymentDialog vm={pay} />
           <ConfirmDialog
             open={vm.dialog?.kind === 'CLOSE'}
             onOpenChange={(open) => !open && vm.closeDialog()}

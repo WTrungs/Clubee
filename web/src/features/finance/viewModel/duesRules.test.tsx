@@ -117,7 +117,7 @@ describe('changing a campaign (FR-FIN-09, BR-FIN-06)', () => {
     expect((await fail(duesRepository.update('c-guitar', 'dues-guitar-hk1', { name: 'Quỹ HK1 mới', version: 0 })))?.status).toBe(409)
 
     const item = db.duesItems.find((candidate) => candidate.campaignId === 'dues-guitar-hk1' && candidate.userId === 'u-long')
-    item?.payments.push({ id: 'pay-1', amount: 50_000, paidOn: vnDate(0), recordedBy: 'u-mai', recordedAt: vnDate(0), transactionId: 'tx-x' })
+    item?.payments.push({ id: 'pay-1', amount: 50_000, paidOn: vnDate(0), confirmedBy: 'u-mai', confirmedAt: vnDate(0), transactionId: 'tx-x' })
     expect(await fail(duesRepository.update('c-guitar', 'dues-guitar-hk1', { amount: 200_000, version: seeded().version }))).toMatchObject({ status: 422, code: 'HAS_PAYMENTS' })
     expect((await duesRepository.get('c-guitar', 'dues-guitar-hk1')).allowedActions).not.toContain('EDIT_AMOUNT')
     // Mức sau miễn giảm không thấp hơn số đã nộp.

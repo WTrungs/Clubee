@@ -1,19 +1,21 @@
 import { http, HttpResponse } from 'msw'
-import type { DuesExemptionInput, OpenDuesRequest, SetExemptionRequest, UpdateDuesCampaignRequest } from '@/features/finance/model/duesTypes'
+import type { DuesExemptionInput, OpenDuesRequest, RecordDuesPaymentRequest, SetExemptionRequest, UpdateDuesCampaignRequest } from '@/features/finance/model/duesTypes'
 import { formatDate } from '@/shared/format/formatDate'
 import { formatMoney } from '@/shared/format/formatMoney'
 import { REASON_MAX, REASON_MIN } from '@/shared/lib/reasonRules'
-import { db } from '../db'
+import { db, type DbTransaction } from '../db'
 import { forbidden } from '../mockAccess'
-import { canViewDues, duesItemStatus, duesTarget, hasPayments, itemsOf, paidOf, toDuesDetail, toDuesItem, toDuesSummary } from '../mockDues'
+import { canViewDues, duesItemStatus, duesTarget, hasPayments, itemsOf, owedOf, paidOf, toDuesDetail, toDuesItem, toDuesSummary } from '../mockDues'
 import { canReachClubFinance, keepsLedger } from '../mockFinance'
 import { API, currentUser, matchesKeyword, networkDelay, newId, paginate, problem, writer } from '../mockHttp'
 import { eligibleMembers } from '../mockMembers'
 import { notify } from '../mockNotifications'
 import { isRealDate, nowIso, vnToday } from '../mockTime'
 import { DUES_MEMBER_STATUSES, type DbDuesCampaign, type DbDuesItem } from '../seed/duesSeed'
+import { generalFundId } from '../seed/financeSeed'
 
 // FR-FIN-09: ban chủ nhiệm xem đợt đóng quỹ; mở, sửa, miễn giảm, đóng đợt cần `RECORD_LEDGER` (mặc định Thủ quỹ).
+// FR-FIN-10: xác nhận đã nộp sinh khoản thu Đã ghi sổ ở Quỹ chung, hạng mục `MEMBER_DUES`.
 // Danh sách người phải đóng chụp lúc mở đợt: Thử việc, Chính thức; họ tên, ban, mức đóng không đổi theo hồ sơ sau đó (BR-DATA-02).
 
 const NAME_MIN = 3
@@ -207,7 +209,11 @@ export const duesHandlers = [
     }
     if (errors.length > 0) return problem(400, 'Thông tin đợt đóng quỹ chưa hợp lệ.', 'VALIDATION', errors)
     if (body.name !== undefined) campaign.name = body.name.trim()
-    if (body.dueOn !== undefined) campaign.dueOn = body.dueOn
+    if (body.dueOn !== undefined && body.dueOn !== campaign.dueOn) {
+      campaign.dueOn = body.dueOn
+      // Hạn mới thì nhắc lại theo hạn mới (FR-FIN-10).
+      for (const item of items) Object.assign(item, { remindedSoonAt: null, remindedOverdueAt: null })
+    }
     if (amountChanges) {
       campaign.amount = body.amount as number
       for (const item of items) {
@@ -287,5 +293,71 @@ export const duesHandlers = [
     if (campaign.status !== 'OPEN') return closedProblem()
     Object.assign(campaign, { status: 'CLOSED', closedBy: user.value.id, closedAt: nowIso(), version: campaign.version + 1 })
     return HttpResponse.json(toDuesDetail(campaign, user.value.id))
+  }),
+
+  http.post(`${API}/clubs/:clubId/dues-campaigns/:campaignId/items/:itemId/payments`, async ({ request, params }) => {
+    await networkDelay()
+    const user = writer(request)
+    if (!user.ok) return user.response
+    const clubId = String(params.clubId)
+    const denied = clubGate(user.value.id, clubId)
+    if (denied) return denied
+    const campaign = findCampaign(clubId, params.campaignId)
+    const item = campaign ? itemsOf(campaign.id).find((candidate) => candidate.id === params.itemId) : undefined
+    if (!campaign || !item) return problem(404, 'Không tìm thấy người này trong đợt đóng quỹ.', 'ITEM_NOT_FOUND')
+    const userId = user.value.id
+    if (!keepsLedger(userId, clubId)) return forbidden(clubId, 'RECORD_LEDGER', 'xác nhận đã nộp quỹ')
+    const body = (await request.json()) as Partial<RecordDuesPaymentRequest>
+    // Lệch phiên bản: lần bấm thứ hai không sinh thêm khoản thu (NFR-REL-01).
+    if (body.version !== item.version) return conflictProblem('Khoản đóng quỹ của người này')
+    if (campaign.status !== 'OPEN') return closedProblem()
+    const owed = owedOf(item)
+    if (owed === 0) return problem(422, `${item.memberName} đã nộp đủ hoặc được miễn.`, 'ALREADY_PAID')
+    const errors: FieldError[] = []
+    if (!validAmount(body.amount) || body.amount > owed) errors.push({ field: 'amount', message: `Số tiền từ 1 đ tới số còn thiếu ${formatMoney(owed)}.` })
+    if (!isRealDate(body.paidOn) || body.paidOn > vnToday()) errors.push({ field: 'paidOn', message: 'Ngày nộp không hợp lệ hoặc sau hôm nay.' })
+    if (errors.length > 0) return problem(400, 'Thông tin khoản nộp chưa hợp lệ.', 'VALIDATION', errors)
+    const now = nowIso()
+    const transaction: DbTransaction = {
+      id: newId('tx'),
+      clubId,
+      fundId: generalFundId(clubId),
+      type: 'INCOME',
+      direction: 'IN',
+      amount: body.amount as number,
+      category: 'MEMBER_DUES',
+      description: `Đóng quỹ ${campaign.name}: ${item.memberName}`,
+      occurredOn: body.paidOn as string,
+      status: 'POSTED',
+      proposerId: userId,
+      approverId: null,
+      posterId: userId,
+      attachmentIds: [],
+      originalId: null,
+      targetFundId: null,
+      rejectionReason: null,
+      createdAt: now,
+      decidedAt: null,
+      postedAt: now,
+      cancelledBy: null,
+      cancelledAt: null,
+      cancellationReason: null,
+      version: 1,
+      duesItemId: item.id,
+    }
+    db.transactions.push(transaction)
+    item.payments.push({ id: newId('duesp'), amount: transaction.amount, paidOn: transaction.occurredOn ?? vnToday(), confirmedBy: userId, confirmedAt: now, transactionId: transaction.id })
+    item.version += 1
+    campaign.version += 1
+    const left = owedOf(item)
+    notify([item.userId], {
+      clubId,
+      category: 'FINANCE',
+      title: `Đã ghi nhận nộp quỹ: ${campaign.name}`,
+      body: left > 0 ? `Đã nhận ${formatMoney(transaction.amount)}, còn thiếu ${formatMoney(left)}.` : `Đã nhận ${formatMoney(transaction.amount)}. Bạn đã nộp đủ.`,
+      target: duesTarget(campaign),
+      actorId: userId,
+    })
+    return HttpResponse.json(toDuesItem(item), { status: 201 })
   }),
 ]

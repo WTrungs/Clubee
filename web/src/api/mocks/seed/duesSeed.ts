@@ -23,8 +23,8 @@ export interface DbDuesPayment {
   id: string
   amount: number
   paidOn: string
-  recordedBy: string
-  recordedAt: string
+  confirmedBy: string
+  confirmedAt: string
   transactionId: string
 }
 

@@ -81,3 +81,15 @@ export function exemptionSchema(fullAmount: number) {
 }
 
 export type ExemptionValues = z.infer<ReturnType<typeof exemptionSchema>>
+
+/** FR-FIN-10: số tiền từ 1 tới số còn thiếu `owed`; ngày nộp không sau hôm nay (`today` yyyy-mm-dd). */
+export function confirmPaymentSchema(today: string, owed: number) {
+  return z
+    .object({ amount: amountText, paidDate: dateText(null, today, 'Ngày nộp không được sau hôm nay.') })
+    .superRefine((values, context) => {
+      const amount = parseMoney(values.amount)
+      if (amount !== null && amount > owed) context.addIssue({ code: 'custom', path: ['amount'], message: `Không vượt số còn thiếu ${formatMoney(owed)}.` })
+    })
+}
+
+export type ConfirmPaymentValues = z.infer<ReturnType<typeof confirmPaymentSchema>>

@@ -165,6 +165,7 @@ export function useDuesItemsViewModel(campaignId: string) {
     canEditAmount: allowed.includes('EDIT_AMOUNT'),
     canExempt: allowed.includes('SET_EXEMPTION'),
     canClose: allowed.includes('CLOSE'),
+    canRecordPayment: allowed.includes('RECORD_PAYMENT'),
     dialog,
     pending,
     closeDialog: () => {

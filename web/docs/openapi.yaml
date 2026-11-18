@@ -4176,6 +4176,43 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
         '422': { $ref: '#/components/responses/UnprocessableEntity' }
+  /clubs/{clubId}/dues-campaigns/{campaignId}/items/{itemId}/payments:
+    post:
+      tags: [FIN]
+      operationId: recordDuesPayment
+      summary: Xác nhận một người đã nộp quỹ (FR-FIN-10)
+      description: |
+        `RECORD_LEDGER`; đợt đang mở (422 `CAMPAIGN_CLOSED`); người đã nộp đủ hoặc được miễn: 422 `ALREADY_PAID`. Số tiền từ 1
+        tới số còn thiếu; ngày nộp không sau hôm nay. `version` là phiên bản của dòng; lệch thì 409, nên bấm hai lần không sinh
+        hai khoản thu (NFR-REL-01). Mỗi lần sinh một khoản thu Đã ghi sổ ở Quỹ chung, hạng mục `MEMBER_DUES`, nội dung có tên kỳ
+        và họ tên; báo người nộp. Việc theo giờ nhắc người còn thiếu một lần khi còn 3 ngày tới hạn và một lần khi quá hạn
+        (đợt đã đóng, người được miễn hoặc đã nộp đủ thì không nhắc). Thứ tự kiểm: 403, 409, 422, 400.
+        Lỗi: 400 `VALIDATION` (`amount`, `paidOn`); 403 `NOT_A_MEMBER`, `FORBIDDEN`; 404 `ITEM_NOT_FOUND`; 409 `VERSION_CONFLICT`;
+        422 `CAMPAIGN_CLOSED`, `ALREADY_PAID`.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - { name: campaignId, in: path, required: true, schema: { type: string } }
+        - { name: itemId, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RecordDuesPaymentRequest' }
+      responses:
+        '201':
+          description: Dòng sau khi ghi nhận.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DuesItem' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
   /clubs/{clubId}/dues-campaigns/{campaignId}/closure:
     post:
       tags: [FIN]
@@ -7621,7 +7658,7 @@ components:
               items: { $ref: '#/components/schemas/DuesCampaignSummary' }
     DuesItem:
       type: object
-      required: [id, member, departmentName, amountDue, paidAmount, status, exemption, version]
+      required: [id, member, departmentName, amountDue, paidAmount, status, exemption, payments, version]
       properties:
         id: { type: string }
         member:
@@ -7635,7 +7672,28 @@ components:
           oneOf:
             - $ref: '#/components/schemas/DuesExemption'
             - type: 'null'
+        payments:
+          type: array
+          description: Các lần nộp, mới nhất trước (FR-FIN-10).
+          items: { $ref: '#/components/schemas/DuesPayment' }
         version: { type: integer }
+    DuesPayment:
+      type: object
+      required: [id, amount, paidOn, confirmedBy, confirmedAt, transactionId]
+      properties:
+        id: { type: string }
+        amount: { type: integer }
+        paidOn: { type: string, format: date }
+        confirmedBy: { $ref: '#/components/schemas/PersonRef' }
+        confirmedAt: { type: string, format: date-time }
+        transactionId: { type: string, description: Khoản thu Đã ghi sổ ở Quỹ chung. }
+    RecordDuesPaymentRequest:
+      type: object
+      required: [amount, paidOn, version]
+      properties:
+        amount: { type: integer, minimum: 1, description: Không vượt số còn thiếu. }
+        paidOn: { type: string, format: date, description: Không sau hôm nay. }
+        version: { type: integer, description: Phiên bản của dòng. }
     DuesItemPage:
       allOf:
         - $ref: '#/components/schemas/PageMeta'

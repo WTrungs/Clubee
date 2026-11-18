@@ -8,7 +8,7 @@ function vnDateText(days: number): string {
 }
 
 test.describe('Đóng quỹ', () => {
-  test('thủ quỹ mở đợt có một người miễn, một người giảm; thành viên được báo', async ({ page }, testInfo) => {
+  test('thủ quỹ mở đợt có một người miễn, một người giảm; thành viên được báo; xác nhận người nộp đủ và người nộp một phần', async ({ page }, testInfo) => {
     test.slow()
     await loginAs(page, 'mai.vo@demo.test')
     await page.goto('/clubs/c-guitar/finance?view=dues')
@@ -46,6 +46,30 @@ test.describe('Đóng quỹ', () => {
     await expect(page.getByText('60.000 đ (giảm từ 120.000 đ)').filter({ visible: true })).toBeVisible()
     await expectNoHorizontalScroll(page)
     await snap(page, testInfo, 'duesCampaign')
+
+    // FR-FIN-10: một người nộp đủ, một người nộp một phần; mỗi lần là một khoản thu trong sổ Quỹ chung.
+    const confirmPaid = async (name: string, amount?: string) => {
+      await page.getByRole('button', { name: `Xác nhận đã nộp: ${name}` }).filter({ visible: true }).click()
+      const dialog = page.getByRole('dialog', { name: 'Xác nhận đã nộp' })
+      if (amount) await dialog.getByRole('textbox', { name: /Số tiền nộp/ }).fill(amount)
+      if (amount) await snap(page, testInfo, 'confirmPayment', { fullPage: false })
+      await dialog.getByRole('button', { name: 'Xác nhận' }).click()
+      await expect(dialog).toHaveCount(0)
+    }
+    await confirmPaid('Bùi Đức Long')
+    await settleToast(page, 'Đã xác nhận Bùi Đức Long nộp 120.000 đ. Sổ Quỹ chung có khoản thu mới.')
+    await confirmPaid('Đặng Khánh Linh', '50000')
+    await settleToast(page, 'Đã xác nhận Đặng Khánh Linh nộp 50.000 đ. Còn thiếu 70.000 đ. Sổ Quỹ chung có khoản thu mới.')
+    await expect(summary.getByText('2/16 người xong · 170.000 đ / 1.740.000 đ')).toBeVisible()
+    await page.getByRole('group', { name: 'Lọc theo tình trạng' }).getByRole('button', { name: 'Nộp một phần' }).click()
+    await expect(page.getByRole('button', { name: 'Xác nhận đã nộp: Đặng Khánh Linh' }).filter({ visible: true })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Xác nhận đã nộp: Bùi Đức Long' })).toHaveCount(0)
+    await expectNoHorizontalScroll(page)
+    await snap(page, testInfo, 'duesPayments')
+    await page.getByRole('tab', { name: 'Quỹ chung' }).click()
+    await expect(page.getByRole('button', { name: /Đóng quỹ Quỹ học kỳ 2: Bùi Đức Long/ })).toBeVisible()
+    await expect(page.getByRole('button', { name: /Đóng quỹ Quỹ học kỳ 2: Đặng Khánh Linh/ })).toBeVisible()
+    await expect(page.getByRole('region', { name: 'Số dư Quỹ chung' }).getByText('5.640.000')).toBeVisible()
 
     // Không tải lại trang: mock chạy trong trình duyệt nên tải lại là mất đợt vừa mở.
     await switchUser(page, 'Võ Ngọc Mai', 'thao.mai@demo.test')
