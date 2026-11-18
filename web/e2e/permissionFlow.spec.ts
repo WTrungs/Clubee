@@ -7,7 +7,7 @@ async function toggleTreasurerMembers(page: Page): Promise<void> {
   await page.getByRole('switch', { name: 'Quản lý thành viên cho Thủ quỹ' }).click()
 }
 
-test.describe('Ma trận quyền', () => {
+test.describe('Bảng phân quyền', () => {
   test('Chủ nhiệm tắt quyền quản lý thành viên của Thủ quỹ, Thủ quỹ mất tab, rồi khôi phục mặc định', async ({ page }, testInfo) => {
     await loginAs(page, 'anh.nguyen@demo.test')
     await page.goto('/clubs/c-guitar/structure?tab=permissions')
@@ -35,7 +35,7 @@ test.describe('Ma trận quyền', () => {
     await page.getByRole('tab', { name: 'Phân quyền' }).click()
     await page.getByRole('button', { name: 'Khôi phục mặc định' }).click()
     await page.getByRole('dialog', { name: 'Khôi phục mặc định' }).getByRole('button', { name: 'Khôi phục' }).click()
-    await settleToast(page, 'Đã khôi phục ma trận về mặc định.')
+    await settleToast(page, 'Đã khôi phục bảng phân quyền về mặc định.')
     await expect(page.getByRole('button', { name: 'Khôi phục mặc định' })).toBeDisabled()
     await snap(page, testInfo, 'permissionMatrixReset', { fullPage: false })
   })

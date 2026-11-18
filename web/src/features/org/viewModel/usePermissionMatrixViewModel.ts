@@ -9,7 +9,7 @@ import type { PermissionMatrix, PermissionMatrixCell } from '../model/permission
 import { orgQueryKeys } from './orgQueryKeys'
 import { pendingChangeList, togglePending, type PendingChanges } from './permissionDisplay'
 
-/** FR-ORG-05: sửa ma trận theo lô; lưu xong làm mới mọi truy vấn vì quyền đổi có hiệu lực ngay ở mọi màn. */
+/** FR-ORG-05: sửa bảng phân quyền theo lô; lưu xong làm mới mọi truy vấn vì quyền đổi có hiệu lực ngay ở mọi màn. */
 export function usePermissionMatrixViewModel(active: boolean) {
   const queryClient = useQueryClient()
   const { clubId } = useCurrentClub()
@@ -64,7 +64,7 @@ export function usePermissionMatrixViewModel(active: boolean) {
     mutationFn: () => orgRepository.resetPermissionMatrix(clubId, data?.version ?? 0),
     meta: { silentError: true },
     onSuccess: (saved) =>
-      onSaved(saved, saved.changedFromDefault > 0 ? `Đã khôi phục mặc định; còn ${saved.changedFromDefault} ô thuộc chức vụ của bạn chưa đổi.` : 'Đã khôi phục ma trận về mặc định.'),
+      onSaved(saved, saved.changedFromDefault > 0 ? `Đã khôi phục mặc định; còn ${saved.changedFromDefault} ô thuộc chức vụ của bạn chưa đổi.` : 'Đã khôi phục bảng phân quyền về mặc định.'),
     onError: onFailed,
   })
 

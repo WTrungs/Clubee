@@ -12,7 +12,7 @@ export type AccessScope =
 
 const CLUB_SCOPE: AccessScope = { type: 'CLUB' }
 
-/** Ô của ma trận: bật hoặc tắt mặc định, và có khóa cứng không (BR-ACL-04, 05). Thiếu ô là quyền vô nghĩa với phạm vi của chức vụ (BR-ACL-02). */
+/** Ô của bảng phân quyền: bật hoặc tắt mặc định, và có khóa cứng không (BR-ACL-04, 05). Thiếu ô là quyền vô nghĩa với phạm vi của chức vụ (BR-ACL-02). */
 export interface PermissionCell {
   enabled: boolean
   locked: boolean
@@ -28,7 +28,7 @@ const lockedOff: PermissionCell = { enabled: false, locked: true }
 const board = { PRESIDENT: on, VICE_PRESIDENT: on, TREASURER: on }
 const departmentLeads = { DEPARTMENT_HEAD: on, DEPARTMENT_VICE_HEAD: on }
 
-/** Quyền mặc định theo SRS 3.2; ma trận của từng CLB chỉ lưu các ô khác mặc định. */
+/** Quyền mặc định theo SRS 3.2; bảng phân quyền của từng CLB chỉ lưu các ô khác mặc định. */
 export const DEFAULT_MATRIX: Record<PermissionKey, Partial<Record<PositionRole, PermissionCell>>> = {
   CONFIGURE_CLUB: board,
   MANAGE_TERMS: board,
@@ -52,7 +52,7 @@ export function defaultCell(role: PositionRole, permission: PermissionKey): Perm
   return DEFAULT_MATRIX[permission][role]
 }
 
-/** Chức vụ có quyền này ở CLB hay không: ô khóa luôn theo mặc định, ô khác theo ma trận của CLB nếu đã sửa. */
+/** Chức vụ có quyền này ở CLB hay không: ô khóa luôn theo mặc định, ô khác theo bảng phân quyền của CLB nếu đã sửa. */
 export function roleAllows(clubId: string, role: PositionRole, permission: PermissionKey): boolean {
   const cell = defaultCell(role, permission)
   if (!cell) return false
@@ -131,7 +131,7 @@ export function rolesPhrase(roles: PositionRole[]): string {
   return `${parts.slice(0, -1).join(', ')} hoặc ${parts.at(-1) ?? ''}`
 }
 
-/** Câu 403 nêu đúng các chức vụ đang có quyền ở CLB theo ma trận hiện tại, trong số chức vụ với tới được loại phạm vi (IF-01). */
+/** Câu 403 nêu đúng các chức vụ đang có quyền ở CLB theo bảng phân quyền hiện tại, trong số chức vụ với tới được loại phạm vi (IF-01). */
 export function forbidden(clubId: string, permission: PermissionKey, what: string, scope: AccessScope = CLUB_SCOPE): Response {
   const roles = ROLES_REACHING[scope.type].filter((role) => roleAllows(clubId, role, permission))
   const detail = roles.length === 0 ? `Hiện không chức vụ nào ở CLB được ${what}.` : `Chỉ ${rolesPhrase(roles)} được ${what}.`

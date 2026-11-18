@@ -37,7 +37,7 @@ function clubActionsFor(userId: string, clubId: string): ClubAction[] {
   if (can(userId, clubId, 'CONFIGURE_CLUB')) actions.push('EDIT_CLUB')
   const assigns = can(userId, clubId, 'ASSIGN_POSITIONS')
   if (assigns && canAssignStanding(clubId)) actions.push('ASSIGN_POSITION')
-  // Quy tắc chốt 05/11: chỉ Chủ nhiệm, Phó chủ nhiệm gán được hai chức này, ma trận không mở rộng được.
+  // Quy tắc chốt 05/11: chỉ Chủ nhiệm, Phó chủ nhiệm gán được hai chức này, bảng phân quyền không mở rộng được.
   if (assigns && isPresidency(userId, clubId)) actions.push('ASSIGN_PRESIDENCY')
   if (canCreateTerm(userId, clubId)) actions.push('CREATE_TERM')
   if (isActiveMember(userId, clubId)) actions.push('PROPOSE_EVENT')
@@ -117,7 +117,7 @@ export function firstTermEnd(startOn: string): string {
   return end.toISOString().slice(0, 10)
 }
 
-/** Ghi được hồ sơ CLB: người gọi là thành viên và có quyền cấu hình CLB theo ma trận (FR-CLB-02). */
+/** Ghi được hồ sơ CLB: người gọi là thành viên và có quyền cấu hình CLB theo bảng phân quyền (FR-CLB-02). */
 function editableClub(userId: string, clubId: string, what = 'sửa hồ sơ CLB'): { ok: true; club: DbClub } | { ok: false; response: Response } {
   const club = db.clubs.find((candidate) => candidate.id === clubId)
   if (!club) return { ok: false, response: problem(404, 'Không tìm thấy CLB.', 'CLUB_NOT_FOUND') }

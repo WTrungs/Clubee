@@ -8,7 +8,7 @@ import { notify, structureTarget } from './mockNotifications'
 import { isPositionEffective, positionsIn, positionTitles } from './mockPermissions'
 import { nowIso } from './mockTime'
 
-/** Số phiên bản và lần sửa gần nhất của ma trận mỗi CLB; chưa sửa lần nào thì không có bản ghi, coi là phiên bản 1. */
+/** Số phiên bản và lần sửa gần nhất của bảng phân quyền mỗi CLB; chưa sửa lần nào thì không có bản ghi, coi là phiên bản 1. */
 export interface DbPermissionMatrixMeta {
   clubId: string
   version: number
@@ -18,7 +18,7 @@ export interface DbPermissionMatrixMeta {
 
 const LOCK_REASONS: Partial<Record<`${PositionRole}:${PermissionKey}`, string>> = {
   'PRESIDENT:ASSIGN_POSITIONS': 'Chủ nhiệm luôn giữ quyền này để CLB không mất người gán chức vụ.',
-  'PRESIDENT:EDIT_PERMISSIONS': 'Chủ nhiệm luôn giữ quyền này để CLB không mất người chỉnh ma trận.',
+  'PRESIDENT:EDIT_PERMISSIONS': 'Chủ nhiệm luôn giữ quyền này để CLB không mất người chỉnh bảng phân quyền.',
   'EVENT_LEAD:APPROVE_EXPENSE': 'Trưởng BTC không tự duyệt chi của sự kiện mình phụ trách.',
 }
 const NOT_APPLICABLE_REASON = 'Không áp dụng với phạm vi của chức vụ này.'

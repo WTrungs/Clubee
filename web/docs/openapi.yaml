@@ -564,7 +564,7 @@ paths:
       description: |
         Ai có tài khoản cũng tạo được, không cần duyệt; không chặn trùng tên (nền tảng phục vụ nhiều trường). Một lần ghi
         tạo: CLB ở Hoạt động (thu thập MSSV tắt, có bước thử việc, SRS 9.2), nhiệm kỳ đầu "Nhiệm kỳ đầu tiên" Đang chạy
-        từ hôm nay đến hết 12 tháng, tư cách Chính thức và chức Chủ nhiệm cho người tạo, ma trận quyền mặc định
+        từ hôm nay đến hết 12 tháng, tư cách Chính thức và chức Chủ nhiệm cho người tạo, bảng phân quyền mặc định
         (mock dùng quyền cố định cho tới khi có FR-ORG-05).
         Kiểm tra: tên 3–100 ký tự, tên viết tắt 2–10, lĩnh vực 2–50 (chữ tự do), mô tả 10–1000.
         Lỗi: 400 `VALIDATION`.
@@ -639,17 +639,17 @@ paths:
     get:
       tags: [ORG]
       operationId: getPermissionMatrix
-      summary: Ma trận quyền của CLB (FR-ORG-05)
+      summary: Bảng phân quyền theo chức vụ của CLB (FR-ORG-05)
       description: |
         Ban chủ nhiệm xem được. Mỗi ô có trạng thái với người xem: `LOCKED` (BR-ACL-04, 05, kèm lý do), `OWN_ROLE` (chức vụ
         người xem đang giữ, BR-ACL-03), `NOT_APPLICABLE` (vô nghĩa với phạm vi của chức vụ, BR-ACL-02), `EDITABLE`.
-        `allowedActions` có `EDIT`, `RESET` khi người xem có quyền chỉnh ma trận. Quyền xem thông tin (SRS 3.5) không nằm ở đây.
+        `allowedActions` có `EDIT`, `RESET` khi người xem có quyền chỉnh bảng phân quyền. Quyền xem thông tin (SRS 3.5) không nằm ở đây.
         Lỗi: 403 `NOT_A_MEMBER`, `FORBIDDEN`.
       parameters:
         - $ref: '#/components/parameters/ClubId'
       responses:
         '200':
-          description: Ma trận.
+          description: Bảng phân quyền.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/PermissionMatrix' }
@@ -658,12 +658,12 @@ paths:
     put:
       tags: [ORG]
       operationId: updatePermissionMatrix
-      summary: Sửa nhiều ô ma trận quyền một lần (FR-ORG-05)
+      summary: Sửa nhiều ô bảng phân quyền một lần (FR-ORG-05)
       description: |
-        Tất cả hoặc không gì. Thứ tự kiểm: quyền chỉnh ma trận (403) → hàng của chức vụ người gọi đang giữ (403 `OWN_ROLE`) →
+        Tất cả hoặc không gì. Thứ tự kiểm: quyền chỉnh bảng phân quyền (403) → hàng của chức vụ người gọi đang giữ (403 `OWN_ROLE`) →
         version (409) → ô khóa hoặc không áp dụng (422 `PERMISSION_LOCKED`, `errors[]` theo `changes[i]`). Ô trở về mặc định thì
         bỏ bản ghi khác mặc định. Mỗi ô đổi ghi nhật ký trước, sau (BR-DATA-03); người đang giữ chức vụ bị đổi nhận một thông báo
-        gộp theo chức vụ (R-02). Có hiệu lực ngay: lần đọc sau mọi `allowedActions` tính theo ma trận mới.
+        gộp theo chức vụ (R-02). Có hiệu lực ngay: lần đọc sau mọi `allowedActions` tính theo bảng phân quyền mới.
         Lỗi: 400 `VALIDATION`; 403 `NOT_A_MEMBER`, `FORBIDDEN`, `OWN_ROLE`; 409 `VERSION_CONFLICT`; 422 `PERMISSION_LOCKED`.
       security:
         - sessionCookie: []
@@ -677,7 +677,7 @@ paths:
             schema: { $ref: '#/components/schemas/UpdatePermissionMatrixRequest' }
       responses:
         '200':
-          description: Ma trận sau khi sửa.
+          description: Bảng phân quyền sau khi sửa.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/PermissionMatrix' }
@@ -690,7 +690,7 @@ paths:
     post:
       tags: [ORG]
       operationId: resetPermissionMatrix
-      summary: Khôi phục ma trận về mặc định (FR-ORG-05)
+      summary: Khôi phục bảng phân quyền về mặc định (FR-ORG-05)
       description: |
         Đưa mọi ô người gọi sửa được về mặc định; hàng của chức vụ người gọi đang giữ giữ nguyên, số ô còn lệch ở
         `changedFromDefault`. Ghi nhật ký từng ô, thông báo như khi sửa.
@@ -707,7 +707,7 @@ paths:
             schema: { $ref: '#/components/schemas/VersionOnly' }
       responses:
         '200':
-          description: Ma trận sau khi khôi phục.
+          description: Bảng phân quyền sau khi khôi phục.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/PermissionMatrix' }
@@ -718,7 +718,7 @@ paths:
     get:
       tags: [ORG]
       operationId: listPermissionMatrixChanges
-      summary: Thay đổi gần đây của ma trận quyền (FR-ORG-05)
+      summary: Thay đổi gần đây của bảng phân quyền (FR-ORG-05)
       description: Ban chủ nhiệm xem được; mới nhất trước, giá trị trước và sau của từng ô. Lỗi 403 `NOT_A_MEMBER`, `FORBIDDEN`.
       parameters:
         - $ref: '#/components/parameters/ClubId'
@@ -824,7 +824,7 @@ paths:
       description: |
         Các tham số cấp CLB đang dùng (SRS 9.2): bước thử việc, hạn liên kết mời, hạn hủy đăng ký, hạn xác nhận lại khi dời giờ,
         số phút mở điểm danh trước giờ, chu kỳ đổi mã QR, nhắc hạn công việc, ngưỡng chi bắt buộc chứng từ, hạn quyết toán tạm ứng,
-        mốc học kỳ cho báo cáo. Chỉ người có quyền cấu hình CLB theo ma trận (mặc định là ban chủ nhiệm).
+        mốc học kỳ cho báo cáo. Chỉ người có quyền cấu hình CLB theo bảng phân quyền (mặc định là ban chủ nhiệm).
         Lỗi: 403 `NOT_A_MEMBER`, `FORBIDDEN`; 404 `CLUB_NOT_FOUND`.
       parameters:
         - $ref: '#/components/parameters/ClubId'
@@ -1015,7 +1015,7 @@ paths:
       operationId: listInvitations
       summary: Lời mời gia nhập của CLB (FR-MEM-01)
       description: |
-        Người có quyền quản lý thành viên theo ma trận (mặc định ban chủ nhiệm). Mới nhất trước; lọc theo trạng thái suy ra.
+        Người có quyền quản lý thành viên theo bảng phân quyền (mặc định ban chủ nhiệm). Mới nhất trước; lọc theo trạng thái suy ra.
         Lỗi: 400 `VALIDATION` (trạng thái lọc sai); 403 `NOT_A_MEMBER`, `FORBIDDEN`; 404 `CLUB_NOT_FOUND`.
       parameters:
         - $ref: '#/components/parameters/ClubId'
@@ -1207,7 +1207,7 @@ paths:
       operationId: updateMemberInfo
       summary: Sửa thông tin thành viên trong CLB (FR-MEM-05)
       description: |
-        Người có quyền quản lý thành viên theo ma trận quyền (mặc định ban chủ nhiệm). Gửi đủ bốn trường; chuỗi rỗng là xóa.
+        Người có quyền quản lý thành viên theo bảng phân quyền (mặc định ban chủ nhiệm). Gửi đủ bốn trường; chuỗi rỗng là xóa.
         `studentId` bị bỏ qua khi CLB không thu thập MSSV. Mỗi trường đổi ghi một dòng `infoHistory`; không đổi gì thì
         `version` giữ nguyên.
 
@@ -1414,7 +1414,7 @@ paths:
       operationId: listLeaveRequests
       summary: Yêu cầu tạm nghỉ (FR-MEM-07)
       description: |
-        Người có quyền quản lý thành viên theo ma trận quyền (mặc định ban chủ nhiệm). `status=PENDING` (mặc định, cũ trước)
+        Người có quyền quản lý thành viên theo bảng phân quyền (mặc định ban chủ nhiệm). `status=PENDING` (mặc định, cũ trước)
         hoặc `DECIDED` (đã xử lý, mới nhất trước). Lỗi 403 `NOT_A_MEMBER`, `FORBIDDEN`.
       parameters:
         - $ref: '#/components/parameters/ClubId'
@@ -1478,7 +1478,7 @@ paths:
       operationId: transferDepartment
       summary: Chuyển ban chính (FR-MEM-10)
       description: |
-        Người có quyền quản lý thành viên theo ma trận quyền (mặc định ban chủ nhiệm). Chuyển 1–50 người sang một ban đang
+        Người có quyền quản lý thành viên theo bảng phân quyền (mặc định ban chủ nhiệm). Chuyển 1–50 người sang một ban đang
         hoạt động, tất cả hoặc không ai. Ban cũ kết thúc ngày hôm qua, ban mới bắt đầu hôm nay (BR-MEM-06); công việc ở ban
         cũ giữ nguyên. Người được chuyển nhận thông báo `MEMBERSHIP`.
 
@@ -2384,7 +2384,7 @@ paths:
       operationId: updateTask
       summary: Đổi người chính, người phối hợp hoặc hạn (FR-TASK-05)
       description: |
-        Chỉ người giao. Đổi người cần thêm quyền giao việc ở phạm vi của việc theo ma trận và phạm vi còn hoạt động; đổi hạn thì không.
+        Chỉ người giao. Đổi người cần thêm quyền giao việc ở phạm vi của việc theo bảng phân quyền và phạm vi còn hoạt động; đổi hạn thì không.
         Trạng thái việc giữ nguyên. Mỗi trường đổi ghi một `TaskChange` (giá trị cũ, mới, lý do) và báo người liên quan.
         Người chính, người phối hợp mới phải là thành viên đang hoạt động của phạm vi (BR-TASK-01, BR-MEM-05); người phối hợp cũ được giữ.
         Đổi hạn không xóa lịch sử quá hạn đã ghi (BR-TASK-03). Thứ tự kiểm: quyền → version → trạng thái → giá trị.
@@ -4342,7 +4342,7 @@ components:
         đang bàn giao; FR-ORG-02, FR-TERM-03).
         `REQUEST_PRESIDENCY_TRANSFER`: thành viên Chính thức, mọi người giữ chức ban chủ nhiệm không đăng nhập quá 30 ngày và CLB
         chưa có yêu cầu chuyển quyền chờ xử lý (FR-ACC-08).
-        `VIEW_PERMISSIONS`: thuộc ban chủ nhiệm, xem được ma trận quyền (FR-ORG-05).
+        `VIEW_PERMISSIONS`: thuộc ban chủ nhiệm, xem được bảng phân quyền (FR-ORG-05).
       enum: [CREATE_EVENT, PROPOSE_EVENT, ASSIGN_TASK, MANAGE_MEMBERS, MANAGE_ORG, ASSIGN_PRESIDENCY, EDIT_CLUB, SEND_ANNOUNCEMENT, CREATE_TERM, ASSIGN_POSITION, REQUEST_PRESIDENCY_TRANSFER, VIEW_PERMISSIONS]
     TermSummary:
       type: object

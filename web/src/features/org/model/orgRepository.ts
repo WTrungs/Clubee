@@ -38,7 +38,7 @@ export const orgRepository = {
   /** FR-ORG-03. */
   revoke: (clubId: string, positionId: string, request: RevokePositionRequest) =>
     httpClient.post<Position>(`${club(clubId)}/positions/${encodeURIComponent(positionId)}/revocation`, request),
-  /** FR-ORG-05: ma trận quyền, sửa theo lô, khôi phục mặc định, lịch sử. */
+  /** FR-ORG-05: bảng phân quyền, sửa theo lô, khôi phục mặc định, lịch sử. */
   permissionMatrix: (clubId: string) => httpClient.get<PermissionMatrix>(`${club(clubId)}/permission-matrix`),
   updatePermissionMatrix: (clubId: string, request: UpdatePermissionMatrixRequest) => httpClient.put<PermissionMatrix>(`${club(clubId)}/permission-matrix`, request),
   resetPermissionMatrix: (clubId: string, version: number) => httpClient.post<PermissionMatrix>(`${club(clubId)}/permission-matrix/reset`, { version }),

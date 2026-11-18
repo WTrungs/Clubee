@@ -70,7 +70,7 @@ export function appointBlock(item: DbBacklogItem, viewerId: string): AppointBloc
   if (!position || !STANDING_ROLES.includes(position.role)) return null
   // Quyền trước trạng thái, cùng thứ tự với gán chức vụ ở Cơ cấu.
   if (!can(viewerId, item.clubId, 'ASSIGN_POSITIONS')) {
-    return { status: 403, code: 'FORBIDDEN', message: 'Chức vụ của bạn không được gán chức vụ thường trực theo ma trận quyền của CLB.' }
+    return { status: 403, code: 'FORBIDDEN', message: 'Chức vụ của bạn không được gán chức vụ thường trực theo bảng phân quyền của CLB.' }
   }
   if (openHandoverOf(item.clubId)) {
     return { status: 422, code: 'HANDOVER_IN_PROGRESS', message: 'CLB đang bàn giao nhiệm kỳ nên chưa chỉ định chức vụ thường trực; người mới ghi ở kết quả bầu.' }

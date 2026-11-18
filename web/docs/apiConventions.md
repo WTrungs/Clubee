@@ -59,7 +59,7 @@ Khi backend có spec OpenAPI (springdoc) thì spec là nguồn chuẩn; chỗ n�
 
 ## Quyền hiển thị ở web
 
-Mỗi tài nguyên trả `allowedActions: string[]` do máy chủ tính theo chức vụ, phạm vi và ma trận quyền tại thời điểm đọc.
+Mỗi tài nguyên trả `allowedActions: string[]` do máy chủ tính theo chức vụ, phạm vi và bảng phân quyền tại thời điểm đọc.
 Web chỉ hiện nút, đích kéo thả có trong danh sách này; web không tự suy quyền. Máy chủ vẫn kiểm tra lại mọi request (SRS 2.4).
 
 ## Ghi đồng thời và chuyển trạng thái

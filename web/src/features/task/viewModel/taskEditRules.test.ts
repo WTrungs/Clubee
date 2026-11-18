@@ -96,7 +96,7 @@ describe('changing who works on a task and its due date (FR-TASK-05)', () => {
   })
 
   it('checks permission, then version, then status', async () => {
-    // Trưởng ban mất quyền giao việc theo ma trận: không đổi người được, vẫn đổi hạn và hủy được.
+    // Trưởng ban mất quyền giao việc theo bảng phân quyền: không đổi người được, vẫn đổi hạn và hủy được.
     db.permissionOverrides.push({ clubId: 'c-guitar', role: 'DEPARTMENT_HEAD', permission: 'ASSIGN_TASK', enabled: false, updatedBy: 'u-anh', updatedAt: '2026-11-16T10:00:00+07:00' })
     signInAs('u-linh')
     expect((await taskRepository.get('c-guitar', 't-intro-post')).allowedActions).toEqual(['CANCEL', 'CHANGE_DUE'])
