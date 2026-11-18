@@ -1,6 +1,7 @@
 import type { LeaveRequest, MyMembership, MyMembershipAction, ResignBlocker } from '@/features/member/model/memberTypes'
 import { db, type DbLeaveRequest, type DbMembership, type DbPosition } from './db'
 import { can } from './mockAccess'
+import { advanceResignBlockers } from './mockAdvances'
 import { problem } from './mockHttp'
 import { coHostResignBlockers, endCoHostStaffOf } from './mockCoHosts'
 import { closeDepartmentStint, personRef } from './mockMembers'
@@ -77,7 +78,7 @@ export function resignBlockers(membership: DbMembership): ResignBlocker[] {
     ? [{ kind: 'APPOINTMENT', refId: openHandoverOf(clubId)?.id ?? '', clubId, title: 'Kết quả bầu của nhiệm kỳ mới' }]
     : []
   // Trưởng tiểu ban, việc ở sự kiện chung của CLB khác mà người này tham gia nhờ CLB này (FR-EVT-08).
-  return [...positions, ...owned, ...reviewing, ...coHostResignBlockers(userId, clubId), ...appointment]
+  return [...positions, ...owned, ...reviewing, ...coHostResignBlockers(userId, clubId), ...advanceResignBlockers(userId, clubId), ...appointment]
 }
 
 /** Đóng yêu cầu tạm nghỉ đang chờ khi tư cách đổi ở chỗ khác (ban chủ nhiệm cho tạm nghỉ, đưa ra, hoặc người đó tự rời). */

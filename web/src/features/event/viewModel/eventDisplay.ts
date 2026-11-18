@@ -81,9 +81,11 @@ export function cancelRegistrationText(status: RegistrationStatus, cancelDeadlin
 /** Đường đi chính của ST-EVT, dùng cho thanh tiến trình. Đã hủy là điểm cuối riêng. */
 export const EVENT_LIFECYCLE: EventStatus[] = ['DRAFT', 'PENDING_APPROVAL', 'APPROVED', 'REGISTRATION_OPEN', 'ONGOING', 'ENDED', 'CLOSED']
 
-/** Sự kiện Đã kết thúc chỉ đóng được khi quỹ đã quyết toán (BR-EVT-05); máy chủ chỉ trả trạng thái quỹ cho người xem được quỹ. */
-export function closeHint(event: Pick<EventDetail, 'status' | 'fundStatus'>): string | null {
-  return event.status === 'ENDED' && event.fundStatus === 'OPEN' ? 'Cần quyết toán quỹ sự kiện trước khi đóng sự kiện.' : null
+/** Sự kiện Đã kết thúc chỉ đóng được khi hết tạm ứng mở và quỹ đã quyết toán (BR-EVT-05); máy chủ chỉ trả hai trường này cho người xem được quỹ. */
+export function closeHint(event: Pick<EventDetail, 'status' | 'fundStatus' | 'openAdvanceCount'>): string | null {
+  if (event.status !== 'ENDED') return null
+  if ((event.openAdvanceCount ?? 0) > 0) return 'Cần quyết toán các tạm ứng và quỹ sự kiện trước khi đóng sự kiện.'
+  return event.fundStatus === 'OPEN' ? 'Cần quyết toán quỹ sự kiện trước khi đóng sự kiện.' : null
 }
 
 export interface LifecycleStep {

@@ -64,6 +64,11 @@ function BalanceCard({ fund, vm }: { fund: FundDetail; vm: FundPanelViewModel })
           {fund.settledBy ? ` bởi ${fund.settledBy.fullName}` : ''}. Quỹ không nhận thêm giao dịch.
         </p>
       )}
+      {vm.advancesBlockSettle > 0 && (
+        <p role="status" className="mt-3 rounded-xl bg-brand-foreground/15 px-3 py-2 text-sm">
+          Còn {vm.advancesBlockSettle} tạm ứng chưa quyết toán xong. Chốt hết tạm ứng mới quyết toán được quỹ này.
+        </p>
+      )}
       {vm.pendingBlocksSettle > 0 && (
         <p role="status" className="mt-3 rounded-xl bg-brand-foreground/15 px-3 py-2 text-sm">
           Còn {vm.pendingBlocksSettle} khoản chờ duyệt hoặc chờ ghi sổ. Xử lý xong mới quyết toán được quỹ này.

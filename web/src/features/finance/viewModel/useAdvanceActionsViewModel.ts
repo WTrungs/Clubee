@@ -5,6 +5,7 @@ import { useForm } from 'react-hook-form'
 import { toast } from 'sonner'
 import { ApiError, getErrorMessage, isConflict } from '@/api/apiError'
 import { useCurrentClub } from '@/features/club/viewModel/clubContext'
+import { eventQueryKeys } from '@/features/event/viewModel/eventQueryKeys'
 import { formatDate, parseVnDate, toVnDateKey } from '@/shared/format/formatDate'
 import { formatMoney } from '@/shared/format/formatMoney'
 import { advanceRepository } from '../model/advanceRepository'
@@ -53,7 +54,7 @@ export function useAdvanceActionsViewModel(advanceId: string | null) {
     meta: { silentError: true },
     onSuccess: async (updated, request) => {
       queryClient.setQueryData(financeQueryKeys.advance(clubId, updated.id), updated)
-      await queryClient.invalidateQueries({ queryKey: financeQueryKeys.all })
+      await Promise.all([queryClient.invalidateQueries({ queryKey: financeQueryKeys.all }), queryClient.invalidateQueries({ queryKey: eventQueryKeys.details })])
       setDialog(null)
       toast.success(successText[request.action](updated))
     },

@@ -1,3 +1,4 @@
+import { useIsMutating } from '@tanstack/react-query'
 import { Check, HandCoins, X } from 'lucide-react'
 import { useId, type ReactNode } from 'react'
 import { formatDate, formatDateTime } from '@/shared/format/formatDate'
@@ -11,10 +12,15 @@ import { ReasonDialog } from '@/shared/ui/ReasonDialog'
 import { Sheet, SheetContent } from '@/shared/ui/Sheet'
 import { Skeleton } from '@/shared/ui/Skeleton'
 import { ErrorState } from '@/shared/ui/StateViews'
-import type { AdvanceDetail } from '../model/advanceTypes'
+import type { AdvanceDetail, AdvanceStatus } from '../model/advanceTypes'
 import { advanceStatusDisplay, settleByText } from '../viewModel/advanceDisplay'
 import { financeCategoryLabel } from '../viewModel/financeDisplay'
 import { useAdvanceActionsViewModel, type AdvanceActionsViewModel } from '../viewModel/useAdvanceActionsViewModel'
+import { ADVANCE_SETTLEMENT_MUTATION } from '../viewModel/useAdvanceSettlementViewModel'
+import { AdvanceSettlementSection } from './AdvanceSettlementSection'
+
+/** Từ khi đã ứng, sheet có khối quyết toán (FR-FIN-08). */
+const SETTLEMENT_STATUSES: AdvanceStatus[] = ['DISBURSED', 'PARTIALLY_SETTLED', 'SETTLED']
 
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -114,6 +120,7 @@ function AdvanceBody({ vm, advance, onOpenTransaction }: { vm: AdvanceActionsVie
           </Row>
         )}
       </dl>
+      {SETTLEMENT_STATUSES.includes(advance.status) && <AdvanceSettlementSection advance={advance} onOpenTransaction={onOpenTransaction} />}
       {(vm.canApprove || vm.canReject || vm.canDisburse) && (
         <div className="flex flex-wrap gap-2">
           {vm.canApprove && (
@@ -151,9 +158,10 @@ export function AdvanceDetailSheet({
   onOpenTransaction?: (transactionId: string) => void
 }) {
   const vm = useAdvanceActionsViewModel(advanceId)
+  const settling = useIsMutating({ mutationKey: ADVANCE_SETTLEMENT_MUTATION }) > 0
   const advance = vm.advance
   return (
-    <Sheet open={advanceId !== null} onOpenChange={(open) => !open && !vm.pending && onClose()}>
+    <Sheet open={advanceId !== null} onOpenChange={(open) => !open && !vm.pending && !settling && onClose()}>
       <SheetContent title="Tạm ứng" description={advance ? `${advance.requester.fullName} · ${advance.fundName}` : undefined}>
         {vm.loading && (
           <div className="space-y-3 p-5" role="status" aria-label="Đang tải tạm ứng">

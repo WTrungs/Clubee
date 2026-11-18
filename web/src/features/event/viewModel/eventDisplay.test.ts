@@ -29,11 +29,15 @@ describe('lifecycleSteps', () => {
 
 describe('closeHint', () => {
   it('tells fund viewers of an ended event that the fund must be settled before closing (BR-EVT-05)', () => {
-    expect(closeHint({ status: 'ENDED', fundStatus: 'OPEN' })).toBe('Cần quyết toán quỹ sự kiện trước khi đóng sự kiện.')
+    expect(closeHint({ status: 'ENDED', fundStatus: 'OPEN', openAdvanceCount: 0 })).toBe('Cần quyết toán quỹ sự kiện trước khi đóng sự kiện.')
     // Người xem quỹ mà không đóng được sự kiện (nhân sự BTC) cũng không còn thấy gợi ý khi quỹ đã quyết toán.
-    expect(closeHint({ status: 'ENDED', fundStatus: 'SETTLED' })).toBeNull()
-    expect(closeHint({ status: 'ENDED', fundStatus: null })).toBeNull()
-    expect(closeHint({ status: 'ONGOING', fundStatus: 'OPEN' })).toBeNull()
+    expect(closeHint({ status: 'ENDED', fundStatus: 'SETTLED', openAdvanceCount: 0 })).toBeNull()
+    expect(closeHint({ status: 'ENDED', fundStatus: null, openAdvanceCount: null })).toBeNull()
+    expect(closeHint({ status: 'ONGOING', fundStatus: 'OPEN', openAdvanceCount: 1 })).toBeNull()
+  })
+
+  it('asks to settle the open advances first when there are some', () => {
+    expect(closeHint({ status: 'ENDED', fundStatus: 'OPEN', openAdvanceCount: 2 })).toBe('Cần quyết toán các tạm ứng và quỹ sự kiện trước khi đóng sự kiện.')
   })
 })
 

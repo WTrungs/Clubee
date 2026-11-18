@@ -147,7 +147,11 @@ export function canProposeIn(userId: string, fund: DbFund): boolean {
   return can(userId, fund.clubId, 'PROPOSE_EXPENSE', fundScope(fund))
 }
 
-/** Ai có thể tạo giao dịch ở CLB thì được tải chứng từ lên trước. */
+/** Ai có thể tạo giao dịch ở CLB, hoặc đang giữ tiền tạm ứng cần nộp chứng từ quyết toán (FR-FIN-08), thì được tải chứng từ lên trước. */
 export function canUploadVoucher(userId: string, clubId: string): boolean {
-  return keepsLedger(userId, clubId) || canAnywhere(userId, clubId, 'PROPOSE_EXPENSE')
+  // Liệt kê lại trạng thái giữ tiền thay vì dùng `HELD_STATUSES`: mockAdvances đã import file này, import ngược sẽ thành vòng.
+  const holdsAdvance = db.advances.some(
+    (advance) => advance.clubId === clubId && advance.requesterId === userId && (advance.status === 'DISBURSED' || advance.status === 'PARTIALLY_SETTLED'),
+  )
+  return keepsLedger(userId, clubId) || canAnywhere(userId, clubId, 'PROPOSE_EXPENSE') || (holdsAdvance && canAccessClub(userId, clubId))
 }

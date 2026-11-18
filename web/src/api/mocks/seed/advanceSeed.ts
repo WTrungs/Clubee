@@ -1,9 +1,23 @@
-import type { AdvanceStatus } from '@/features/finance/model/advanceTypes'
+import type { AdvanceClosureKind, AdvanceLineStatus, AdvanceStatus } from '@/features/finance/model/advanceTypes'
 import type { ExpenseCategory } from '@/features/finance/model/financeTypes'
 import { vnDate, vnDayAt } from '../mockTime'
 import { generalFundId } from './financeSeed'
 
-/** Tạm ứng (FR-FIN-07, ST-ADV); lần nộp chứng từ, chốt quyết toán thêm ở FR-FIN-08. Dữ liệu tổng hợp. */
+/** Một lần nộp chứng từ quyết toán (FR-FIN-08). */
+export interface DbAdvanceLine {
+  id: string
+  amount: number
+  description: string
+  spentOn: string
+  attachmentIds: string[]
+  status: AdvanceLineStatus
+  submittedAt: string
+  decidedBy: string | null
+  decidedAt: string | null
+  note: string | null
+}
+
+/** Tạm ứng (FR-FIN-07, ST-ADV), lần nộp chứng từ và chốt quyết toán (FR-FIN-08). Dữ liệu tổng hợp. */
 export interface DbAdvance {
   id: string
   clubId: string
@@ -24,6 +38,8 @@ export interface DbAdvance {
   remindedFor: string | null
   /** Đã báo quá hạn cho hạn này. */
   overdueNotifiedFor: string | null
+  lines: DbAdvanceLine[]
+  closure: { kind: AdvanceClosureKind; amount: number; transactionId: string | null; closedBy: string; closedAt: string } | null
   createdAt: string
   version: number
 }
@@ -52,6 +68,8 @@ export function createAdvanceSeed(): DbAdvance[] {
       disbursementTxId: null,
       remindedFor: null,
       overdueNotifiedFor: null,
+      lines: [],
+      closure: null,
       createdAt: vnDayAt(-1, 15),
       version: 1,
     },

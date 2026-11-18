@@ -60,6 +60,8 @@ export interface FundDetail extends FundSummary {
   coHosts: Array<{ id: string; name: string }>
   /** Số ngày gợi ý cho hạn quyết toán tạm ứng (tham số CLB, SRS 9.2). */
   advanceSettleDays: number
+  /** Số tạm ứng còn mở (chặn quyết toán quỹ, FR-FIN-11); null với người không xem được tạm ứng của quỹ. */
+  openAdvanceCount: number | null
   allowedActions: FundAction[]
   version: number
 }

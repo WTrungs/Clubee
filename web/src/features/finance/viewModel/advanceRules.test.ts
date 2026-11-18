@@ -46,6 +46,7 @@ function heldAdvance(settleBy: string): DbAdvance {
     disbursedBy: 'u-mai',
     disbursedOn: vnDate(-10),
     settleBy,
+    lines: [],
   }
   db.advances.push(advance)
   return advance

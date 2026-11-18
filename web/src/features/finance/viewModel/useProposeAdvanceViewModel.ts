@@ -5,6 +5,7 @@ import { useForm } from 'react-hook-form'
 import { toast } from 'sonner'
 import { ApiError, getErrorMessage, isForbidden } from '@/api/apiError'
 import { useCurrentClub } from '@/features/club/viewModel/clubContext'
+import { eventQueryKeys } from '@/features/event/viewModel/eventQueryKeys'
 import { applyServerFieldErrors } from '@/shared/form/applyServerFieldErrors'
 import { parseVnDate, toVnDateKey } from '@/shared/format/formatDate'
 import { formatMoney, parseMoney } from '@/shared/format/formatMoney'
@@ -45,7 +46,7 @@ export function useProposeAdvanceViewModel(fund: Pick<FundDetail, 'id' | 'advanc
       }),
     meta: { silentError: true },
     onSuccess: async (advance) => {
-      await queryClient.invalidateQueries({ queryKey: financeQueryKeys.all })
+      await Promise.all([queryClient.invalidateQueries({ queryKey: financeQueryKeys.all }), queryClient.invalidateQueries({ queryKey: eventQueryKeys.details })])
       toast.success(`Đã gửi đề xuất tạm ứng ${formatMoney(advance.amount)}. Ban chủ nhiệm sẽ được báo để duyệt.`)
       onDone()
     },

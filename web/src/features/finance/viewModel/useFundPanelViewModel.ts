@@ -27,6 +27,13 @@ export function settlePendingCount(fund: Pick<FundDetail, 'kind' | 'status' | 'e
   return fund.pendingCount ?? 0
 }
 
+/** Số tạm ứng còn mở chặn quyết toán quỹ sự kiện đã đến lúc quyết toán (FR-FIN-11); 0 khi không áp dụng hoặc không xem được. */
+export function settleOpenAdvanceCount(fund: Pick<FundDetail, 'kind' | 'status' | 'event' | 'openAdvanceCount'> | undefined): number {
+  if (!fund || fund.kind !== 'EVENT' || fund.status !== 'OPEN' || !fund.event) return 0
+  if (fund.event.status !== 'ENDED' && fund.event.status !== 'CANCELLED') return 0
+  return fund.openAdvanceCount ?? 0
+}
+
 export interface ShareDraft {
   amount: string
   note: string
@@ -200,6 +207,7 @@ export function useFundPanelViewModel(fundId: string) {
     canSettle: allowed.includes('SETTLE'),
     /** Sự kiện đã kết thúc hoặc đã hủy nhưng quỹ còn khoản treo nên chưa quyết toán được (FR-FIN-11). */
     pendingBlocksSettle: settlePendingCount(fund.data),
+    advancesBlockSettle: settleOpenAdvanceCount(fund.data),
     settleOpen,
     /** Mở hộp quyết toán và hỏi lại số dư, vì số tiền chuyển về Quỹ chung phải là số mới nhất. */
     openSettle: () => {

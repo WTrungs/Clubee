@@ -45,3 +45,28 @@ export function disburseSchema(today: string) {
 }
 
 export type DisburseValues = z.infer<ReturnType<typeof disburseSchema>>
+
+export const SETTLEMENT_TEXT_MIN = 3
+export const SETTLEMENT_TEXT_MAX = 200
+
+/** FR-FIN-08: một lần nộp chứng từ; ngày chi không sau hôm nay. */
+export function settlementLineSchema(today: string) {
+  return z.object({
+    amount: amountText,
+    description: z
+      .string()
+      .trim()
+      .min(SETTLEMENT_TEXT_MIN, `Nội dung cần ít nhất ${SETTLEMENT_TEXT_MIN} ký tự.`)
+      .max(SETTLEMENT_TEXT_MAX, `Nội dung tối đa ${SETTLEMENT_TEXT_MAX} ký tự.`),
+    spentDate: dateText(null, today, 'Ngày chi không được sau hôm nay.'),
+  })
+}
+
+export type SettlementLineValues = z.infer<ReturnType<typeof settlementLineSchema>>
+
+/** Ngày nhận lại tiền thừa khi chốt: từ ngày ứng tới hôm nay. */
+export function closeAdvanceSchema(disbursedOn: string | null, today: string) {
+  return z.object({ refundDate: dateText(disbursedOn, today, 'Ngày nhận lại từ ngày ứng đến hôm nay.') })
+}
+
+export type CloseAdvanceValues = z.infer<ReturnType<typeof closeAdvanceSchema>>

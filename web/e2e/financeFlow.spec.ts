@@ -208,6 +208,30 @@ test.describe('Tài chính', () => {
     await snap(page, testInfo, 'closedEvent')
   })
 
+  test('quyết toán quỹ sự kiện và đóng sự kiện bị chặn khi còn tạm ứng mở', async ({ page }, testInfo) => {
+    await loginAs(page, 'anh.nguyen@demo.test')
+    await page.goto('/clubs/c-guitar/events/e-exchange?tab=fund')
+    const fundCard = page.getByRole('region', { name: 'Số dư Quỹ Giao lưu guitar cùng CLB bạn' })
+    await fundCard.getByRole('button', { name: 'Đề xuất tạm ứng' }).click()
+    const sheet = page.getByRole('dialog', { name: 'Đề xuất tạm ứng' })
+    await sheet.getByRole('textbox', { name: /Số tiền/ }).fill('300000')
+    await sheet.getByRole('combobox', { name: /Hạng mục/ }).selectOption({ label: 'Chi khác' })
+    await sheet.getByRole('textbox', { name: /Mục đích/ }).fill('Mua quà cho khách mời')
+    await sheet.getByRole('button', { name: 'Gửi đề xuất' }).click()
+    await expect(sheet).toHaveCount(0)
+    await expect(page.getByText('Cần quyết toán các tạm ứng và quỹ sự kiện trước khi đóng sự kiện.')).toBeVisible()
+
+    // Không tải lại trang: mock chạy trong trình duyệt nên tải lại là mất đề xuất vừa gửi.
+    await switchUser(page, 'Nguyễn Minh Anh', 'mai.vo@demo.test')
+    await openNavLink(page, 'Tài chính')
+    await page.getByRole('tab', { name: /Quỹ sự kiện/ }).click()
+    await page.getByRole('link', { name: /Giao lưu guitar cùng CLB bạn/ }).click()
+    const blocked = page.getByRole('region', { name: 'Số dư Quỹ Giao lưu guitar cùng CLB bạn' })
+    await expect(blocked.getByText('Còn 1 tạm ứng chưa quyết toán xong. Chốt hết tạm ứng mới quyết toán được quỹ này.')).toBeVisible()
+    await expect(blocked.getByRole('button', { name: 'Quyết toán quỹ' })).toHaveCount(0)
+    await snap(page, testInfo, 'settleBlockedByAdvance', { fullPage: false })
+  })
+
   test('thành viên thường chỉ xem sổ Quỹ chung, lọc được theo hạng mục', async ({ page }) => {
     await loginAs(page, 'ha.le@demo.test')
     await page.goto('/clubs/c-guitar/finance')

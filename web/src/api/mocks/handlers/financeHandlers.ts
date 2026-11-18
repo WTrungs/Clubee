@@ -45,7 +45,7 @@ import { API, currentUser, matchesKeyword, networkDelay, newId, paginate, proble
 import { personRef } from '../mockMembers'
 import { isBoardMember } from '../mockPermissions'
 import { financeTarget, notify, sharedEventsTarget } from '../mockNotifications'
-import { canListAdvances } from '../mockAdvances'
+import { canListAdvances, openAdvanceCountOf } from '../mockAdvances'
 import { clubNameOf, coHostDeciders } from '../mockCoHosts'
 import { isRealDate, nowIso, vnToday } from '../mockTime'
 import { DEFAULT_RECEIPT_THRESHOLD, generalFundId } from '../seed/financeSeed'
@@ -99,6 +99,11 @@ function settleBlocker(fund: DbFund): Response | null {
   if (fund.kind !== 'EVENT' || !event) return problem(422, 'Chỉ quyết toán quỹ sự kiện; Quỹ chung không quyết toán.', 'INVALID_TRANSITION')
   if (fund.status !== 'OPEN') return problem(422, 'Quỹ đã quyết toán.', 'FUND_SETTLED')
   if (!SETTLEABLE_EVENT.includes(event.status)) return problem(422, 'Chỉ quyết toán khi sự kiện đã kết thúc hoặc đã hủy.', 'INVALID_TRANSITION')
+  // Tạm ứng kiểm trước khoản chờ duyệt: chốt tạm ứng có thể sinh khoản chi bổ sung chờ duyệt (FR-FIN-08).
+  const advances = openAdvanceCountOf(fund.id)
+  if (advances > 0) {
+    return problem(422, `Quỹ còn ${advances} tạm ứng chưa quyết toán xong; cần chốt hết tạm ứng trước khi quyết toán quỹ.`, 'FUND_HAS_OPEN_ADVANCES')
+  }
   const pending = pendingCountOf(fund.id)
   if (pending > 0) {
     return problem(422, `Quỹ còn ${pending} khoản chờ duyệt hoặc chờ ghi sổ; cần xử lý xong trước khi quyết toán.`, 'FUND_HAS_PENDING')
@@ -225,6 +230,7 @@ function toFundDetail(fund: DbFund, userId: string): FundDetail {
     settledBy: fund.settledBy ? personRef(fund.settledBy) : null,
     coHosts: coHostsOfFund(fund),
     advanceSettleDays: db.clubs.find((club) => club.id === fund.clubId)?.advanceSettleDays ?? 14,
+    openAdvanceCount: canListAdvances(userId, fund) ? openAdvanceCountOf(fund.id) : null,
     allowedActions: fundActions(userId, fund),
     version: fund.version,
   }

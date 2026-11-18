@@ -85,6 +85,8 @@ export interface EventDetail extends EventSummary {
   fundId: string | null
   /** Trạng thái quỹ sự kiện; null khi chưa có quỹ hoặc người xem không được xem quỹ (SRS 3.5). */
   fundStatus: FundStatus | null
+  /** Số tạm ứng còn mở ở quỹ sự kiện (BR-EVT-05); null như `fundStatus`. */
+  openAdvanceCount: number | null
   /** Lần dời thời gian gần nhất (FR-EVT-14); null khi chưa dời lần nào. */
   lastScheduleChange: ScheduleChange | null
   /** CLB đồng tổ chức khi người xem chỉ là ban chủ nhiệm của CLB đó (FR-EVT-09, chỉ xem); null với người khác. */

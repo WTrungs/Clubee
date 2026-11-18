@@ -1,4 +1,6 @@
-import type { AdvanceAction, AdvanceDetail, AdvanceSummary } from '@/features/finance/model/advanceTypes'
+import type { FileRef } from '@/api/commonTypes'
+import type { AdvanceAction, AdvanceDetail, AdvanceLine, AdvanceSummary } from '@/features/finance/model/advanceTypes'
+import type { ResignBlocker } from '@/features/member/model/memberTypes'
 import { formatDate } from '@/shared/format/formatDate'
 import { formatMoney } from '@/shared/format/formatMoney'
 import { db, type DbFund } from './db'
@@ -9,7 +11,7 @@ import { isBoardMember } from './mockPermissions'
 import { registerJob, SYSTEM_ACTOR } from './mockSchedule'
 import { isEventLead } from './mockStaffEvents'
 import { shiftDate, vnToday } from './mockTime'
-import type { DbAdvance } from './seed/advanceSeed'
+import type { DbAdvance, DbAdvanceLine } from './seed/advanceSeed'
 
 /** Số ngày trước hạn quyết toán thì nhắc người ứng (FR-FIN-07). */
 export const ADVANCE_REMIND_DAYS = 2
@@ -19,7 +21,25 @@ export const ADVANCE_SETTLE_MAX_DAYS = 90
 /** Tạm ứng còn mở: chưa Đã quyết toán, chưa bị từ chối (chặn quyết toán quỹ, đóng sự kiện, xin rời ở FR-FIN-08). */
 export const OPEN_ADVANCE_STATUSES: DbAdvance['status'][] = ['PROPOSED', 'APPROVED', 'DISBURSED', 'PARTIALLY_SETTLED']
 /** Tiền đang nằm ở người ứng: Đã ứng hoặc Quyết toán một phần. */
-const HELD_STATUSES: DbAdvance['status'][] = ['DISBURSED', 'PARTIALLY_SETTLED']
+export const HELD_STATUSES: DbAdvance['status'][] = ['DISBURSED', 'PARTIALLY_SETTLED']
+
+export const isAdvanceOpen = (advance: Pick<DbAdvance, 'status'>) => OPEN_ADVANCE_STATUSES.includes(advance.status)
+
+/** Số tạm ứng còn mở của một quỹ: chặn quyết toán quỹ (FR-FIN-11) và đóng sự kiện (BR-EVT-05). */
+export function openAdvanceCountOf(fundId: string): number {
+  return db.advances.filter((advance) => advance.fundId === fundId && isAdvanceOpen(advance)).length
+}
+
+/** Tổng các lần nộp đã xác nhận (FR-FIN-08). */
+export const confirmedAmountOf = (advance: Pick<DbAdvance, 'lines'>) =>
+  advance.lines.filter((line) => line.status === 'CONFIRMED').reduce((sum, line) => sum + line.amount, 0)
+
+/** BR-MEM-03: tạm ứng còn mở của người này ở CLB chặn tự xin rời; liên kết mở thẳng tạm ứng ở trang Tài chính. */
+export function advanceResignBlockers(userId: string, clubId: string): ResignBlocker[] {
+  return db.advances
+    .filter((advance) => advance.clubId === clubId && advance.requesterId === userId && isAdvanceOpen(advance))
+    .map((advance) => ({ kind: 'ADVANCE', refId: advance.id, clubId, title: `${advance.purpose} (${formatMoney(advance.amount)})` }))
+}
 
 export const fundOfAdvance = (advance: Pick<DbAdvance, 'fundId'>) => db.funds.find((fund) => fund.id === advance.fundId)
 
@@ -56,7 +76,36 @@ function advanceActions(userId: string, advance: DbAdvance): AdvanceAction[] {
   // Người đề xuất không tự duyệt khoản của mình (FR-FIN-07, cùng tinh thần BR-ACL-01).
   if (advance.status === 'PROPOSED' && advance.requesterId !== userId && canApproveIn(userId, fund)) actions.push('APPROVE', 'REJECT')
   if (advance.status === 'APPROVED' && fund.status === 'OPEN' && keepsLedger(userId, fund.clubId)) actions.push('DISBURSE')
+  if (HELD_STATUSES.includes(advance.status)) {
+    if (advance.requesterId === userId) actions.push('SUBMIT_SETTLEMENT')
+    if (keepsLedger(userId, fund.clubId)) {
+      if (advance.lines.some((line) => line.status === 'SUBMITTED')) actions.push('DECIDE_LINES')
+      else actions.push('CLOSE')
+    }
+  }
   return actions
+}
+
+function fileRefs(ids: string[]): FileRef[] {
+  return ids.flatMap((id) => {
+    const file = db.attachments.find((attachment) => attachment.id === id)
+    return file ? [{ id: file.id, name: file.name, size: file.size, contentType: file.contentType }] : []
+  })
+}
+
+function toAdvanceLine(line: DbAdvanceLine): AdvanceLine {
+  return {
+    id: line.id,
+    amount: line.amount,
+    description: line.description,
+    spentOn: line.spentOn,
+    attachments: fileRefs(line.attachmentIds),
+    status: line.status,
+    submittedAt: line.submittedAt,
+    decidedBy: line.decidedBy ? personRef(line.decidedBy) : null,
+    decidedAt: line.decidedAt,
+    note: line.note,
+  }
 }
 
 const refOrNull = (userId: string | null) => (userId ? personRef(userId) : null)
@@ -87,6 +136,10 @@ export function toAdvanceDetail(advance: DbAdvance, userId: string): AdvanceDeta
     disbursedBy: refOrNull(advance.disbursedBy),
     disbursedOn: advance.disbursedOn,
     disbursementTxId: advance.disbursementTxId,
+    // Lần nộp mới nhất lên đầu.
+    lines: advance.lines.toReversed().map(toAdvanceLine),
+    confirmedAmount: confirmedAmountOf(advance),
+    closure: advance.closure ? { ...advance.closure, closedBy: personRef(advance.closure.closedBy) } : null,
     allowedActions: advanceActions(userId, advance),
     version: advance.version,
   }

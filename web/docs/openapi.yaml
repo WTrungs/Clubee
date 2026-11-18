@@ -2616,7 +2616,8 @@ paths:
         - `CANCEL`: ban chủ nhiệm, bắt buộc lý do; chỉ trước khi sự kiện diễn ra. Chức vụ sự kiện hết hiệu lực; quỹ sự kiện còn mở để quyết toán.
         - `CLOSE`: ban chủ nhiệm hoặc Trưởng BTC, khi sự kiện Đã kết thúc và quỹ sự kiện Đã quyết toán (BR-EVT-05; quyết toán
           quỹ qua `POST /clubs/{clubId}/funds/{fundId}/transitions` không đổi trạng thái sự kiện). Mọi chức vụ trong sự kiện
-          hết hiệu lực, hồ sơ sự kiện chỉ đọc. Quỹ chưa quyết toán (hoặc không có quỹ; sự kiện từ Đã duyệt luôn có quỹ):
+          hết hiệu lực, hồ sơ sự kiện chỉ đọc. Kiểm theo thứ tự: Đã kết thúc, quyền, còn tạm ứng mở ở quỹ sự kiện (422
+          `EVENT_HAS_OPEN_ADVANCES` nêu số khoản), quỹ chưa quyết toán (hoặc không có quỹ; sự kiện từ Đã duyệt luôn có quỹ):
           422 `FUND_NOT_SETTLED`.
 
         Lỗi:
@@ -2624,7 +2625,7 @@ paths:
         - 403 `FORBIDDEN`.
         - 404 `EVENT_NOT_FOUND`.
         - 409 `VERSION_CONFLICT`.
-        - 422 `INVALID_TRANSITION`, `LEAD_NOT_ELIGIBLE`, `FUND_NOT_SETTLED`.
+        - 422 `INVALID_TRANSITION`, `LEAD_NOT_ELIGIBLE`, `EVENT_HAS_OPEN_ADVANCES`, `FUND_NOT_SETTLED`.
       security:
         - sessionCookie: []
           csrfHeader: []
@@ -3847,6 +3848,7 @@ paths:
         - `APPROVE`, `REJECT`: người duyệt chi được ở quỹ (`APPROVE_EXPENSE`; Trưởng BTC không có, BR-ACL-05); người ứng không tự
           duyệt (403 `SELF_APPROVAL`); chỉ khi Đề xuất; từ chối cần lý do 5–500 ký tự. Duyệt thì báo người ứng và người giữ sổ;
           từ chối thì báo người ứng kèm lý do.
+        - `APPROVE` khi quỹ đã quyết toán: 422 `FUND_SETTLED`.
         - `DISBURSE`: `RECORD_LEDGER`; chỉ khi Đã duyệt; quỹ đang mở; số tiền không vượt số dư (422 `INSUFFICIENT_BALANCE` nêu
           số dư còn lại, BR-FIN-08); `disbursedOn` không sau hôm nay, bỏ trống là hôm nay. Sinh khoản chi Đã ghi sổ gắn với tạm
           ứng, người duyệt của khoản chi là người duyệt tạm ứng, người ghi sổ là người ghi Đã ứng. Báo người ứng kèm hạn.
@@ -3877,6 +3879,114 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
         '422': { $ref: '#/components/responses/UnprocessableEntity' }
+  /clubs/{clubId}/advances/{advanceId}/settlement-lines:
+    post:
+      tags: [FIN]
+      operationId: submitAdvanceSettlementLine
+      summary: Nộp chứng từ quyết toán tạm ứng (FR-FIN-08)
+      description: |
+        Chỉ người ứng; tạm ứng ở `DISBURSED` hoặc `PARTIALLY_SETTLED`. Nộp được nhiều lần, mỗi lần một khoản đã chi kèm ít nhất
+        một chứng từ (tải trước qua `POST /clubs/{clubId}/transaction-attachments`; người đang giữ tiền tạm ứng tải được), chứng từ
+        chưa dùng ở giao dịch hay lần nộp khác. Báo người giữ sổ. Thứ tự kiểm: 403, 409, 422, 400.
+        Lỗi: 400 `VALIDATION` (`amount`, `description`, `spentOn`, `attachmentIds`); 403 `NOT_A_MEMBER`, `FORBIDDEN`;
+        404 `ADVANCE_NOT_FOUND`; 409 `VERSION_CONFLICT`; 422 `INVALID_TRANSITION`.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - { name: advanceId, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SubmitSettlementLineRequest' }
+      responses:
+        '201':
+          description: Tạm ứng sau khi nộp.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AdvanceDetail' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+  /clubs/{clubId}/advances/{advanceId}/settlement-lines/{lineId}/decision:
+    post:
+      tags: [FIN]
+      operationId: decideAdvanceSettlementLine
+      summary: Xác nhận hoặc trả lại một lần nộp chứng từ (FR-FIN-08)
+      description: |
+        `RECORD_LEDGER`. Chỉ lần nộp đang `SUBMITTED`. `CONFIRM` cộng vào số đã quyết toán, tạm ứng Đã ứng sang Quyết toán một
+        phần. `RETURN` cần ghi chú 5–500 ký tự; người ứng nộp lại bằng lần nộp mới. Báo người ứng. `version` là phiên bản tạm
+        ứng. Thứ tự kiểm: 403, 409, 422, 400.
+        Lỗi: 400 `VALIDATION`; 403 `NOT_A_MEMBER`, `FORBIDDEN`; 404 `ADVANCE_NOT_FOUND`, `LINE_NOT_FOUND`;
+        409 `VERSION_CONFLICT`; 422 `INVALID_TRANSITION`.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - { name: advanceId, in: path, required: true, schema: { type: string } }
+        - { name: lineId, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SettlementLineDecisionRequest' }
+      responses:
+        '200':
+          description: Tạm ứng sau quyết định.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AdvanceDetail' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+  /clubs/{clubId}/advances/{advanceId}/closure:
+    post:
+      tags: [FIN]
+      operationId: closeAdvance
+      summary: Chốt quyết toán tạm ứng (FR-FIN-08)
+      description: |
+        `RECORD_LEDGER`; tạm ứng ở `DISBURSED` hoặc `PARTIALLY_SETTLED`; không còn lần nộp chờ xác nhận (422
+        `ADVANCE_HAS_PENDING_LINES` kèm số lần); quỹ đang mở. Đối chiếu số đã ứng với tổng đã xác nhận:
+        - thừa: ghi điều chỉnh tăng quỹ Đã ghi sổ "Hoàn tạm ứng", tham chiếu khoản chi ứng, ngày là `refundOn` (từ ngày ứng tới
+          hôm nay, bỏ trống là hôm nay);
+        - thiếu: tạo khoản chi `PROPOSED` đứng tên người ứng, kèm chứng từ các lần đã xác nhận, đi qua duyệt và ghi sổ như khoản
+          chi thường (người ứng không tự duyệt); báo người duyệt;
+        - khớp: không sinh giao dịch.
+        Tạm ứng sang `SETTLED`, báo người ứng. Thứ tự kiểm: 403, 409, 422, 400.
+        Lỗi: 400 `VALIDATION` (`refundOn`); 403 `NOT_A_MEMBER`, `FORBIDDEN`; 404 `ADVANCE_NOT_FOUND`; 409 `VERSION_CONFLICT`;
+        422 `INVALID_TRANSITION`, `ADVANCE_HAS_PENDING_LINES`, `FUND_SETTLED`.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - { name: advanceId, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CloseAdvanceRequest' }
+      responses:
+        '200':
+          description: Tạm ứng đã quyết toán.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AdvanceDetail' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
   /clubs/{clubId}/funds/{fundId}/transitions:
     post:
       tags: [FIN]
@@ -3884,7 +3994,8 @@ paths:
       summary: Quyết toán quỹ sự kiện (FR-FIN-11)
       description: |
         `SETTLE`: chỉ Thủ quỹ. Quỹ phải là quỹ sự kiện đang mở, sự kiện ở Đã kết thúc hoặc Đã hủy, không còn khoản chi hay
-        điều chỉnh ở `PROPOSED`, `APPROVED` (422 `FUND_HAS_PENDING` kèm số khoản). Số dư lớn hơn 0 thì ghi một giao dịch
+        điều chỉnh ở `PROPOSED`, `APPROVED` (422 `FUND_HAS_PENDING` kèm số khoản), không còn tạm ứng mở (`PROPOSED`, `APPROVED`,
+        `DISBURSED`, `PARTIALLY_SETTLED`; 422 `FUND_HAS_OPEN_ADVANCES` kèm số khoản, kiểm trước khoản chờ duyệt). Số dư lớn hơn 0 thì ghi một giao dịch
         `TRANSFER` (hạng mục `FUND_TRANSFER`) sang Quỹ chung; quỹ sang `SETTLED`. Sự kiện giữ nguyên trạng thái; sự kiện
         Đã kết thúc từ đây đóng được (`CLOSE`). Quỹ của sự kiện đồng tổ chức thuộc CLB chủ trì (BR-FIN-07).
         `shares` (không bắt buộc): mỗi khoản cho một CLB đang đồng tổ chức (`FundDetail.coHosts`), số nguyên dương, ghi chú
@@ -3898,7 +4009,7 @@ paths:
         - 403 `NOT_A_MEMBER`, `FORBIDDEN`.
         - 404 `FUND_NOT_FOUND`.
         - 409 `VERSION_CONFLICT`.
-        - 422 `INVALID_TRANSITION`, `FUND_SETTLED`, `FUND_HAS_PENDING`, `SHARE_EXCEEDS_BALANCE`.
+        - 422 `INVALID_TRANSITION`, `FUND_SETTLED`, `FUND_HAS_OPEN_ADVANCES`, `FUND_HAS_PENDING`, `SHARE_EXCEEDS_BALANCE`.
       security:
         - sessionCookie: []
           csrfHeader: []
@@ -5219,7 +5330,7 @@ components:
         tham gia với tư cách nhân sự CLB đồng tổ chức (FR-EVT-08).
       required: [kind, refId, clubId, title]
       properties:
-        kind: { type: string, enum: [POSITION, TASK, TASK_REVIEW, APPOINTMENT] }
+        kind: { type: string, enum: [POSITION, TASK, TASK_REVIEW, ADVANCE, APPOINTMENT], description: '`ADVANCE`: tạm ứng còn mở do người này ứng, `refId` là mã tạm ứng.' }
         refId: { type: string }
         clubId: { type: string, description: 'CLB của khoản; việc, chức vụ ở sự kiện chung thuộc CLB chủ trì.' }
         title: { type: string }
@@ -6512,7 +6623,7 @@ components:
       allOf:
         - $ref: '#/components/schemas/EventSummary'
         - type: object
-          required: [description, onlineUrl, proposer, approver, rejectionReason, cancellationReason, statusBeforeCancel, allowedActions, version, createdAt, fundId, fundStatus, lastScheduleChange, viewingAsCoHost]
+          required: [description, onlineUrl, proposer, approver, rejectionReason, cancellationReason, statusBeforeCancel, allowedActions, version, createdAt, fundId, fundStatus, openAdvanceCount, lastScheduleChange, viewingAsCoHost]
           properties:
             description: { type: string }
             onlineUrl: { $ref: '#/components/schemas/NullableString' }
@@ -6543,6 +6654,10 @@ components:
               oneOf:
                 - $ref: '#/components/schemas/FundStatus'
                 - type: 'null'
+            openAdvanceCount:
+              type: [integer, 'null']
+              minimum: 0
+              description: Số tạm ứng còn mở ở quỹ sự kiện (chặn đóng sự kiện, BR-EVT-05); `null` như `fundStatus`.
             lastScheduleChange:
               description: Lần dời thời gian gần nhất (FR-EVT-14); `null` khi chưa dời lần nào.
               oneOf:
@@ -7108,7 +7223,7 @@ components:
       allOf:
         - $ref: '#/components/schemas/AdvanceSummary'
         - type: object
-          required: [approver, decidedAt, rejectionReason, disbursedBy, disbursedOn, disbursementTxId, allowedActions, version]
+          required: [approver, decidedAt, rejectionReason, disbursedBy, disbursedOn, disbursementTxId, lines, confirmedAmount, closure, allowedActions, version]
           properties:
             approver:
               oneOf:
@@ -7124,10 +7239,78 @@ components:
             disbursementTxId:
               $ref: '#/components/schemas/NullableString'
               description: Khoản chi Đã ghi sổ sinh khi ghi Đã ứng.
+            lines:
+              type: array
+              description: Các lần nộp chứng từ, mới nhất trước (FR-FIN-08).
+              items: { $ref: '#/components/schemas/AdvanceLine' }
+            confirmedAmount: { type: integer, description: Tổng các lần nộp đã xác nhận. }
+            closure:
+              oneOf:
+                - $ref: '#/components/schemas/AdvanceClosure'
+                - type: 'null'
             allowedActions:
               type: array
-              items: { type: string, enum: [APPROVE, REJECT, DISBURSE] }
+              description: |
+                `SUBMIT_SETTLEMENT` (người ứng nộp chứng từ), `DECIDE_LINES` (người giữ sổ, còn lần nộp chờ), `CLOSE` (người giữ
+                sổ, không còn lần nộp chờ).
+              items: { type: string, enum: [APPROVE, REJECT, DISBURSE, SUBMIT_SETTLEMENT, DECIDE_LINES, CLOSE] }
             version: { type: integer }
+    AdvanceLine:
+      type: object
+      required: [id, amount, description, spentOn, attachments, status, submittedAt, decidedBy, decidedAt, note]
+      properties:
+        id: { type: string }
+        amount: { type: integer }
+        description: { type: string }
+        spentOn: { type: string, format: date }
+        attachments:
+          type: array
+          items: { $ref: '#/components/schemas/FileRef' }
+        status: { type: string, enum: [SUBMITTED, CONFIRMED, RETURNED] }
+        submittedAt: { type: string, format: date-time }
+        decidedBy:
+          oneOf:
+            - $ref: '#/components/schemas/PersonRef'
+            - type: 'null'
+        decidedAt: { $ref: '#/components/schemas/NullableDateTime' }
+        note: { $ref: '#/components/schemas/NullableString' }
+    AdvanceClosure:
+      type: object
+      required: [kind, amount, transactionId, closedBy, closedAt]
+      properties:
+        kind: { type: string, enum: [REFUND, TOP_UP, EXACT], description: 'Hoàn phần thừa, chi bổ sung phần thiếu, hoặc khớp.' }
+        amount: { type: integer, description: Số tiền hoàn hoặc chi bổ sung; 0 khi khớp. }
+        transactionId:
+          $ref: '#/components/schemas/NullableString'
+          description: Điều chỉnh tăng quỹ (hoàn) hoặc khoản chi Đề xuất (chi bổ sung); `null` khi khớp.
+        closedBy: { $ref: '#/components/schemas/PersonRef' }
+        closedAt: { type: string, format: date-time }
+    SubmitSettlementLineRequest:
+      type: object
+      required: [amount, description, spentOn, attachmentIds, version]
+      properties:
+        amount: { type: integer, minimum: 1, maximum: 1000000000 }
+        description: { type: string, minLength: 3, maxLength: 200 }
+        spentOn: { type: string, format: date, description: Không sau hôm nay. }
+        attachmentIds:
+          type: array
+          minItems: 1
+          maxItems: 5
+          items: { type: string }
+        version: { type: integer }
+    SettlementLineDecisionRequest:
+      type: object
+      required: [action, version]
+      properties:
+        action: { type: string, enum: [CONFIRM, RETURN] }
+        note: { type: string, description: Bắt buộc 5–500 ký tự khi `RETURN`. }
+        version: { type: integer, description: Phiên bản tạm ứng. }
+    CloseAdvanceRequest:
+      type: object
+      required: [version]
+      properties:
+        refundOn: { type: string, format: date, description: 'Ngày nhận lại tiền thừa; từ ngày ứng tới hôm nay, bỏ trống là hôm nay.' }
+        version: { type: integer }
     AdvancePage:
       allOf:
         - $ref: '#/components/schemas/PageMeta'
@@ -7203,7 +7386,7 @@ components:
       allOf:
         - $ref: '#/components/schemas/FundSummary'
         - type: object
-          required: [receiptThreshold, pendingCount, settledAt, settledBy, coHosts, advanceSettleDays, allowedActions, version]
+          required: [receiptThreshold, pendingCount, settledAt, settledBy, coHosts, advanceSettleDays, openAdvanceCount, allowedActions, version]
           properties:
             receiptThreshold:
               type: integer
@@ -7222,6 +7405,10 @@ components:
               description: CLB đồng tổ chức đang Chấp nhận của sự kiện, để chia khi quyết toán (FR-FIN-11); rỗng với Quỹ chung.
               items: { $ref: '#/components/schemas/CoHostClubRef' }
             advanceSettleDays: { type: integer, description: 'Số ngày gợi ý cho hạn quyết toán tạm ứng (tham số CLB, SRS 9.2).' }
+            openAdvanceCount:
+              type: [integer, 'null']
+              minimum: 0
+              description: Số tạm ứng còn mở (chặn quyết toán quỹ, FR-FIN-11); `null` với người không xem được tạm ứng của quỹ.
             allowedActions:
               type: array
               items: { $ref: '#/components/schemas/FundAction' }

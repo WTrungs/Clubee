@@ -27,6 +27,7 @@ import { canAccessClub, departmentNameOf, eligibleMembers, isActiveMember, membe
 import { normalizeEmail } from '../mockInvitations'
 import { isEmail } from '@/shared/lib/contactRules'
 import { eventAttendanceAvailable } from '../mockAttendance'
+import { openAdvanceCountOf } from '../mockAdvances'
 import { canViewFund, ensureEventFund, eventFundOf } from '../mockFinance'
 import {
   activeRegistrations,
@@ -88,9 +89,13 @@ function myRegistration(userId: string, event: DbEvent): MyRegistration | null {
 
 const eventScope = (event: DbEvent) => ({ type: 'EVENT', id: event.id }) as const
 
-/** BR-EVT-05: quỹ sự kiện đã quyết toán; chưa có tạm ứng (FR-FIN-07, P1) nên điều kiện tạm ứng mở luôn đúng. */
+/** BR-EVT-05: đóng khi không còn tạm ứng mở ở quỹ sự kiện và quỹ đã quyết toán. */
 const fundSettled = (event: DbEvent) => eventFundOf(event.id)?.status === 'SETTLED'
-const closable = (event: DbEvent) => event.status === 'ENDED' && fundSettled(event)
+const openAdvancesOfEvent = (event: DbEvent) => {
+  const fund = eventFundOf(event.id)
+  return fund ? openAdvanceCountOf(fund.id) : 0
+}
+const closable = (event: DbEvent) => event.status === 'ENDED' && openAdvancesOfEvent(event) === 0 && fundSettled(event)
 
 function eventActions(userId: string, event: DbEvent): EventAction[] {
   const board = isBoardMember(userId, event.clubId)
@@ -153,6 +158,7 @@ function toDetail(event: DbEvent, userId: string): EventDetail {
     statusBeforeCancel: event.statusBeforeCancel,
     fundId: fund?.id ?? null,
     fundStatus: fund && canViewFund(userId, fund) ? fund.status : null,
+    openAdvanceCount: fund && canViewFund(userId, fund) ? openAdvanceCountOf(fund.id) : null,
     lastScheduleChange: toScheduleChange(event.scheduleChanges.at(-1)),
     viewingAsCoHost: viewingAsCoHost(userId, event),
   }
@@ -502,6 +508,11 @@ export const eventHandlers = [
       case 'CLOSE': {
         if (event.status !== 'ENDED') return invalid()
         if (!runs) return forbidden(clubId, 'RUN_EVENT', 'đóng sự kiện', eventScope(event))
+        // Tạm ứng kiểm trước quỹ: phải chốt hết tạm ứng thì mới quyết toán quỹ được, nên câu báo chỉ đúng việc cần làm trước.
+        const openAdvances = openAdvancesOfEvent(event)
+        if (openAdvances > 0) {
+          return problem(422, `Quỹ sự kiện còn ${openAdvances} tạm ứng chưa quyết toán xong nên chưa đóng được sự kiện.`, 'EVENT_HAS_OPEN_ADVANCES')
+        }
         if (!fundSettled(event)) return problem(422, 'Quỹ sự kiện chưa quyết toán nên chưa đóng được sự kiện.', 'FUND_NOT_SETTLED')
         event.status = 'CLOSED'
         endEventPositions(event.id, 'Sự kiện đã đóng.')

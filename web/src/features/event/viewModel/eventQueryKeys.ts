@@ -4,6 +4,8 @@ export const eventQueryKeys = {
   all: ['events'] as const,
   lists: ['events', 'list'] as const,
   list: (clubId: string, query: EventQuery) => ['events', 'list', clubId, query] as const,
+  /** Mọi trang chi tiết sự kiện; tạm ứng đổi thì số tạm ứng mở và gợi ý đóng sự kiện đổi theo (BR-EVT-05). */
+  details: ['events', 'detail'] as const,
   detail: (clubId: string, eventId: string) => ['events', 'detail', clubId, eventId] as const,
   subcommittees: (clubId: string, eventId: string) => ['events', 'subcommittees', clubId, eventId] as const,
   candidates: (clubId: string, eventId: string, q: string, coHostId: string | null = null) => ['events', 'candidates', clubId, eventId, q, coHostId] as const,
