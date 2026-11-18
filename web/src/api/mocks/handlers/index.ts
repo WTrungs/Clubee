@@ -1,6 +1,7 @@
 import { accountHandlers } from './accountHandlers'
 import { advanceHandlers } from './advanceHandlers'
 import { duesHandlers } from './duesHandlers'
+import { financeReportHandlers } from './financeReportHandlers'
 import { adminGuardHandlers, adminHandlers } from './adminHandlers'
 import { announcementHandlers } from './announcementHandlers'
 import { attendanceHandlers } from './attendanceHandlers'
@@ -21,7 +22,7 @@ import { termHandlers } from './termHandlers'
 import { transferHandlers } from './transferHandlers'
 
 /** Route API thật, đối chiếu với docs/openapi.yaml. */
-export const routeHandlers = [...accountHandlers, ...adminHandlers, ...clubHandlers, ...memberHandlers, ...invitationHandlers, ...leaveHandlers, ...backlogHandlers, ...orgHandlers, ...permissionHandlers, ...termHandlers, ...transferHandlers, ...taskHandlers, ...eventHandlers, ...coHostHandlers, ...sessionHandlers, ...attendanceHandlers, ...financeHandlers, ...advanceHandlers, ...duesHandlers, ...notificationHandlers, ...announcementHandlers]
+export const routeHandlers = [...accountHandlers, ...adminHandlers, ...clubHandlers, ...memberHandlers, ...invitationHandlers, ...leaveHandlers, ...backlogHandlers, ...orgHandlers, ...permissionHandlers, ...termHandlers, ...transferHandlers, ...taskHandlers, ...eventHandlers, ...coHostHandlers, ...sessionHandlers, ...attendanceHandlers, ...financeHandlers, ...advanceHandlers, ...duesHandlers, ...financeReportHandlers, ...notificationHandlers, ...announcementHandlers]
 
 /** Bộ chặn Admin ở route CLB chạy trước mọi route (NFR-SEC-06). */
 export const handlers = [...adminGuardHandlers, ...routeHandlers]

@@ -8,6 +8,7 @@ import { useDuesCampaignsViewModel } from '../viewModel/useDuesCampaignsViewMode
 import { DuesCampaignList } from './DuesCampaignList'
 import { DuesCampaignPanel } from './DuesCampaignPanel'
 import { EventFundList } from './EventFundList'
+import { FinanceReportPanel } from './FinanceReportPanel'
 import { FundPanel } from './FundPanel'
 import { OpenDuesSheet } from './OpenDuesSheet'
 
@@ -46,7 +47,7 @@ export function FinancePage() {
       )}
       {/* Luôn giữ cùng cấu trúc Tabs để sổ Quỹ chung không bị gắn lại khi biết có quỹ sự kiện. */}
       <Tabs value={vm.view} onValueChange={vm.setView}>
-        {(vm.hasEventFunds || vm.canViewDues) && (
+        {(vm.hasEventFunds || vm.canViewDues || vm.canViewReport) && (
           <TabsBar
             aria-label="Chọn quỹ"
             active={vm.view}
@@ -55,6 +56,7 @@ export function FinancePage() {
               { value: 'general', label: 'Quỹ chung' },
               ...(vm.hasEventFunds ? [{ value: 'events', label: 'Quỹ sự kiện', count: vm.eventFundCount }] : []),
               ...(vm.canViewDues ? [{ value: 'dues', label: 'Đóng quỹ' }] : []),
+              ...(vm.canViewReport ? [{ value: 'report', label: 'Báo cáo' }] : []),
             ]}
           />
         )}
@@ -69,6 +71,11 @@ export function FinancePage() {
         {vm.canViewDues && (
           <TabsContent value="dues">
             <DuesTab active={vm.view === 'dues'} />
+          </TabsContent>
+        )}
+        {vm.canViewReport && (
+          <TabsContent value="report">
+            <FinanceReportPanel active={vm.view === 'report'} />
           </TabsContent>
         )}
       </Tabs>

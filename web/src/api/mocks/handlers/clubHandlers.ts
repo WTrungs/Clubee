@@ -47,7 +47,7 @@ function clubActionsFor(userId: string, clubId: string): ClubAction[] {
   if (canAssign) actions.push('ASSIGN_TASK')
   if (announcementAudiences(userId, clubId).length > 0) actions.push('SEND_ANNOUNCEMENT')
   if (canRequestTransfer(userId, clubId)) actions.push('REQUEST_PRESIDENCY_TRANSFER')
-  if (isBoardMember(userId, clubId)) actions.push('VIEW_PERMISSIONS', 'VIEW_SHARED_EVENTS', 'VIEW_DUES')
+  if (isBoardMember(userId, clubId)) actions.push('VIEW_PERMISSIONS', 'VIEW_SHARED_EVENTS', 'VIEW_DUES', 'VIEW_FINANCE_REPORT')
   if (isBoardMember(userId, clubId) && keepsLedger(userId, clubId)) actions.push('OPEN_DUES')
   return actions
 }

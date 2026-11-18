@@ -25,6 +25,8 @@ export type ClubAction =
   | 'VIEW_DUES'
   /** FR-FIN-09: người giữ sổ (mặc định Thủ quỹ) mở đợt đóng quỹ. */
   | 'OPEN_DUES'
+  /** FR-FIN-12: ban chủ nhiệm xem tab Báo cáo thu chi. */
+  | 'VIEW_FINANCE_REPORT'
 
 /** Nhiệm kỳ đang phụ trách CLB: Đang chạy hoặc Đang bàn giao. */
 export interface TermSummary {

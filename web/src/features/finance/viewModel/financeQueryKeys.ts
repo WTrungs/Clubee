@@ -1,5 +1,6 @@
 import type { AdvanceQuery } from '../model/advanceTypes'
 import type { DuesCampaignQuery, DuesItemQuery } from '../model/duesTypes'
+import type { FinanceReportQuery, UnpaidDuesQuery } from '../model/financeReportTypes'
 import type { FundQuery, TransactionQuery } from '../model/financeTypes'
 
 export const financeQueryKeys = {
@@ -17,4 +18,7 @@ export const financeQueryKeys = {
   duesCampaign: (clubId: string, campaignId: string) => ['finance', 'duesCampaign', clubId, campaignId] as const,
   duesItems: (clubId: string, campaignId: string, query: DuesItemQuery) => ['finance', 'duesItems', clubId, campaignId, query] as const,
   duesCandidates: (clubId: string, q: string) => ['finance', 'duesCandidates', clubId, q] as const,
+  reportPeriods: (clubId: string) => ['finance', 'reportPeriods', clubId] as const,
+  report: (clubId: string, query: FinanceReportQuery) => ['finance', 'report', clubId, query] as const,
+  unpaidDues: (clubId: string, query: UnpaidDuesQuery) => ['finance', 'unpaidDues', clubId, query] as const,
 }
