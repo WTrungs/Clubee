@@ -215,8 +215,8 @@ describe('settlement view models', () => {
     await waitFor(() => expect(result.current.canSettle).toBe(true))
     act(() => result.current.openSettle())
     act(() => result.current.confirmSettle())
-    await waitFor(() => expect(result.current.fund?.status).toBe('SETTLED'))
-    expect(result.current.settleOpen).toBe(false)
+    // Cache quỹ có thể làm mới xong trước khi hộp thoại đóng, nên chờ cả hai.
+    await waitFor(() => expect({ status: result.current.fund?.status, open: result.current.settleOpen }).toEqual({ status: 'SETTLED', open: false }))
   })
 
   it('shows event funds only to people who can see at least one, filtered by status', async () => {
