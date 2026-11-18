@@ -13,7 +13,7 @@ import { eventRepository } from '@/features/event/model/eventRepository'
 import { createTestWrapper, signInAs } from '@/testUtils'
 import { financeRepository } from '../model/financeRepository'
 import { useFinancePageViewModel } from './useFinancePageViewModel'
-import { settlePendingCount, useFundPanelViewModel } from './useFundPanelViewModel'
+import { settlePendingCount, settleShares, useFundPanelViewModel } from './useFundPanelViewModel'
 
 const fail = (promise: Promise<unknown>) => promise.then(() => null).catch((caught: unknown) => caught as ApiError)
 const guitar = generalFundId('c-guitar')
@@ -234,5 +234,122 @@ describe('settlement view models', () => {
     await waitFor(() => expect(result.current.funds.length).toBe(5))
     act(() => result.current.setFilter('SETTLED'))
     await waitFor(() => expect(result.current.funds.map((fund) => fund.id)).toEqual([exchange]))
+  })
+})
+
+/** Seed chỉ có lời mời Đã gửi cho e-winter; test cho CLB Tiếng Anh đã nhận lời đồng tổ chức e-exchange. */
+function englishCoHostsExchange() {
+  db.eventCoHosts.push({
+    id: 'ch-exchange-english',
+    eventId: 'e-exchange',
+    hostClubId: 'c-guitar',
+    clubId: 'c-english',
+    status: 'ACCEPTED',
+    message: '',
+    invitedBy: 'u-anh',
+    invitedAt: new Date().toISOString(),
+    decidedBy: 'u-tu',
+    decidedAt: new Date().toISOString(),
+    decisionNote: null,
+    removedBy: null,
+    removedAt: null,
+    removeReason: null,
+    version: 2,
+  })
+}
+
+describe('settling with shares for co-host clubs (FR-FIN-11, BR-FIN-07, BR-FIN-08)', () => {
+  const settleWith = async (shares: Array<{ clubId: string; amount: number; note: string }>) => {
+    const fund = await financeRepository.fund('c-guitar', exchange)
+    return financeRepository.settle('c-guitar', exchange, fund.version, shares)
+  }
+
+  it('checks each share and the total against the balance, changing nothing on error', async () => {
+    englishCoHostsExchange()
+    signInAs('u-mai')
+    expect((await financeRepository.fund('c-guitar', exchange)).coHosts).toEqual([{ id: 'c-english', name: 'CLB Tiếng Anh Giao tiếp' }])
+    expect(await fail(settleWith([{ clubId: 'c-volunteer', amount: 100_000, note: '' }]))).toMatchObject({ status: 400, fieldErrors: [{ field: 'shares[0].clubId' }] })
+    expect(await fail(settleWith([{ clubId: 'c-english', amount: 0, note: '' }]))).toMatchObject({ status: 400, fieldErrors: [{ field: 'shares[0].amount' }] })
+    expect(
+      await fail(
+        settleWith([
+          { clubId: 'c-english', amount: 100_000, note: '' },
+          { clubId: 'c-english', amount: 100_000, note: '' },
+        ]),
+      ),
+    ).toMatchObject({ status: 400 })
+    expect(await fail(settleWith([{ clubId: 'c-english', amount: 800_000, note: '' }]))).toMatchObject({ status: 422, code: 'SHARE_EXCEEDS_BALANCE' })
+    expect(db.funds.find((fund) => fund.id === exchange)?.status).toBe('OPEN')
+    expect(fundBalance(exchange)).toBe(750_000)
+  })
+
+  it('records the share as a posted expense before moving the rest to the general fund, and tells the co-host board', async () => {
+    englishCoHostsExchange()
+    signInAs('u-mai')
+    const settled = await settleWith([{ clubId: 'c-english', amount: 300_000, note: ' Phần giao lưu song ngữ ' }])
+    expect(settled).toMatchObject({ status: 'SETTLED', balance: 0 })
+    const ledger = (await financeRepository.transactions('c-guitar', { fundId: exchange, status: ['POSTED'], size: 50 })).content
+    expect(ledger.find((row) => row.category === 'CO_HOST_SHARE')).toMatchObject({
+      type: 'EXPENSE',
+      amount: 300_000,
+      description: 'Chia cho CLB Tiếng Anh Giao tiếp khi quyết toán: Phần giao lưu song ngữ',
+    })
+    expect(ledger.find((row) => row.category === 'FUND_TRANSFER')).toMatchObject({ amount: 450_000 })
+    expect(fundBalance(guitar)).toBe(5_920_000)
+    const told = db.notifications.find((notification) => notification.title.startsWith('CLB Guitar Sinh viên chia 300.000'))
+    expect(db.notificationRecipients.some((recipient) => recipient.notificationId === told?.id && recipient.userId === 'u-tu')).toBe(true)
+  })
+
+  it('settles from the fund panel with a share typed in the dialog', async () => {
+    englishCoHostsExchange()
+    signInAs('u-mai')
+    const wrapper = await clubWrapper('c-guitar')
+    const { result } = renderHook(() => useFundPanelViewModel(exchange), { wrapper })
+    await waitFor(() => expect(result.current.shareClubs).toHaveLength(1))
+    act(() => result.current.openSettle())
+    await waitFor(() => expect(result.current.settleBalanceLoading).toBe(false))
+    act(() => result.current.setShareDraft('c-english', { amount: '900.000' }))
+    expect(result.current.sharePlan.totalError).toBe('Tổng khoản chia 900.000 đ vượt số dư 750.000 đ.')
+    act(() => result.current.confirmSettle())
+    expect(result.current.settling).toBe(false)
+    act(() => result.current.setShareDraft('c-english', { amount: '200.000' }))
+    expect(result.current.sharePlan).toMatchObject({ total: 200_000, remainder: 550_000, totalError: null })
+    act(() => result.current.confirmSettle())
+    await waitFor(() => expect({ status: result.current.fund?.status, open: result.current.settleOpen }).toEqual({ status: 'SETTLED', open: false }))
+    expect(db.transactions.some((transaction) => transaction.category === 'CO_HOST_SHARE' && transaction.amount === 200_000)).toBe(true)
+  })
+})
+
+describe('settleShares (FR-FIN-11)', () => {
+  const clubs = [
+    { id: 'c-english', name: 'CLB Tiếng Anh Giao tiếp' },
+    { id: 'c-volunteer', name: 'Đội Tình nguyện Xanh' },
+  ]
+
+  it('skips empty rows and reports a bad amount or a long note per club', () => {
+    expect(settleShares(clubs, {}, 500_000)).toMatchObject({ shares: [], total: 0, remainder: 500_000, totalError: null, errors: {} })
+    const plan = settleShares(clubs, { 'c-english': { amount: '0', note: '' }, 'c-volunteer': { amount: '100.000', note: 'x'.repeat(201) } }, 500_000)
+    expect(Object.keys(plan.errors)).toEqual(['c-english', 'c-volunteer'])
+    expect(plan.shares).toEqual([])
+    const ok = settleShares(clubs, { 'c-english': { amount: '200.000', note: ' Phần song ngữ ' }, 'c-volunteer': { amount: '', note: '' } }, 500_000)
+    expect(ok).toMatchObject({ shares: [{ clubId: 'c-english', amount: 200_000, note: 'Phần song ngữ' }], remainder: 300_000 })
+  })
+
+  it('keeps the dialog open with the server reason when a share is refused', async () => {
+    englishCoHostsExchange()
+    signInAs('u-mai')
+    const wrapper = await clubWrapper('c-guitar')
+    const { result } = renderHook(() => useFundPanelViewModel(exchange), { wrapper })
+    await waitFor(() => expect(result.current.shareClubs).toHaveLength(1))
+    act(() => result.current.openSettle())
+    await waitFor(() => expect(result.current.settleBalanceLoading).toBe(false))
+    act(() => result.current.setShareDraft('c-english', { amount: '100.000' }))
+    // CLB Tiếng Anh vừa bị gỡ ở chỗ khác.
+    const record = db.eventCoHosts.find((coHost) => coHost.id === 'ch-exchange-english')
+    if (record) record.status = 'REMOVED'
+    act(() => result.current.confirmSettle())
+    await waitFor(() => expect(result.current.settleError).toContain('Chỉ chia cho CLB đang đồng tổ chức sự kiện.'))
+    expect(result.current.settleOpen).toBe(true)
+    expect(db.funds.find((fund) => fund.id === exchange)?.status).toBe('OPEN')
   })
 })

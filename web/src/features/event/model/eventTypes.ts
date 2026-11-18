@@ -15,7 +15,16 @@ export type EventStatus =
 export type EventTransitionAction = 'SUBMIT' | 'APPROVE' | 'REJECT' | 'OPEN_REGISTRATION' | 'CANCEL' | 'CLOSE'
 
 /** Quyền không phải chuyển trạng thái, cũng do máy chủ tính (SRS 3.5: dữ liệu BTC, danh sách tham dự chỉ BTC và ban chủ nhiệm xem). */
-export type EventCapability = 'MANAGE_SUBCOMMITTEES' | 'REGISTER' | 'RESCHEDULE' | 'VIEW_STAFF' | 'VIEW_REGISTRATIONS' | 'VIEW_FUND' | 'VIEW_ATTENDANCE'
+export type EventCapability =
+  | 'MANAGE_SUBCOMMITTEES'
+  | 'REGISTER'
+  | 'RESCHEDULE'
+  | 'VIEW_STAFF'
+  /** FR-EVT-09: số việc theo tiểu ban; ban chủ nhiệm CLB đồng tổ chức cũng xem được. */
+  | 'VIEW_PROGRESS'
+  | 'VIEW_REGISTRATIONS'
+  | 'VIEW_FUND'
+  | 'VIEW_ATTENDANCE'
 
 export type EventAction = EventTransitionAction | EventCapability
 
@@ -78,6 +87,24 @@ export interface EventDetail extends EventSummary {
   fundStatus: FundStatus | null
   /** Lần dời thời gian gần nhất (FR-EVT-14); null khi chưa dời lần nào. */
   lastScheduleChange: ScheduleChange | null
+  /** CLB đồng tổ chức khi người xem chỉ là ban chủ nhiệm của CLB đó (FR-EVT-09, chỉ xem); null với người khác. */
+  viewingAsCoHost: ClubRef | null
+}
+
+/** Số việc theo trạng thái, không tính việc Đã hủy; `overdue` đếm trùng với các trạng thái còn làm. */
+export interface TaskProgressCounts {
+  total: number
+  assigned: number
+  inProgress: number
+  pendingReview: number
+  done: number
+  overdue: number
+}
+
+/** FR-EVT-09: tiến độ sự kiện là số việc của từng tiểu ban. */
+export interface EventProgress {
+  total: TaskProgressCounts
+  subcommittees: Array<{ id: string; name: string; counts: TaskProgressCounts }>
 }
 
 export interface ScheduleChange {

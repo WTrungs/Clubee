@@ -6,6 +6,7 @@ import type {
   CreateEventRequest,
   CreateSubcommitteeRequest,
   EventDetail,
+  EventProgress,
   EventQuery,
   EventSummary,
   EventTransitionRequest,
@@ -35,6 +36,8 @@ export const eventRepository = {
   reschedule: (clubId: string, eventId: string, request: RescheduleEventRequest) => httpClient.post<EventDetail>(`${event(clubId, eventId)}/reschedule`, request),
   leadCandidates: (clubId: string) => httpClient.get<StaffCandidate[]>(`/clubs/${encodeURIComponent(clubId)}/event-lead-candidates`),
 
+  /** FR-EVT-09: số việc theo tiểu ban. */
+  progress: (clubId: string, eventId: string) => httpClient.get<EventProgress>(`${event(clubId, eventId)}/progress`),
   subcommittees: (clubId: string, eventId: string) => httpClient.get<Subcommittee[]>(`${event(clubId, eventId)}/subcommittees`),
   createSubcommittee: (clubId: string, eventId: string, request: CreateSubcommitteeRequest) =>
     httpClient.post<Subcommittee>(`${event(clubId, eventId)}/subcommittees`, request),

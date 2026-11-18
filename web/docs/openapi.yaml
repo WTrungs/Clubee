@@ -2587,7 +2587,10 @@ paths:
       tags: [EVT]
       operationId: getEvent
       summary: Chi tiết sự kiện
-      description: Sự kiện người gọi không được xem trả 404 `EVENT_NOT_FOUND`, không lộ là có tồn tại.
+      description: |
+        Sự kiện người gọi không được xem trả 404 `EVENT_NOT_FOUND`, không lộ là có tồn tại. Người ngoài CLB chủ trì xem được
+        khi là CTV, nhân sự hoặc ban chủ nhiệm CLB đồng tổ chức của sự kiện còn hoạt động; với ban chủ nhiệm CLB đồng tổ
+        chức, `viewingAsCoHost` nêu CLB của họ (FR-EVT-09).
       parameters:
         - $ref: '#/components/parameters/ClubId'
         - $ref: '#/components/parameters/EventId'
@@ -2688,6 +2691,27 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
         '422': { $ref: '#/components/responses/UnprocessableEntity' }
+  /clubs/{clubId}/events/{eventId}/progress:
+    get:
+      tags: [EVT]
+      operationId: getEventProgress
+      summary: Tiến độ sự kiện theo tiểu ban (FR-EVT-09)
+      description: |
+        Người có `VIEW_PROGRESS`: ban chủ nhiệm, Trưởng BTC, nhân sự BTC, ban chủ nhiệm CLB đồng tổ chức. Chỉ số việc theo
+        trạng thái (bỏ việc Đã hủy) và số quá hạn (BR-TASK-03), không có nội dung việc.
+        Lỗi: 403 `FORBIDDEN`; 404 `EVENT_NOT_FOUND`.
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - $ref: '#/components/parameters/EventId'
+      responses:
+        '200':
+          description: Tiến độ.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EventProgress' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
   /clubs/{clubId}/events/{eventId}/subcommittees:
     get:
       tags: [EVT]
@@ -3738,15 +3762,19 @@ paths:
         `SETTLE`: chỉ Thủ quỹ. Quỹ phải là quỹ sự kiện đang mở, sự kiện ở Đã kết thúc hoặc Đã hủy, không còn khoản chi hay
         điều chỉnh ở `PROPOSED`, `APPROVED` (422 `FUND_HAS_PENDING` kèm số khoản). Số dư lớn hơn 0 thì ghi một giao dịch
         `TRANSFER` (hạng mục `FUND_TRANSFER`) sang Quỹ chung; quỹ sang `SETTLED`. Sự kiện giữ nguyên trạng thái; sự kiện
-        Đã kết thúc từ đây đóng được (`CLOSE`). Quỹ của sự kiện đồng tổ chức thuộc CLB chủ trì (BR-FIN-07); khoản chia cho
-        CLB đồng tổ chức và điều kiện "không còn tạm ứng mở" làm khi có FR-EVT-07, FR-FIN-07 (P1).
+        Đã kết thúc từ đây đóng được (`CLOSE`). Quỹ của sự kiện đồng tổ chức thuộc CLB chủ trì (BR-FIN-07).
+        `shares` (không bắt buộc): mỗi khoản cho một CLB đang đồng tổ chức (`FundDetail.coHosts`), số nguyên dương, ghi chú
+        tối đa 200 ký tự, không lặp CLB (400 theo ô `shares[i].…`); tổng không vượt số dư (422 `SHARE_EXCEEDS_BALANCE`,
+        BR-FIN-08). Mỗi khoản ghi thành khoản chi Đã ghi sổ hạng mục `CO_HOST_SHARE` trước, rồi phần còn lại mới chuyển về
+        Quỹ chung; ban chủ nhiệm CLB nhận khoản chia được báo. Thứ tự kiểm: 403, 409, 422 điều kiện quỹ, 400 khoản chia,
+        422 vượt số dư.
 
         Lỗi:
         - 400 `VALIDATION`.
         - 403 `NOT_A_MEMBER`, `FORBIDDEN`.
         - 404 `FUND_NOT_FOUND`.
         - 409 `VERSION_CONFLICT`.
-        - 422 `INVALID_TRANSITION`, `FUND_SETTLED`, `FUND_HAS_PENDING`.
+        - 422 `INVALID_TRANSITION`, `FUND_SETTLED`, `FUND_HAS_PENDING`, `SHARE_EXCEEDS_BALANCE`.
       security:
         - sessionCookie: []
           csrfHeader: []
@@ -6278,7 +6306,9 @@ components:
       description: |
         Chuyển trạng thái cộng các quyền khác do máy chủ tính: `MANAGE_SUBCOMMITTEES`, `REGISTER`, `RESCHEDULE` (dời thời gian, FR-EVT-14),
         `VIEW_STAFF`, `VIEW_REGISTRATIONS`, `VIEW_FUND`, `VIEW_ATTENDANCE` (dữ liệu BTC, danh sách tham dự, quỹ sự kiện, điểm danh chỉ BTC và ban chủ nhiệm xem, SRS 3.5).
-      enum: [SUBMIT, APPROVE, REJECT, OPEN_REGISTRATION, CANCEL, CLOSE, MANAGE_SUBCOMMITTEES, REGISTER, RESCHEDULE, VIEW_STAFF, VIEW_REGISTRATIONS, VIEW_FUND, VIEW_ATTENDANCE]
+        `VIEW_PROGRESS`: số việc theo tiểu ban (FR-EVT-09). Ban chủ nhiệm CLB đồng tổ chức (đang Chấp nhận, sự kiện còn hoạt
+        động) chỉ có `VIEW_PROGRESS`, `VIEW_STAFF`, `VIEW_FUND`: không có `VIEW_REGISTRATIONS`, `VIEW_ATTENDANCE` và không thao tác ghi nào.
+      enum: [SUBMIT, APPROVE, REJECT, OPEN_REGISTRATION, CANCEL, CLOSE, MANAGE_SUBCOMMITTEES, REGISTER, RESCHEDULE, VIEW_STAFF, VIEW_PROGRESS, VIEW_REGISTRATIONS, VIEW_FUND, VIEW_ATTENDANCE]
     EventFormat:
       type: string
       enum: [OFFLINE, ONLINE]
@@ -6358,7 +6388,7 @@ components:
       allOf:
         - $ref: '#/components/schemas/EventSummary'
         - type: object
-          required: [description, onlineUrl, proposer, approver, rejectionReason, cancellationReason, statusBeforeCancel, allowedActions, version, createdAt, fundId, fundStatus, lastScheduleChange]
+          required: [description, onlineUrl, proposer, approver, rejectionReason, cancellationReason, statusBeforeCancel, allowedActions, version, createdAt, fundId, fundStatus, lastScheduleChange, viewingAsCoHost]
           properties:
             description: { type: string }
             onlineUrl: { $ref: '#/components/schemas/NullableString' }
@@ -6394,6 +6424,36 @@ components:
               oneOf:
                 - $ref: '#/components/schemas/ScheduleChange'
                 - type: 'null'
+            viewingAsCoHost:
+              description: CLB đồng tổ chức khi người gọi chỉ là ban chủ nhiệm của CLB đó (FR-EVT-09, chỉ xem); `null` với người khác.
+              oneOf:
+                - $ref: '#/components/schemas/CoHostClubRef'
+                - type: 'null'
+    TaskProgressCounts:
+      type: object
+      description: Số việc theo trạng thái, không tính việc Đã hủy; `overdue` đếm trùng với các trạng thái còn làm.
+      required: [total, assigned, inProgress, pendingReview, done, overdue]
+      properties:
+        total: { type: integer }
+        assigned: { type: integer }
+        inProgress: { type: integer }
+        pendingReview: { type: integer }
+        done: { type: integer }
+        overdue: { type: integer }
+    EventProgress:
+      type: object
+      required: [total, subcommittees]
+      properties:
+        total: { $ref: '#/components/schemas/TaskProgressCounts' }
+        subcommittees:
+          type: array
+          items:
+            type: object
+            required: [id, name, counts]
+            properties:
+              id: { type: string }
+              name: { type: string }
+              counts: { $ref: '#/components/schemas/TaskProgressCounts' }
     EventPage:
       allOf:
         - $ref: '#/components/schemas/PageMeta'
@@ -6919,8 +6979,9 @@ components:
       type: string
       description: |
         Hạng mục cố định. Thu: `MEMBER_DUES`, `SPONSORSHIP`, `EVENT_REVENUE`, `OTHER_INCOME`.
-        Chi: `EQUIPMENT`, `VENUE`, `PRINTING`, `FOOD`, `TRAVEL`, `OTHER_EXPENSE`. `FUND_TRANSFER` chỉ hệ thống dùng.
-      enum: [MEMBER_DUES, SPONSORSHIP, EVENT_REVENUE, OTHER_INCOME, EQUIPMENT, VENUE, PRINTING, FOOD, TRAVEL, OTHER_EXPENSE, FUND_TRANSFER]
+        Chi: `EQUIPMENT`, `VENUE`, `PRINTING`, `FOOD`, `TRAVEL`, `OTHER_EXPENSE`. `FUND_TRANSFER` (chuyển số dư về Quỹ chung)
+        và `CO_HOST_SHARE` (khoản chia cho CLB đồng tổ chức) chỉ hệ thống dùng khi quyết toán.
+      enum: [MEMBER_DUES, SPONSORSHIP, EVENT_REVENUE, OTHER_INCOME, EQUIPMENT, VENUE, PRINTING, FOOD, TRAVEL, OTHER_EXPENSE, FUND_TRANSFER, CO_HOST_SHARE]
     FundEventRef:
       type: object
       required: [id, name, status]
@@ -6947,7 +7008,7 @@ components:
       allOf:
         - $ref: '#/components/schemas/FundSummary'
         - type: object
-          required: [receiptThreshold, pendingCount, settledAt, settledBy, allowedActions, version]
+          required: [receiptThreshold, pendingCount, settledAt, settledBy, coHosts, allowedActions, version]
           properties:
             receiptThreshold:
               type: integer
@@ -6961,6 +7022,10 @@ components:
               oneOf:
                 - $ref: '#/components/schemas/PersonRef'
                 - type: 'null'
+            coHosts:
+              type: array
+              description: CLB đồng tổ chức đang Chấp nhận của sự kiện, để chia khi quyết toán (FR-FIN-11); rỗng với Quỹ chung.
+              items: { $ref: '#/components/schemas/CoHostClubRef' }
             allowedActions:
               type: array
               items: { $ref: '#/components/schemas/FundAction' }
@@ -7093,6 +7158,17 @@ components:
           type: string
           enum: [SETTLE]
         version: { type: integer }
+        shares:
+          type: array
+          description: Khoản chia cho CLB đồng tổ chức; không gửi hoặc rỗng thì toàn bộ số dư về Quỹ chung.
+          items: { $ref: '#/components/schemas/SettleShare' }
+    SettleShare:
+      type: object
+      required: [clubId, amount, note]
+      properties:
+        clubId: { type: string }
+        amount: { type: integer, minimum: 1 }
+        note: { type: string, maxLength: 200 }
     TransactionTransitionRequest:
       type: object
       required: [action, version]

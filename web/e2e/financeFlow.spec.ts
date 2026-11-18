@@ -223,4 +223,42 @@ test.describe('Tài chính', () => {
     await expect(page.getByRole('button', { name: /In poster tuyển thành viên/ })).toHaveCount(0)
     await expect(page.getByText(/−600\.000 đ/)).toBeVisible()
   })
+
+  test('thủ quỹ quyết toán quỹ sự kiện có khoản chia cho CLB đồng tổ chức', async ({ page }, testInfo) => {
+    // Chủ nhiệm mời CLB Tiếng Anh đồng tổ chức sự kiện đã kết thúc; CLB đó nhận lời; Thủ quỹ chia một phần số dư.
+    await loginAs(page, 'anh.nguyen@demo.test')
+    await page.goto('/clubs/c-guitar/events/e-exchange?tab=staff')
+    const section = page.getByRole('region', { name: 'CLB đồng tổ chức' })
+    await section.getByRole('button', { name: 'Mời CLB' }).click()
+    const sheet = page.getByRole('dialog', { name: 'Mời CLB đồng tổ chức' })
+    await sheet.getByRole('button', { name: /CLB Tiếng Anh Giao tiếp/ }).click()
+    await sheet.getByRole('button', { name: 'Gửi lời mời' }).click()
+    await expect(page.getByText('Đã gửi lời mời tới CLB Tiếng Anh Giao tiếp.')).toBeVisible()
+
+    // Không tải lại trang: mock chạy trong trình duyệt nên tải lại là mất lời mời vừa gửi.
+    const go = (path: string) =>
+      page.evaluate((target) => {
+        window.history.pushState({}, '', target)
+        window.dispatchEvent(new PopStateEvent('popstate'))
+      }, path)
+    await switchUser(page, 'Nguyễn Minh Anh', 'tu.chau@demo.test')
+    await go('/clubs/c-english/events?tab=shared')
+    await page.getByRole('button', { name: 'Chấp nhận đồng tổ chức Giao lưu guitar cùng CLB bạn' }).click()
+    await expect(page.getByText('Đã nhận lời đồng tổ chức Giao lưu guitar cùng CLB bạn.')).toBeVisible()
+
+    await switchUser(page, 'Châu Minh Tú', 'mai.vo@demo.test')
+    await go('/clubs/c-guitar/events/e-exchange?tab=fund')
+    const fundCard = page.getByRole('region', { name: 'Số dư Quỹ Giao lưu guitar cùng CLB bạn' })
+    await fundCard.getByRole('button', { name: 'Quyết toán quỹ' }).click()
+    const confirm = page.getByRole('dialog', { name: 'Quyết toán quỹ sự kiện' })
+    await confirm.getByRole('textbox', { name: 'Số tiền chia cho CLB Tiếng Anh Giao tiếp' }).fill('900000')
+    await expect(confirm.getByText('Tổng khoản chia 900.000 đ vượt số dư 750.000 đ.')).toBeVisible()
+    await confirm.getByRole('textbox', { name: 'Số tiền chia cho CLB Tiếng Anh Giao tiếp' }).fill('300000')
+    await confirm.getByRole('textbox', { name: 'Ghi chú cho CLB Tiếng Anh Giao tiếp' }).fill('Phần giao lưu song ngữ')
+    await expect(confirm.getByRole('status')).toContainText('Chuyển 450.000 đ còn lại về Quỹ chung')
+    await snap(page, testInfo, 'settleWithShare', { fullPage: false })
+    await confirm.getByRole('button', { name: 'Quyết toán' }).click()
+    await expect(page.getByText('Đã quyết toán quỹ, chia 300.000 đ cho CLB đồng tổ chức, chuyển 450.000 đ về Quỹ chung.')).toBeVisible()
+    await expect(page.getByRole('button', { name: /Chia cho CLB Tiếng Anh Giao tiếp khi quyết toán/ })).toBeVisible()
+  })
 })

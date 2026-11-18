@@ -26,8 +26,11 @@ export const EXPENSE_CATEGORIES = ['EQUIPMENT', 'VENUE', 'PRINTING', 'FOOD', 'TR
 
 export type IncomeCategory = (typeof INCOME_CATEGORIES)[number]
 export type ExpenseCategory = (typeof EXPENSE_CATEGORIES)[number]
-/** Hạng mục cố định; `FUND_TRANSFER` chỉ hệ thống dùng khi quyết toán quỹ sự kiện. */
-export type FinanceCategory = IncomeCategory | ExpenseCategory | 'FUND_TRANSFER'
+/**
+ * Hạng mục cố định. Hai hạng mục chỉ hệ thống dùng khi quyết toán quỹ sự kiện: `FUND_TRANSFER` (chuyển số dư về Quỹ chung),
+ * `CO_HOST_SHARE` (khoản chia cho CLB đồng tổ chức, FR-FIN-11).
+ */
+export type FinanceCategory = IncomeCategory | ExpenseCategory | 'FUND_TRANSFER' | 'CO_HOST_SHARE'
 
 export interface FundEventRef {
   id: string
@@ -52,6 +55,8 @@ export interface FundDetail extends FundSummary {
   pendingCount: number | null
   settledAt: string | null
   settledBy: PersonRef | null
+  /** CLB đồng tổ chức đang Chấp nhận của sự kiện, để chia khi quyết toán (FR-FIN-11); rỗng với Quỹ chung. */
+  coHosts: Array<{ id: string; name: string }>
   allowedActions: FundAction[]
   version: number
 }
@@ -123,9 +128,18 @@ export interface TransactionTransitionRequest {
   reason?: string
 }
 
+/** Khoản chia cho một CLB đồng tổ chức khi quyết toán (FR-FIN-11, BR-FIN-07): số nguyên dương, ghi chú tối đa 200 ký tự. */
+export interface SettleShare {
+  clubId: string
+  amount: number
+  note: string
+}
+
 export interface FundTransitionRequest {
   action: 'SETTLE'
   version: number
+  /** Không gửi hoặc rỗng thì toàn bộ số dư về Quỹ chung như trước. */
+  shares?: SettleShare[]
 }
 
 export interface TransactionQuery {

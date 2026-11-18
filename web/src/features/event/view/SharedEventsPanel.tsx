@@ -1,5 +1,6 @@
-import { CalendarClock, Check, Handshake, X } from 'lucide-react'
+import { ArrowRight, CalendarClock, Check, Handshake, X } from 'lucide-react'
 import { useId, type ReactNode } from 'react'
+import { Link } from 'react-router'
 import { formatDateTime, formatTimeRange } from '@/shared/format/formatDate'
 import { Badge } from '@/shared/ui/Badge'
 import { Button } from '@/shared/ui/Button'
@@ -107,7 +108,22 @@ export function SharedEventsPanel({ vm }: { vm: CoHostInvitationsViewModel }) {
       </Group>
       <Group title="Đang đồng tổ chức" count={vm.active.length}>
         {vm.active.map((item) => (
-          <SharedEventCard key={item.id} item={item} />
+          <SharedEventCard
+            key={item.id}
+            item={item}
+            actions={
+              // FR-EVT-09: mở trang sự kiện của CLB chủ trì để xem tiến độ, nhân sự, quỹ (chỉ xem).
+              !['CLOSED', 'CANCELLED'].includes(item.event.status) && (
+                <Link
+                  to={`/clubs/${encodeURIComponent(item.event.clubId)}/events/${encodeURIComponent(item.event.id)}`}
+                  className="inline-flex items-center gap-1.5 self-start text-sm font-semibold text-primary underline-offset-2 hover:underline"
+                >
+                  Xem sự kiện {item.event.name}
+                  <ArrowRight aria-hidden className="size-4" />
+                </Link>
+              )
+            }
+          />
         ))}
       </Group>
       <Group title="Lịch sử" count={vm.past.length}>

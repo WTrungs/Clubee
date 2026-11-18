@@ -1,5 +1,5 @@
 import { motion } from 'motion/react'
-import { ArrowLeft, CalendarClock, CalendarCog, Lock, Send, ShieldCheck, ShieldX, Ticket, XCircle } from 'lucide-react'
+import { ArrowLeft, CalendarClock, CalendarCog, Eye, Lock, Send, ShieldCheck, ShieldX, Ticket, XCircle } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { Link } from 'react-router'
 import { AttendancePanel } from '@/features/attendance/view/AttendancePanel'
@@ -18,6 +18,7 @@ import { EventCover } from './EventCover'
 import { EventLifecycle } from './EventLifecycle'
 import { EventPlace, EventStatusBadge } from './EventMeta'
 import { EventOverviewTab } from './EventOverviewTab'
+import { EventProgressTab } from './EventProgressTab'
 import { EventRegistrationTab } from './EventRegistrationTab'
 import { EventStaffTab } from './EventStaffTab'
 import { EventTransitionDialogs } from './EventTransitionDialogs'
@@ -105,6 +106,15 @@ export function EventDetailPage() {
 
       <ConflictBanner show={vm.conflict} onReload={vm.reloadAfterConflict} />
 
+      {event.viewingAsCoHost && (
+        <p role="note" className="flex items-start gap-2 rounded-xl bg-status-info-soft p-3 text-sm text-status-info">
+          <Eye aria-hidden className="mt-0.5 size-4 shrink-0" />
+          <span>
+            Bạn đang xem với tư cách ban chủ nhiệm {event.viewingAsCoHost.name}, CLB đồng tổ chức. Chỉ xem tiến độ, nhân sự và quỹ, không thao tác được.
+          </span>
+        </p>
+      )}
+
       {(vm.transitions.length > 0 || vm.canReschedule) && (
         <div className="flex flex-wrap gap-2">
           {vm.transitions
@@ -129,6 +139,11 @@ export function EventDetailPage() {
         <TabsContent value="overview" className="pt-5">
           <EventOverviewTab event={event} />
         </TabsContent>
+        {vm.canViewProgress && (
+          <TabsContent value="progress" className="pt-5">
+            <EventProgressTab clubId={vm.clubId} eventId={event.id} />
+          </TabsContent>
+        )}
         {vm.canViewStaff && (
           <TabsContent value="staff" className="pt-5">
             <EventStaffTab event={event} clubId={vm.clubId} canManage={vm.canManageStaff} />

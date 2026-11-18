@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { ApiError } from '@/api/apiError'
+import { sessionQueryKey } from '@/api/queryClient'
 import { eventRepository } from '../model/eventRepository'
 import type { SharedEvent } from '../model/eventTypes'
 import { eventQueryKeys } from './eventQueryKeys'
@@ -32,6 +33,8 @@ export function useCoHostInvitationsViewModel(clubId: string, enabled: boolean) 
       eventRepository.decideCoHost(clubId, invitation.id, { decision, note, version: invitation.version }),
     onSuccess: async (updated) => {
       await refresh()
+      // Nhận lời thì ban chủ nhiệm thành khách của CLB chủ trì: tải lại phiên để menu, "CLB của tôi" có sự kiện chung.
+      if (updated.status === 'ACCEPTED') void queryClient.invalidateQueries({ queryKey: sessionQueryKey })
       toast.success(updated.status === 'ACCEPTED' ? `Đã nhận lời đồng tổ chức ${updated.event.name}.` : `Đã từ chối lời mời ${updated.event.name}.`)
       setDeclineTarget(null)
     },

@@ -8,8 +8,11 @@ import { AnimatedNumber } from '@/shared/ui/AnimatedNumber'
 import { Button } from '@/shared/ui/Button'
 import { ConfirmDialog } from '@/shared/ui/ConfirmDialog'
 import { ConflictBanner } from '@/shared/ui/ConflictBanner'
-import { NativeSelect } from '@/shared/ui/Input'
+import { FormAlert } from '@/shared/ui/FormAlert'
+import { FormField } from '@/shared/ui/FormField'
+import { Input, NativeSelect } from '@/shared/ui/Input'
 import { FilterChip, Pagination, SearchInput } from '@/shared/ui/ListControls'
+import { MoneyInput } from '@/shared/ui/MoneyInput'
 import { Skeleton } from '@/shared/ui/Skeleton'
 import { EmptyState, ErrorState } from '@/shared/ui/StateViews'
 import { Tabs, TabsBar, TabsContent } from '@/shared/ui/Tabs'
@@ -24,7 +27,7 @@ import {
   type LedgerPeriod,
   type RequestFilter,
 } from '../viewModel/financeDisplay'
-import { useFundPanelViewModel, type FundPanelViewModel } from '../viewModel/useFundPanelViewModel'
+import { SHARE_NOTE_MAX, useFundPanelViewModel, type FundPanelViewModel } from '../viewModel/useFundPanelViewModel'
 import { LedgerRow, RequestRow } from './FinanceMeta'
 import { ProposeExpenseSheet } from './ProposeExpenseSheet'
 import { RecordIncomeSheet } from './RecordIncomeSheet'
@@ -268,13 +271,41 @@ export function FundPanel({ fundId }: { fundId: string }) {
           pending={vm.settling}
           onConfirm={vm.confirmSettle}
         >
+          {vm.shareClubs.length > 0 && (
+            <fieldset className="mb-4 space-y-3">
+              <legend className="mb-1 text-sm font-semibold">Chia cho CLB đồng tổ chức</legend>
+              <p className="text-xs text-muted-foreground">Không bắt buộc. Mỗi khoản ghi thành khoản chi đã ghi sổ của quỹ này; quỹ vẫn thuộc CLB bạn.</p>
+              {vm.shareClubs.map((club) => {
+                const draft = vm.shareDrafts[club.id] ?? { amount: '', note: '' }
+                return (
+                  <div key={club.id} className="space-y-2 rounded-xl border p-3">
+                    <FormField label={`Số tiền chia cho ${club.name}`} error={vm.sharePlan.errors[club.id]}>
+                      <MoneyInput value={draft.amount} onChange={(event) => vm.setShareDraft(club.id, { amount: event.target.value })} />
+                    </FormField>
+                    <FormField label={`Ghi chú cho ${club.name}`}>
+                      <Input maxLength={SHARE_NOTE_MAX} value={draft.note} onChange={(event) => vm.setShareDraft(club.id, { note: event.target.value })} />
+                    </FormField>
+                  </div>
+                )
+              })}
+              <FormAlert message={vm.sharePlan.totalError} />
+            </fieldset>
+          )}
+          <FormAlert message={vm.settleError} />
           <p role="status" className="rounded-xl border bg-muted/40 p-3 text-sm">
             {vm.settleBalanceLoading ? (
               'Đang tải số dư mới nhất…'
-            ) : vm.fund.balance > 0 ? (
+            ) : vm.sharePlan.remainder > 0 ? (
               <>
-                Chuyển <span className="font-bold tabular-nums">{formatMoney(vm.fund.balance)}</span> còn lại về Quỹ chung bằng một giao dịch chuyển quỹ.
+                {vm.sharePlan.total > 0 && (
+                  <>
+                    Chia <span className="font-bold tabular-nums">{formatMoney(vm.sharePlan.total)}</span> cho CLB đồng tổ chức.{' '}
+                  </>
+                )}
+                Chuyển <span className="font-bold tabular-nums">{formatMoney(vm.sharePlan.remainder)}</span> còn lại về Quỹ chung bằng một giao dịch chuyển quỹ.
               </>
+            ) : vm.fund.balance > 0 && vm.sharePlan.total > 0 ? (
+              'Toàn bộ số dư chia cho CLB đồng tổ chức nên không có giao dịch chuyển quỹ.'
             ) : (
               'Quỹ không còn số dư nên không có giao dịch chuyển quỹ.'
             )}
