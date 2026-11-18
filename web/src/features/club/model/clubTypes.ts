@@ -52,10 +52,14 @@ export interface ClubDetail extends ClubContacts {
   currentTerm: TermSummary | null
   myPositionTitles: string[]
   allowedActions: ClubAction[]
-  /** Mỗi CLB có đúng một Quỹ chung (FR-FIN-06). */
+  /** Mỗi CLB có đúng một Quỹ chung (FR-FIN-06); khách của sự kiện nhận chuỗi rỗng. */
   generalFundId: string
+  /** Khách của sự kiện (CTV, nhân sự CLB đồng tổ chức) chỉ có thông tin công khai và mục Sự kiện. */
+  viewerRole: ClubViewerRole
   version: number
 }
+
+export type ClubViewerRole = 'MEMBER' | 'EVENT_GUEST'
 
 /** FR-CLB-01: người tạo thành thành viên Chính thức và Chủ nhiệm của nhiệm kỳ đầu. */
 export interface CreateClubRequest {

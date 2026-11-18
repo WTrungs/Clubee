@@ -9,6 +9,7 @@ import { grantPosition } from '@/api/mocks/mockPermissions'
 import { server } from '@/api/mocks/server'
 import { clubRepository } from '@/features/club/model/clubRepository'
 import { ClubContext } from '@/features/club/viewModel/clubContext'
+import { eventRepository } from '@/features/event/model/eventRepository'
 import { clubQueryKeys } from '@/features/club/viewModel/useClubDetail'
 import { createTestWrapper, signInAs } from '@/testUtils'
 import { notificationRepository } from '../model/notificationRepository'
@@ -102,6 +103,48 @@ describe('send announcement (FR-NOT-01, NFR-SEC-03)', () => {
       notificationRepository.sendAnnouncement(club.id, { audience: { kind: 'CLUB', scopeId: club.id }, title: 'Chào mọi người', body: 'Xin chào.', sendEmail: false }),
     )
     expect(error).toMatchObject({ status: 422, code: 'NO_RECIPIENTS' })
+  })
+})
+
+describe('opening an announcement checks the audience again (BR-SEC-02)', () => {
+  it('lets a collaborator open an event staff announcement until they leave the staff', async () => {
+    signInAs('u-bao')
+    await eventRepository.addCollaborator('c-guitar', 'e-winter', 'sc-winter-media', 'tam.duong@demo.test')
+    const result = await send({ kind: 'EVENT_STAFF', scopeId: 'e-winter' })
+    signInAs('u-tam')
+    expect(await notificationRepository.get(result.id)).toMatchObject({ body: 'Tối thứ Năm 19:00 ở phòng B2.05.' })
+
+    const row = db.eventStaff.find((staff) => staff.userId === 'u-tam' && staff.eventId === 'e-winter')
+    if (row) row.leftAt = new Date().toISOString()
+    expect(await fail(notificationRepository.get(result.id))).toMatchObject({ status: 403, code: 'NOT_IN_AUDIENCE' })
+  })
+
+  it('refuses a member who left the event staff or moved to another department', async () => {
+    signInAs('u-bao')
+    const staffNotice = await send({ kind: 'EVENT_STAFF', scopeId: 'e-winter' })
+    signInAs('u-linh')
+    const departmentNotice = await send({ kind: 'DEPARTMENT', scopeId: 'd-media' })
+
+    const vy = db.eventStaff.find((staff) => staff.userId === 'u-vy' && staff.eventId === 'e-winter')
+    if (vy) vy.leftAt = new Date().toISOString()
+    signInAs('u-vy')
+    expect(await fail(notificationRepository.get(staffNotice.id))).toMatchObject({ status: 403, code: 'NOT_IN_AUDIENCE' })
+    expect(await notificationRepository.get(departmentNotice.id)).toMatchObject({ title: 'Họp ban tuần này' })
+
+    const ha = db.memberships.find((membership) => membership.userId === 'u-ha' && membership.clubId === 'c-guitar')
+    if (ha) ha.departmentId = 'd-music'
+    signInAs('u-ha')
+    const refused = await fail(notificationRepository.get(departmentNotice.id))
+    expect(refused).toMatchObject({ status: 403, code: 'NOT_IN_AUDIENCE' })
+    expect(refused?.detail).toContain('không còn thuộc ban')
+  })
+
+  it('keeps the old rule for announcements saved without an audience', async () => {
+    signInAs('u-ha')
+    expect((await notificationRepository.get('n-guitar-schedule')).title).toBe('Lịch sinh hoạt tháng 11')
+    const ha = db.memberships.find((membership) => membership.userId === 'u-ha' && membership.clubId === 'c-guitar')
+    if (ha) ha.status = 'LEFT'
+    expect(await fail(notificationRepository.get('n-guitar-schedule'))).toMatchObject({ status: 403, code: 'NOT_A_MEMBER' })
   })
 })
 

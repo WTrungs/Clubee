@@ -105,7 +105,7 @@ export interface Subcommittee {
   quota: number | null
   lead: StaffMember | null
   members: StaffMember[]
-  allowedActions: Array<'INVITE_MEMBER'>
+  allowedActions: Array<'INVITE_MEMBER' | 'ADD_COLLABORATOR'>
 }
 
 /** FR-EVT-05: khi mời chỉ thấy tên và ban. */

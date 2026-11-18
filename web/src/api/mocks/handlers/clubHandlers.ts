@@ -24,6 +24,7 @@ import { canAccessClub, isActiveMember, memberCountOf, membershipOf, myMembershi
 import { can, forbidden } from '../mockAccess'
 import { currentTermOf, grantPosition, isBoardMember, isPresidency, positionTitlesOf } from '../mockPermissions'
 import { assignableScopes } from '../mockScopes'
+import { isEventGuest } from '../mockStaffEvents'
 import { canAssignStanding, canCreateTerm } from '../mockTerms'
 import { nowIso, vnToday } from '../mockTime'
 import { canRequestTransfer } from '../mockTransfers'
@@ -71,6 +72,24 @@ function toClubDetail(club: DbClub, viewerId: string): ClubDetail {
     myPositionTitles: positionTitlesOf(viewerId, club.id),
     allowedActions: clubActionsFor(viewerId, club.id),
     generalFundId: generalFundId(club.id),
+    viewerRole: 'MEMBER',
+    version: club.version,
+  }
+}
+
+/** Khách của sự kiện chỉ nhận thông tin công khai của CLB chủ trì; không có nội quy, sĩ số, nhiệm kỳ, quỹ (SRS 3.5). */
+function toGuestClubDetail(club: DbClub): ClubDetail {
+  return {
+    ...publicClubInfo(club),
+    foundedOn: club.foundedOn,
+    rules: '',
+    memberCount: 0,
+    currentTermName: '',
+    currentTerm: null,
+    myPositionTitles: [],
+    allowedActions: [],
+    generalFundId: '',
+    viewerRole: 'EVENT_GUEST',
     version: club.version,
   }
 }
@@ -295,6 +314,7 @@ export const clubHandlers = [
     const club = db.clubs.find((candidate) => candidate.id === params.clubId)
     if (!club) return problem(404, 'Không tìm thấy CLB.', 'CLUB_NOT_FOUND')
     if (!canAccessClub(user.value.id, club.id)) {
+      if (isEventGuest(user.value.id, club.id)) return HttpResponse.json(toGuestClubDetail(club))
       if (membershipOf(user.value.id, club.id)?.status === 'PENDING') {
         return problem(403, 'Yêu cầu gia nhập của bạn đang chờ ban chủ nhiệm duyệt.', 'MEMBERSHIP_PENDING')
       }

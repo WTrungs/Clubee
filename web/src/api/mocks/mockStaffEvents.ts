@@ -43,6 +43,11 @@ export function isEventStaff(userId: string, event: DbEvent, { outsideOnly = fal
   )
 }
 
+/** Khách của sự kiện: không là thành viên nhưng đang làm BTC một sự kiện còn hoạt động của CLB (FR-EVT-07, SRS 3.5). */
+export function isEventGuest(userId: string, clubId: string): boolean {
+  return staffEventsOf(userId).some((event) => event.clubId === clubId)
+}
+
 /** Sự kiện người dùng đang làm BTC ở CLB mà họ không là thành viên, ví dụ CTV (FR-ACC-06). */
 export function staffEventsOf(userId: string): StaffEventSummary[] {
   return db.events

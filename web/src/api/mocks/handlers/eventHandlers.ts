@@ -19,7 +19,9 @@ import type {
 } from '@/features/event/model/eventTypes'
 import { db } from '../db'
 import { API, currentUser, matchesKeyword, networkDelay, newId, paginate, problem, writer } from '../mockHttp'
-import { canAccessClub, departmentNameOf, eligibleMembers, isActiveMember, personRef as person } from '../mockMembers'
+import { canAccessClub, departmentNameOf, eligibleMembers, isActiveMember, membershipOf, personRef as person } from '../mockMembers'
+import { normalizeEmail } from '../mockInvitations'
+import { isEmail } from '@/shared/lib/contactRules'
 import { eventAttendanceAvailable } from '../mockAttendance'
 import { canViewFund, ensureEventFund, eventFundOf } from '../mockFinance'
 import {
@@ -36,7 +38,7 @@ import {
 import { EVENT_STAFF_ACTIVE as STAFF_ACTIVE, endPositions, grantPosition, isBoardMember, positionHolderOf } from '../mockPermissions'
 import { can, forbidden } from '../mockAccess'
 import { eventTarget, notify } from '../mockNotifications'
-import { assignSubcommitteeLead, isEventLead, isEventStaff, leadsOtherSubcommittee } from '../mockStaffEvents'
+import { assignSubcommitteeLead, isEventGuest, isEventLead, isEventStaff, leadsOtherSubcommittee } from '../mockStaffEvents'
 import { isBoardAppointee, openHandoverOf } from '../mockTerms'
 import { nowIso } from '../mockTime'
 import type { DbEvent, DbRegistration, DbScheduleChange, DbSubcommittee } from '../seed/eventSeed'
@@ -156,7 +158,10 @@ function toSubcommittee(subcommittee: DbSubcommittee, event: DbEvent, userId: st
     .filter((member) => member.subcommitteeId === subcommittee.id && member.leftAt === null)
     .map((member) => ({ ...person(member.userId), departmentName: departmentNameOf(member.userId, event.clubId), kind: member.kind }))
   const leadId = positionHolderOf('SUBCOMMITTEE_LEAD', subcommittee.id, historyOnly(event))
-  const canInvite = STAFF_ACTIVE.includes(event.status) && can(userId, event.clubId, 'MANAGE_EVENT_STAFF', { type: 'SUBCOMMITTEE', id: subcommittee.id })
+  const active = STAFF_ACTIVE.includes(event.status)
+  const canInvite = active && can(userId, event.clubId, 'MANAGE_EVENT_STAFF', { type: 'SUBCOMMITTEE', id: subcommittee.id })
+  // Thêm CTV cần quyền ở cả sự kiện, nên trưởng tiểu ban không thêm được (FR-EVT-07).
+  const canAddCollaborator = active && can(userId, event.clubId, 'MANAGE_EVENT_STAFF', eventScope(event))
   return {
     id: subcommittee.id,
     name: subcommittee.name,
@@ -164,7 +169,7 @@ function toSubcommittee(subcommittee: DbSubcommittee, event: DbEvent, userId: st
     quota: subcommittee.quota,
     lead: staff.find((member) => member.id === leadId) ?? null,
     members: staff.filter((member) => member.id !== leadId),
-    allowedActions: canInvite ? ['INVITE_MEMBER'] : [],
+    allowedActions: [...(canInvite ? (['INVITE_MEMBER'] as const) : []), ...(canAddCollaborator ? (['ADD_COLLABORATOR'] as const) : [])],
   }
 }
 
@@ -244,7 +249,8 @@ export const eventHandlers = [
     const user = currentUser()
     if (!user.ok) return user.response
     const clubId = String(params.clubId)
-    if (!canAccessClub(user.value.id, clubId)) return problem(403, 'Bạn không phải thành viên của CLB này.', 'NOT_A_MEMBER')
+    // Khách của sự kiện chỉ thấy các sự kiện mình đang làm BTC (`canViewEvent`).
+    if (!canAccessClub(user.value.id, clubId) && !isEventGuest(user.value.id, clubId)) return problem(403, 'Bạn không phải thành viên của CLB này.', 'NOT_A_MEMBER')
     const url = new URL(request.url)
     const statuses = url.searchParams.getAll('status')
     const keyword = url.searchParams.get('q')
@@ -506,6 +512,44 @@ export const eventHandlers = [
     }
     db.eventStaff.push({ userId: body.userId, eventId: event.id, subcommitteeId: subcommittee.id, kind: 'MEMBER', joinedAt: nowIso(), leftAt: null })
     notifyEventRole(body.userId, event, `Bạn được mời vào tiểu ban ${subcommittee.name} của`, user.value.id)
+    return HttpResponse.json(toSubcommittee(subcommittee, event, user.value.id))
+  }),
+
+  http.post(`${API}/clubs/:clubId/events/:eventId/subcommittees/:subcommitteeId/collaborators`, async ({ request, params }) => {
+    await networkDelay()
+    const user = writer(request)
+    if (!user.ok) return user.response
+    const event = findEvent(params)
+    const subcommittee = db.subcommittees.find((candidate) => candidate.id === params.subcommitteeId && candidate.eventId === params.eventId)
+    if (!event || !subcommittee || !canViewEvent(user.value.id, event)) return problem(404, 'Không tìm thấy tiểu ban.', 'NOT_FOUND')
+    if (!can(user.value.id, event.clubId, 'MANAGE_EVENT_STAFF', eventScope(event))) {
+      return forbidden(event.clubId, 'MANAGE_EVENT_STAFF', 'thêm cộng tác viên cho sự kiện', eventScope(event))
+    }
+    if (!STAFF_ACTIVE.includes(event.status)) return problem(422, `Sự kiện ${statusLabel[event.status]} nên không thêm nhân sự được.`, 'EVENT_READ_ONLY')
+    const body = (await request.json()) as { email?: string }
+    const email = normalizeEmail(body.email ?? '')
+    if (!isEmail(email)) return problem(400, 'Email chưa hợp lệ.', 'VALIDATION', [{ field: 'email', message: 'Nhập email tài khoản của người cần thêm.' }])
+    // Chỉ báo không tìm thấy, không nói tài khoản đang bị khóa hay chưa xác thực, để không dò được tài khoản.
+    const account = db.users.find((candidate) => normalizeEmail(candidate.email) === email && candidate.status === 'ACTIVE' && candidate.accountType === 'USER')
+    if (!account) {
+      return problem(422, 'Không có tài khoản đang hoạt động nào dùng email này.', 'ACCOUNT_NOT_FOUND', [{ field: 'email', message: 'Không tìm thấy tài khoản.' }])
+    }
+    // CTV là người ngoài CLB: mọi tư cách chưa Đã rời đều bị từ chối; người đã rời, kể cả Trưởng BTC cũ, thêm lại được (báo cáo 17/11, mục 1.5).
+    const standing = membershipOf(account.id, event.clubId)?.status
+    if (standing !== undefined) {
+      const detail =
+        standing === 'PENDING'
+          ? 'Người này đang chờ ban chủ nhiệm duyệt gia nhập CLB nên không thêm làm cộng tác viên được.'
+          : standing === 'ON_LEAVE'
+            ? 'Người này là thành viên CLB đang Tạm nghỉ nên không thêm vào ban tổ chức được.'
+            : 'Người này đang là thành viên CLB; dùng nút Mời để thêm như thành viên.'
+      return problem(422, detail, 'IS_MEMBER', [{ field: 'email', message: 'Đang có tư cách ở CLB.' }])
+    }
+    if (db.eventStaff.some((staff) => staff.subcommitteeId === subcommittee.id && staff.userId === account.id && staff.leftAt === null)) {
+      return problem(409, 'Người này đã là nhân sự của tiểu ban.', 'ALREADY_STAFF')
+    }
+    db.eventStaff.push({ userId: account.id, eventId: event.id, subcommitteeId: subcommittee.id, kind: 'COLLABORATOR', joinedAt: nowIso(), leftAt: null })
+    notifyEventRole(account.id, event, `Bạn được thêm làm cộng tác viên tiểu ban ${subcommittee.name} của`, user.value.id)
     return HttpResponse.json(toSubcommittee(subcommittee, event, user.value.id))
   }),
 

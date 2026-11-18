@@ -1,5 +1,5 @@
 import { motion } from 'motion/react'
-import { Crown, Plus, UserPlus, UsersRound } from 'lucide-react'
+import { Crown, Handshake, Plus, UserPlus, UsersRound } from 'lucide-react'
 import { useId } from 'react'
 import { itemVariants, listVariants } from '@/shared/motion/presets'
 import { Avatar } from '@/shared/ui/Avatar'
@@ -14,24 +14,34 @@ import { ProgressBar } from '@/shared/ui/ProgressBar'
 import { Skeleton } from '@/shared/ui/Skeleton'
 import { EmptyState, ErrorState } from '@/shared/ui/StateViews'
 import type { EventDetail, Subcommittee } from '../model/eventTypes'
+import { useAddCollaboratorViewModel, type AddCollaboratorViewModel } from '../viewModel/useAddCollaboratorViewModel'
 import { useEventStaffViewModel, type EventStaffViewModel } from '../viewModel/useEventStaffViewModel'
 
-function SubcommitteeCard({ subcommittee, onInvite }: { subcommittee: Subcommittee; onInvite: () => void }) {
+function SubcommitteeCard({ subcommittee, onInvite, onAddCollaborator }: { subcommittee: Subcommittee; onInvite: () => void; onAddCollaborator: () => void }) {
   const headcount = subcommittee.members.length + (subcommittee.lead ? 1 : 0)
   const overQuota = subcommittee.quota !== null && headcount > subcommittee.quota
   return (
     <motion.li variants={itemVariants} layout className="flex flex-col gap-4 rounded-2xl border bg-card p-5 shadow-sm">
-      <div className="flex items-start justify-between gap-3">
+      {/* Nút xếp dưới tên: thẻ chỉ rộng khoảng 320 px ở màn hẹp và lưới 3 cột, đặt cạnh tên thì tên bị ép mỗi dòng một chữ. */}
+      <div className="space-y-3">
         <div className="min-w-0">
           <h3 className="text-base font-bold">Tiểu ban {subcommittee.name}</h3>
           {subcommittee.description && <p className="text-sm text-muted-foreground">{subcommittee.description}</p>}
         </div>
-        {subcommittee.allowedActions.includes('INVITE_MEMBER') && (
-          <Button variant="outline" size="sm" onClick={onInvite}>
-            <UserPlus aria-hidden />
-            Mời
-          </Button>
-        )}
+        <div className="flex flex-wrap gap-2 empty:hidden">
+          {subcommittee.allowedActions.includes('INVITE_MEMBER') && (
+            <Button variant="outline" size="sm" onClick={onInvite} aria-label={`Mời thành viên vào tiểu ban ${subcommittee.name}`}>
+              <UserPlus aria-hidden />
+              Mời
+            </Button>
+          )}
+          {subcommittee.allowedActions.includes('ADD_COLLABORATOR') && (
+            <Button variant="outline" size="sm" onClick={onAddCollaborator} aria-label={`Thêm CTV vào tiểu ban ${subcommittee.name}`}>
+              <Handshake aria-hidden />
+              Thêm CTV
+            </Button>
+          )}
+        </div>
       </div>
       {subcommittee.quota !== null && (
         <div className="space-y-1.5">
@@ -60,7 +70,13 @@ function SubcommitteeCard({ subcommittee, onInvite }: { subcommittee: Subcommitt
           <li key={member.id} className="flex items-center gap-2.5 text-sm">
             <Avatar name={member.fullName} size="sm" />
             <span className="min-w-0 flex-1 truncate">{member.fullName}</span>
-            {member.departmentName && <span className="text-xs text-muted-foreground">Ban {member.departmentName}</span>}
+            {member.kind === 'COLLABORATOR' ? (
+              <Badge tone="neutral" title="Cộng tác viên, người ngoài CLB">
+                CTV
+              </Badge>
+            ) : (
+              member.departmentName && <span className="text-xs text-muted-foreground">Ban {member.departmentName}</span>
+            )}
           </li>
         ))}
         {headcount === 0 && <li className="text-sm text-muted-foreground">Chưa có nhân sự.</li>}
@@ -167,8 +183,40 @@ function InviteDialog({ staff }: { staff: EventStaffViewModel }) {
   )
 }
 
+/** FR-EVT-07: chỉ nhập email tài khoản, không gợi ý theo email để không dò được tài khoản. */
+function AddCollaboratorDialog({ vm }: { vm: AddCollaboratorViewModel }) {
+  const formId = useId()
+  const { register, formState } = vm.form
+  return (
+    <Dialog open={vm.target !== null} onOpenChange={(open) => !open && vm.close()}>
+      <DialogContent
+        title={`Thêm cộng tác viên vào tiểu ban ${vm.target?.name ?? ''}`}
+        description="Người ngoài CLB, đã có tài khoản Clubee. Họ vào tiểu ban ngay, nhận thông báo và chỉ xem được sự kiện này. Cộng tác viên không làm trưởng tiểu ban."
+        footer={
+          <>
+            <Button variant="ghost" onClick={vm.close} disabled={vm.submitting}>
+              Hủy bỏ
+            </Button>
+            <Button type="submit" form={formId} loading={vm.submitting}>
+              Thêm cộng tác viên
+            </Button>
+          </>
+        }
+      >
+        <form id={formId} noValidate onSubmit={vm.submit} className="space-y-4">
+          <FormField label="Email tài khoản" required error={formState.errors.email?.message} hint="Thành viên CLB thì dùng nút Mời.">
+            <Input type="email" inputMode="email" autoComplete="off" maxLength={254} placeholder="ten@example.com" {...register('email')} />
+          </FormField>
+          <FormAlert message={vm.formError} />
+        </form>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 export function EventStaffTab({ event, clubId, canManage }: { event: EventDetail; clubId: string; canManage: boolean }) {
   const staff = useEventStaffViewModel(clubId, event.id, true)
+  const collaborator = useAddCollaboratorViewModel(clubId, event.id)
 
   return (
     <div className="space-y-5">
@@ -199,13 +247,19 @@ export function EventStaffTab({ event, clubId, canManage }: { event: EventDetail
       {staff.subcommittees.length > 0 && (
         <motion.ul variants={listVariants} initial="initial" animate="animate" className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {staff.subcommittees.map((subcommittee) => (
-            <SubcommitteeCard key={subcommittee.id} subcommittee={subcommittee} onInvite={() => staff.openInvite(subcommittee)} />
+            <SubcommitteeCard
+              key={subcommittee.id}
+              subcommittee={subcommittee}
+              onInvite={() => staff.openInvite(subcommittee)}
+              onAddCollaborator={() => collaborator.open(subcommittee)}
+            />
           ))}
         </motion.ul>
       )}
 
       {canManage && <CreateSubcommitteeDialog staff={staff} />}
       <InviteDialog staff={staff} />
+      <AddCollaboratorDialog vm={collaborator} />
     </div>
   )
 }

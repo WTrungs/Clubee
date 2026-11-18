@@ -33,6 +33,8 @@ export const eventRepository = {
     httpClient.post<Subcommittee>(`${event(clubId, eventId)}/subcommittees`, request),
   addStaff: (clubId: string, eventId: string, subcommitteeId: string, userId: string) =>
     httpClient.post<Subcommittee>(`${event(clubId, eventId)}/subcommittees/${encodeURIComponent(subcommitteeId)}/members`, { userId }),
+  addCollaborator: (clubId: string, eventId: string, subcommitteeId: string, email: string) =>
+    httpClient.post<Subcommittee>(`${event(clubId, eventId)}/subcommittees/${encodeURIComponent(subcommitteeId)}/collaborators`, { email }),
   staffCandidates: (clubId: string, eventId: string, q: string) =>
     httpClient.get<StaffCandidate[]>(`${event(clubId, eventId)}/staff-candidates`, { query: { q } }),
 

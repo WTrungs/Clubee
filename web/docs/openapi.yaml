@@ -486,8 +486,10 @@ paths:
       operationId: getNotification
       summary: Chi tiết thông báo (FR-NOT-03, BR-SEC-02)
       description: |
-        Kiểm tra quyền tại thời điểm mở (BR-SEC-02). Thông báo do người gửi soạn (`MANUAL`) của một CLB chỉ mở được khi người
-        nhận còn là thành viên CLB đó, nếu không trả 403 `NOT_A_MEMBER` kèm lý do. Thông báo loại `FINANCE` nêu số tiền,
+        Kiểm tra quyền tại thời điểm mở (BR-SEC-02). Thông báo do người gửi soạn (`MANUAL`) chỉ mở được khi người nhận còn
+        thuộc nhóm nhận lúc gửi: toàn CLB thì còn là thành viên; ban thì ban chính vẫn là ban đó; BTC sự kiện thì còn trong BTC
+        (gồm CTV, nhân sự CLB đồng tổ chức khi sự kiện còn hoạt động). Không còn là thành viên trả 403 `NOT_A_MEMBER`, còn là
+        thành viên nhưng đã rời nhóm (hoặc người ngoài CLB đã rời BTC) trả 403 `NOT_IN_AUDIENCE`, kèm lý do. Thông báo loại `FINANCE` nêu số tiền,
         quỹ, người đề xuất nên chỉ mở được khi người nhận còn xem được giao dịch `target.id`, nếu không trả 403 `FORBIDDEN`.
         Thông báo hệ thống khác nói về chính người nhận; màn hình đích (`target`) tự kiểm tra quyền khi mở.
         Không phải người nhận thì 404 `NOTIFICATION_NOT_FOUND`.
@@ -592,7 +594,9 @@ paths:
       summary: Thông tin CLB hiện hành
       description: |
         Thông tin CLB (gồm liên hệ công khai; nội quy chỉ thành viên xem), nhiệm kỳ đang phụ trách (`currentTerm`: Đang chạy hoặc Đang bàn giao) và
-        `allowedActions` cấp CLB.
+        `allowedActions` cấp CLB. Khách của sự kiện (người ngoài CLB đang làm CTV hoặc nhân sự CLB đồng tổ chức của một sự kiện
+        còn hoạt động) nhận `viewerRole: EVENT_GUEST` và chỉ thông tin công khai: `rules` rỗng, `memberCount` 0,
+        `currentTerm` null, `myPositionTitles`, `allowedActions` rỗng, `generalFundId` rỗng (SRS 3.5, FR-EVT-07).
         Lỗi: 404 `CLUB_NOT_FOUND`; 403 `MEMBERSHIP_PENDING` (yêu cầu gia nhập đang chờ duyệt), `NOT_A_MEMBER`.
       parameters:
         - $ref: '#/components/parameters/ClubId'
@@ -2503,7 +2507,8 @@ paths:
       summary: Danh sách sự kiện
       description: |
         Sự kiện người gọi được xem. Dự thảo chỉ người đề xuất xem, và ban chủ nhiệm khi đề xuất đã bị từ chối;
-        Chờ duyệt thì người đề xuất và ban chủ nhiệm. Lỗi 403 `NOT_A_MEMBER`.
+        Chờ duyệt thì người đề xuất và ban chủ nhiệm. Khách của sự kiện (`viewerRole: EVENT_GUEST`) chỉ thấy các sự kiện
+        mình đang làm BTC. Lỗi 403 `NOT_A_MEMBER`.
       parameters:
         - $ref: '#/components/parameters/ClubId'
         - name: status
@@ -2786,6 +2791,42 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
+  /clubs/{clubId}/events/{eventId}/subcommittees/{subcommitteeId}/collaborators:
+    post:
+      tags: [EVT]
+      operationId: addCollaborator
+      summary: Thêm cộng tác viên vào tiểu ban (FR-EVT-07)
+      description: |
+        Cần `MANAGE_EVENT_STAFF` ở phạm vi sự kiện (Trưởng BTC, ban chủ nhiệm); trưởng tiểu ban không thêm được. Người được
+        thêm vào ngay, không có bước chấp nhận, và nhận thông báo. Email phải khớp một tài khoản người dùng đang Hoạt động và
+        người đó không có tư cách nào chưa Đã rời ở CLB chủ trì (Chờ duyệt, Thử việc, Chính thức, Tạm nghỉ đều trả
+        `IS_MEMBER`); người đã rời CLB (kể cả Trưởng BTC cũ) thêm được. CTV không làm trưởng tiểu ban (BR-ORG-01).
+        Lỗi: 400 `VALIDATION`; 403 `FORBIDDEN`; 404 `NOT_FOUND`; 409 `ALREADY_STAFF`; 422 `EVENT_READ_ONLY`,
+        `ACCOUNT_NOT_FOUND`, `IS_MEMBER`.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - $ref: '#/components/parameters/EventId'
+        - $ref: '#/components/parameters/SubcommitteeId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AddCollaboratorRequest' }
+      responses:
+        '200':
+          description: Tiểu ban sau khi thêm.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Subcommittee' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
   /clubs/{clubId}/events/{eventId}/registrations:
     get:
       tags: [EVT]
@@ -4375,6 +4416,7 @@ components:
         - myPositionTitles
         - allowedActions
         - generalFundId
+        - viewerRole
         - version
       properties:
         id: { type: string }
@@ -4407,7 +4449,11 @@ components:
           items: { $ref: '#/components/schemas/ClubAction' }
         generalFundId:
           type: string
-          description: Mỗi CLB có đúng một Quỹ chung (FR-FIN-06).
+          description: Mỗi CLB có đúng một Quỹ chung (FR-FIN-06); khách của sự kiện nhận chuỗi rỗng.
+        viewerRole:
+          type: string
+          enum: [MEMBER, EVENT_GUEST]
+          description: '`EVENT_GUEST`: người ngoài CLB đang làm BTC một sự kiện của CLB; chỉ dùng được mục Sự kiện.'
         version: { type: integer }
     CreateClubRequest:
       type: object
@@ -6182,7 +6228,7 @@ components:
           type: array
           items:
             type: string
-            enum: [INVITE_MEMBER]
+            enum: [INVITE_MEMBER, ADD_COLLABORATOR]
     StaffCandidate:
       description: Khi mời chỉ thấy tên và ban (FR-EVT-05).
       allOf:
@@ -6279,6 +6325,14 @@ components:
       required: [userId]
       properties:
         userId: { type: string }
+    AddCollaboratorRequest:
+      type: object
+      required: [email]
+      properties:
+        email:
+          type: string
+          format: email
+          description: Email tài khoản của người ngoài CLB; không có gợi ý theo email để không dò được tài khoản.
     # Sinh hoạt, điểm danh
     SessionScopeType:
       type: string

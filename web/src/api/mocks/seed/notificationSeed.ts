@@ -1,4 +1,4 @@
-import type { NotificationCategory, NotificationKind, NotificationTarget } from '@/features/notification/model/notificationTypes'
+import type { AnnouncementAudienceRef, NotificationCategory, NotificationKind, NotificationTarget } from '@/features/notification/model/notificationTypes'
 import { vnDayAt } from '../mockTime'
 import { createMembershipSeed } from './memberSeed'
 
@@ -14,6 +14,8 @@ export interface DbNotification {
   target: NotificationTarget | null
   sendEmail: boolean
   createdAt: string
+  /** Nhóm nhận của thông báo gửi tay; bản ghi cũ không có thì chỉ kiểm còn là thành viên CLB (BR-SEC-02). */
+  audience?: AnnouncementAudienceRef
 }
 
 export interface DbNotificationRecipient {
