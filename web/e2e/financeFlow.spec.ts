@@ -96,6 +96,31 @@ test.describe('Tài chính', () => {
     await expect(done.getByRole('button', { name: 'Rút đề xuất' })).toHaveCount(0)
   })
 
+  test('người đề xuất hủy khoản chi đã duyệt kèm lý do, thủ quỹ được báo', async ({ page }, testInfo) => {
+    await loginAs(page, 'long.bui@demo.test')
+    await page.goto('/clubs/c-guitar/finance')
+    await page.getByRole('tab', { name: /Khoản chi/ }).click()
+    await page.getByRole('button', { name: /Mua capo và pick dự phòng/ }).click()
+    const detail = page.getByRole('dialog', { name: 'Khoản chi' })
+    await detail.getByRole('button', { name: 'Hủy khoản chi' }).click()
+    const reason = page.getByRole('dialog', { name: 'Hủy khoản chi' })
+    await expect(reason.getByRole('button', { name: 'Giữ khoản chi' })).toBeVisible()
+    await reason.getByRole('textbox').fill('Thành viên đã tự mua capo, không cần chi nữa.')
+    await snap(page, testInfo, 'cancelExpense', { fullPage: false })
+    await reason.getByRole('button', { name: 'Hủy khoản chi' }).click()
+    await expect(page.getByText('Đã hủy khoản chi.')).toBeVisible()
+    await expect(detail.getByText('Đã hủy', { exact: true })).toBeVisible()
+    await expect(detail.getByText('Thành viên đã tự mua capo, không cần chi nữa.')).toBeVisible()
+    await expect(detail.getByText('Không chi (đã hủy)')).toBeVisible()
+    await expect(detail.getByRole('button', { name: 'Hủy khoản chi' })).toHaveCount(0)
+    await snap(page, testInfo, 'cancelledExpense', { fullPage: false })
+    await page.keyboard.press('Escape')
+
+    await switchUser(page, 'Bùi Đức Long', 'mai.vo@demo.test')
+    await openNotification(page, /Khoản chi đã bị hủy: Mua capo và pick dự phòng/)
+    await expect(page.getByRole('dialog', { name: 'Khoản chi' }).getByRole('button', { name: 'Ghi sổ' })).toHaveCount(0)
+  })
+
   test('thủ quỹ điều chỉnh giảm quỹ, chủ nhiệm duyệt thì ghi sổ và số dư giảm', async ({ page }, testInfo) => {
     await loginAs(page, 'mai.vo@demo.test')
     await page.goto('/clubs/c-guitar/finance')

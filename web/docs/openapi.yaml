@@ -3570,7 +3570,7 @@ paths:
     post:
       tags: [FIN]
       operationId: transitionTransaction
-      summary: Rút, duyệt, từ chối, ghi sổ khoản chi và điều chỉnh giảm quỹ (FR-FIN-02..05)
+      summary: Rút, duyệt, từ chối, ghi sổ, hủy khoản chi và điều chỉnh giảm quỹ (FR-FIN-02..05)
       description: |
         ST-EXP. Kiểm tra theo thứ tự: quyền (403), `version` (409), trạng thái (422), dữ liệu (400).
         Điều chỉnh giảm quỹ đi cùng luật rút, duyệt, từ chối; duyệt xong thì tự ghi sổ (không có bước `POST`), kiểm số dư
@@ -3578,12 +3578,14 @@ paths:
         `allowedActions` có `ADJUST` khi người gọi là Thủ quỹ và giao dịch đã ghi sổ, không phải chuyển quỹ, quỹ đang mở.
         - `WITHDRAW`: chỉ người đề xuất, khi còn `PROPOSED`.
         - `APPROVE`, `REJECT`: thành viên ban chủ nhiệm khác người đề xuất, kể cả Chủ nhiệm (BR-ACL-01, 403 `SELF_APPROVAL`);
-          khi còn `PROPOSED`. `REJECT` bắt buộc lý do từ 5 ký tự. Duyệt khoản trên ngưỡng mà thiếu chứng từ: 422 `RECEIPT_REQUIRED`.
+          khi còn `PROPOSED`. `REJECT` bắt buộc lý do 5–500 ký tự. Duyệt khoản trên ngưỡng mà thiếu chứng từ: 422 `RECEIPT_REQUIRED`.
         - `POST`: Thủ quỹ, khoản chi `APPROVED`. Vượt số dư hiện có của quỹ: 422 `INSUFFICIENT_FUNDS`, `detail` nêu số dư
           còn lại (BR-FIN-08). `occurredOn` là ngày ghi sổ.
+        - `CANCEL`: người đề xuất hoặc ban chủ nhiệm, khoản chi `APPROVED` (chưa ghi sổ); bắt buộc lý do 5–500 ký tự.
+          Khoản sang `CANCELLED`, không còn chặn quyết toán quỹ sự kiện (`FUND_HAS_PENDING`).
 
         Thông báo (FR-NOT-02): khoản chi được duyệt thì báo người đề xuất và Thủ quỹ (khoản chờ ghi sổ); từ chối báo người đề xuất
-        kèm lý do; ghi sổ báo người đề xuất. Điều chỉnh giảm quỹ: khi tạo thì báo ban chủ nhiệm trừ người tạo; duyệt (đã ghi sổ)
+        kèm lý do; ghi sổ báo người đề xuất; hủy báo người đề xuất, người duyệt và Thủ quỹ kèm lý do, trừ người hủy. Điều chỉnh giảm quỹ: khi tạo thì báo ban chủ nhiệm trừ người tạo; duyệt (đã ghi sổ)
         hoặc từ chối chỉ báo Thủ quỹ đã tạo, không có thông báo chờ ghi sổ.
         Duyệt điều chỉnh, ghi sổ khoản chi ở quỹ đã quyết toán: 422 `FUND_SETTLED`.
 
@@ -6419,15 +6421,17 @@ components:
       enum: [INCOME, EXPENSE, ADJUSTMENT, TRANSFER]
     TransactionStatus:
       type: string
-      description: ST-EXP. Khoản thu, chuyển quỹ và điều chỉnh tăng quỹ được ghi thẳng vào `POSTED`.
-      enum: [PROPOSED, APPROVED, POSTED, REJECTED, WITHDRAWN]
+      description: |
+        ST-EXP theo báo cáo 17/11 (có Đã duyệt → Đã hủy cho khoản chi). Khoản thu, chuyển quỹ và điều chỉnh tăng quỹ được
+        ghi thẳng vào `POSTED`.
+      enum: [PROPOSED, APPROVED, POSTED, REJECTED, WITHDRAWN, CANCELLED]
     TransactionFlow:
       type: string
       description: Tiền vào hay ra khỏi quỹ đang xem.
       enum: [IN, OUT]
     TransactionAction:
       type: string
-      enum: [WITHDRAW, APPROVE, REJECT, POST, ADJUST]
+      enum: [WITHDRAW, APPROVE, REJECT, POST, CANCEL, ADJUST]
     FinanceCategory:
       type: string
       description: |
@@ -6525,7 +6529,7 @@ components:
       allOf:
         - $ref: '#/components/schemas/TransactionSummary'
         - type: object
-          required: [approver, poster, attachments, original, adjustments, counterpartFundName, rejectionReason, decidedAt, postedAt, allowedActions, version]
+          required: [approver, poster, attachments, original, adjustments, counterpartFundName, rejectionReason, decidedAt, postedAt, cancelledBy, cancelledAt, cancellationReason, allowedActions, version]
           properties:
             approver:
               oneOf:
@@ -6551,6 +6555,13 @@ components:
             rejectionReason: { $ref: '#/components/schemas/NullableString' }
             decidedAt: { $ref: '#/components/schemas/NullableDateTime' }
             postedAt: { $ref: '#/components/schemas/NullableDateTime' }
+            cancelledBy:
+              description: Người hủy khoản chi đã duyệt (`CANCEL`).
+              oneOf:
+                - $ref: '#/components/schemas/PersonRef'
+                - type: 'null'
+            cancelledAt: { $ref: '#/components/schemas/NullableDateTime' }
+            cancellationReason: { $ref: '#/components/schemas/NullableString' }
             allowedActions:
               type: array
               items: { $ref: '#/components/schemas/TransactionAction' }
@@ -6605,9 +6616,9 @@ components:
       properties:
         action:
           type: string
-          enum: [WITHDRAW, APPROVE, REJECT, POST]
+          enum: [WITHDRAW, APPROVE, REJECT, POST, CANCEL]
         version: { type: integer }
         reason:
           type: string
           maxLength: 500
-          description: Bắt buộc từ 5 đến 500 ký tự khi `REJECT`.
+          description: Bắt buộc từ 5 đến 500 ký tự khi `REJECT` hoặc `CANCEL`.

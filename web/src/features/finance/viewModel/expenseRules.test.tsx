@@ -205,13 +205,14 @@ describe('posting an expense (FR-FIN-04, BR-FIN-08)', () => {
   it('lets only the treasurer post an approved expense, which then lowers the balance', async () => {
     signInAs('u-anh')
     const capo = await financeRepository.transaction('c-guitar', 'tx-capo')
-    expect(capo.allowedActions).toEqual([])
+    // Chủ nhiệm hủy được khoản đã duyệt nhưng không ghi sổ được.
+    expect(capo.allowedActions).toEqual(['CANCEL'])
     expect((await fail(financeRepository.transition('c-guitar', capo.id, { action: 'POST', version: capo.version })))?.status).toBe(403)
     expect(db.transactions.find((transaction) => transaction.id === capo.id)).toMatchObject({ status: 'APPROVED', version: capo.version, posterId: null })
     expect(fundBalance(guitar)).toBe(5_470_000)
 
     signInAs('u-mai')
-    expect((await financeRepository.transaction('c-guitar', 'tx-capo')).allowedActions).toEqual(['POST'])
+    expect((await financeRepository.transaction('c-guitar', 'tx-capo')).allowedActions).toEqual(['POST', 'CANCEL'])
     const posted = await financeRepository.transition('c-guitar', capo.id, { action: 'POST', version: capo.version })
     expect(posted).toMatchObject({ status: 'POSTED', poster: { id: 'u-mai' }, occurredOn: vnDate(0) })
     expect(fundBalance(guitar)).toBe(5_290_000)

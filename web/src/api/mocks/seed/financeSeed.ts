@@ -38,6 +38,9 @@ export interface DbTransaction {
   createdAt: string
   decidedAt: string | null
   postedAt: string | null
+  cancelledBy: string | null
+  cancelledAt: string | null
+  cancellationReason: string | null
   version: number
 }
 
@@ -127,6 +130,9 @@ function transaction(spec: TransactionSpec): DbTransaction {
     createdAt: vnDayAt(-spec.daysAgo - (spec.type === 'EXPENSE' ? 2 : 0), 9),
     decidedAt: decided ? vnDayAt(-spec.daysAgo - 1, 15) : null,
     postedAt: posted ? vnDayAt(-spec.daysAgo, 17) : null,
+    cancelledBy: null,
+    cancelledAt: null,
+    cancellationReason: null,
     version: 1,
   }
 }

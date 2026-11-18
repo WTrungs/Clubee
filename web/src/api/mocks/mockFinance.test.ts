@@ -23,6 +23,9 @@ function posted(fields: Partial<DbTransaction> & Pick<DbTransaction, 'id' | 'fun
     createdAt: '2026-11-01T09:00:00+07:00',
     decidedAt: null,
     postedAt: '2026-11-01T09:00:00+07:00',
+    cancelledBy: null,
+    cancelledAt: null,
+    cancellationReason: null,
     version: 1,
     ...fields,
   }

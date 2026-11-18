@@ -11,13 +11,13 @@ export type FundAction = 'RECORD_INCOME' | 'PROPOSE_EXPENSE' | 'VIEW_REQUESTS' |
 
 export type TransactionType = 'INCOME' | 'EXPENSE' | 'ADJUSTMENT' | 'TRANSFER'
 
-/** ST-EXP. Khoản thu, chuyển quỹ và điều chỉnh tăng quỹ được ghi thẳng vào Đã ghi sổ. */
-export type TransactionStatus = 'PROPOSED' | 'APPROVED' | 'POSTED' | 'REJECTED' | 'WITHDRAWN'
+/** ST-EXP (báo cáo 17/11 có thêm Đã duyệt → Đã hủy). Khoản thu, chuyển quỹ và điều chỉnh tăng quỹ được ghi thẳng vào Đã ghi sổ. */
+export type TransactionStatus = 'PROPOSED' | 'APPROVED' | 'POSTED' | 'REJECTED' | 'WITHDRAWN' | 'CANCELLED'
 
 /** Tiền vào hay ra khỏi quỹ đang xem. */
 export type TransactionFlow = 'IN' | 'OUT'
 
-export type TransactionTransitionAction = 'WITHDRAW' | 'APPROVE' | 'REJECT' | 'POST'
+export type TransactionTransitionAction = 'WITHDRAW' | 'APPROVE' | 'REJECT' | 'POST' | 'CANCEL'
 
 export type TransactionAction = TransactionTransitionAction | 'ADJUST'
 
@@ -94,6 +94,10 @@ export interface TransactionDetail extends TransactionSummary {
   rejectionReason: string | null
   decidedAt: string | null
   postedAt: string | null
+  /** Hủy khoản chi đã duyệt mà chưa ghi sổ: người hủy, thời điểm, lý do. */
+  cancelledBy: PersonRef | null
+  cancelledAt: string | null
+  cancellationReason: string | null
   allowedActions: TransactionAction[]
   version: number
 }

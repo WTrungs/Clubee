@@ -60,7 +60,7 @@ export function useTransactionActionsViewModel(clubId: string, transaction: Tran
   const allowed = transaction?.allowedActions ?? []
   return {
     actions: TRANSACTION_TRANSITIONS.filter((action) => allowed.includes(action)),
-    /** Duyệt khoản chi gửi ngay; từ chối cần lý do; rút, ghi sổ và duyệt điều chỉnh (ghi sổ luôn) cần xác nhận. */
+    /** Duyệt khoản chi gửi ngay; từ chối, hủy cần lý do; rút, ghi sổ và duyệt điều chỉnh (ghi sổ luôn) cần xác nhận. */
     request: (action: TransactionTransitionAction) => {
       if (mutation.isPending) return
       if (action === 'APPROVE' && !approvalPosts) {

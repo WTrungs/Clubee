@@ -18,6 +18,7 @@ import {
   type FundTransitionRequest,
 } from '@/features/finance/model/financeTypes'
 import { formatMoney } from '@/shared/format/formatMoney'
+import { REASON_MAX, REASON_MIN } from '@/shared/lib/reasonRules'
 import { validateUploadFile } from '@/shared/lib/validateUploadFile'
 import { db, type DbFund, type DbTransaction } from '../db'
 import { forbidden } from '../mockAccess'
@@ -41,6 +42,7 @@ import {
 } from '../mockFinance'
 import { API, currentUser, matchesKeyword, networkDelay, newId, paginate, problem, writer } from '../mockHttp'
 import { personRef } from '../mockMembers'
+import { isBoardMember } from '../mockPermissions'
 import { financeTarget, notify } from '../mockNotifications'
 import { isRealDate, nowIso, vnToday } from '../mockTime'
 import { DEFAULT_RECEIPT_THRESHOLD, generalFundId } from '../seed/financeSeed'
@@ -51,6 +53,7 @@ const transactionStatusLabel: Record<TransactionStatus, string> = {
   POSTED: 'Đã ghi sổ',
   REJECTED: 'Bị từ chối',
   WITHDRAWN: 'Đã rút',
+  CANCELLED: 'Đã hủy',
 }
 
 const MAX_AMOUNT = 1_000_000_000
@@ -191,7 +194,10 @@ function adjustable(transaction: DbTransaction): boolean {
   return transaction.status === 'POSTED' && transaction.type !== 'TRANSFER' && fundById(transaction.fundId)?.status === 'OPEN'
 }
 
-/** ST-EXP: rút khi còn Đề xuất (người tạo); duyệt, từ chối (ban chủ nhiệm khác người tạo, BR-ACL-01); ghi sổ khoản chi đã duyệt, điều chỉnh khoản đã ghi sổ (Thủ quỹ). */
+/** Hủy khoản chi đã duyệt mà chưa ghi sổ: người đề xuất hoặc ban chủ nhiệm (báo cáo 17/11, nhóm chốt ngày 17/11). */
+const canCancelExpense = (userId: string, transaction: DbTransaction) => transaction.proposerId === userId || isBoardMember(userId, transaction.clubId)
+
+/** ST-EXP: rút khi còn Đề xuất (người tạo); duyệt, từ chối (ban chủ nhiệm khác người tạo, BR-ACL-01); ghi sổ khoản chi đã duyệt (Thủ quỹ) hoặc hủy (người đề xuất, ban chủ nhiệm); điều chỉnh khoản đã ghi sổ (Thủ quỹ). */
 function transactionActions(userId: string, transaction: DbTransaction): TransactionAction[] {
   const actions: TransactionAction[] = []
   if (transaction.status === 'PROPOSED') {
@@ -199,7 +205,9 @@ function transactionActions(userId: string, transaction: DbTransaction): Transac
     else if (canApproveTransaction(userId, transaction)) actions.push('APPROVE', 'REJECT')
   }
   const treasurer = keepsLedger(userId, transaction.clubId)
-  if (transaction.status === 'APPROVED' && transaction.type === 'EXPENSE' && treasurer) actions.push('POST')
+  const approvedExpense = transaction.status === 'APPROVED' && transaction.type === 'EXPENSE'
+  if (approvedExpense && treasurer) actions.push('POST')
+  if (approvedExpense && canCancelExpense(userId, transaction)) actions.push('CANCEL')
   if (treasurer && adjustable(transaction)) actions.push('ADJUST')
   return actions
 }
@@ -226,6 +234,9 @@ function toDetail(transaction: DbTransaction, userId: string, perspectiveFundId?
     rejectionReason: transaction.rejectionReason,
     decidedAt: transaction.decidedAt,
     postedAt: transaction.postedAt,
+    cancelledBy: transaction.cancelledBy ? personRef(transaction.cancelledBy) : null,
+    cancelledAt: transaction.cancelledAt,
+    cancellationReason: transaction.cancellationReason,
     allowedActions: transactionActions(userId, transaction),
     version: transaction.version,
   }
@@ -286,6 +297,9 @@ function newTransaction(fields: Pick<DbTransaction, 'clubId' | 'fundId' | 'type'
     createdAt: nowIso(),
     decidedAt: null,
     postedAt: null,
+    cancelledBy: null,
+    cancelledAt: null,
+    cancellationReason: null,
     version: 1,
     ...fields,
   }
@@ -399,13 +413,18 @@ function notifyFinance(userIds: Iterable<string>, transaction: DbTransaction, ti
   notify(userIds, { clubId: transaction.clubId, category: 'FINANCE', title, body, target: financeTarget(transaction.clubId, transaction.id), actorId })
 }
 
-/** ST-EXP: Đề xuất → Đã duyệt → Đã ghi sổ; Đề xuất → Bị từ chối, Đã rút. Kiểm quyền trước, rồi phiên bản, rồi trạng thái. */
+/** ST-EXP: Đề xuất → Đã duyệt → Đã ghi sổ; Đề xuất → Bị từ chối, Đã rút; Đã duyệt → Đã hủy. Kiểm quyền trước, rồi phiên bản, rồi trạng thái. */
 function transitionTransaction(transaction: DbTransaction, body: Partial<TransactionTransitionRequest>, userId: string): Response {
   const approver = canApproveTransaction(userId, transaction)
   const invalid = () => problem(422, `Không thể thực hiện khi khoản này đang ở trạng thái ${transactionStatusLabel[transaction.status]}.`, 'INVALID_TRANSITION')
   const settled = fundById(transaction.fundId)?.status !== 'OPEN'
   const fundSettled = () => problem(422, 'Quỹ đã quyết toán, không ghi thêm giao dịch.', 'FUND_SETTLED')
   const conflict = () => problem(409, 'Khoản này vừa được người khác xử lý. Tải lại để xem trạng thái mới nhất.', 'VERSION_CONFLICT')
+  const reason = (body.reason ?? '').trim()
+  const badReason = (title: string) =>
+    reason.length < REASON_MIN || reason.length > REASON_MAX
+      ? problem(400, title, 'VALIDATION', [{ field: 'reason', message: `Lý do cần từ ${REASON_MIN} đến ${REASON_MAX} ký tự.` }])
+      : null
   const now = nowIso()
 
   switch (body.action) {
@@ -422,10 +441,8 @@ function transitionTransaction(transaction: DbTransaction, body: Partial<Transac
       if (body.version !== transaction.version) return conflict()
       if (transaction.status !== 'PROPOSED') return invalid()
       if (body.action === 'REJECT') {
-        const reason = (body.reason ?? '').trim()
-        if (reason.length < 5 || reason.length > 500) {
-          return problem(400, 'Vui lòng nhập lý do từ chối.', 'VALIDATION', [{ field: 'reason', message: 'Lý do cần từ 5 đến 500 ký tự.' }])
-        }
+        const rejected = badReason('Vui lòng nhập lý do từ chối.')
+        if (rejected) return rejected
         Object.assign(transaction, { status: 'REJECTED', approverId: userId, decidedAt: now, rejectionReason: reason })
         notifyFinance([transaction.proposerId], transaction, `${kindOf(transaction)} bị từ chối: ${transaction.description}`, userId, `Lý do: ${reason}`)
         break
@@ -467,6 +484,20 @@ function transitionTransaction(transaction: DbTransaction, body: Partial<Transac
       }
       Object.assign(transaction, { status: 'POSTED', posterId: userId, postedAt: now, occurredOn: vnToday() })
       notifyFinance([transaction.proposerId], transaction, `Khoản chi đã được ghi sổ: ${transaction.description}`, userId)
+      break
+    }
+    case 'CANCEL': {
+      if (!canCancelExpense(userId, transaction)) return problem(403, 'Chỉ người đề xuất hoặc ban chủ nhiệm được hủy khoản chi đã duyệt.', 'FORBIDDEN')
+      if (body.version !== transaction.version) return conflict()
+      if (transaction.status !== 'APPROVED' || transaction.type !== 'EXPENSE') return invalid()
+      const rejected = badReason('Vui lòng nhập lý do hủy.')
+      if (rejected) return rejected
+      Object.assign(transaction, { status: 'CANCELLED', cancelledBy: userId, cancelledAt: now, cancellationReason: reason })
+      // Người đề xuất, người duyệt và Thủ quỹ (đang chờ ghi sổ) đều cần biết khoản này không chi nữa.
+      const recipients = new Set([transaction.proposerId, transaction.approverId ?? '', ...ledgerKeepersOf(transaction.clubId)])
+      recipients.delete(userId)
+      recipients.delete('')
+      notifyFinance(recipients, transaction, `Khoản chi đã bị hủy: ${transaction.description}`, userId, `Lý do: ${reason}`)
       break
     }
     default:
