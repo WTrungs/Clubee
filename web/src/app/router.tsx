@@ -70,6 +70,10 @@ export const router = createBrowserRouter([
                   },
                   { path: '/me/tasks', lazy: () => import('@/features/task/view/MyTasksPage').then((module) => ({ Component: module.MyTasksPage })) },
                   {
+                    path: '/scan',
+                    lazy: () => import('@/features/attendance/view/AttendanceScanPage').then((module) => ({ Component: module.AttendanceScanPage })),
+                  },
+                  {
                     path: '/clubs/:clubId',
                     element: <ClubLayout />,
                     children: [

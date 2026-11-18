@@ -1,5 +1,11 @@
 import { http, HttpResponse } from 'msw'
-import type { AttendanceStatus, CloseAttendanceRequest, MarkAttendanceRequest } from '@/features/attendance/model/attendanceTypes'
+import type {
+  AttendanceCheckIn,
+  AttendanceCheckInRequest,
+  AttendanceStatus,
+  CloseAttendanceRequest,
+  MarkAttendanceRequest,
+} from '@/features/attendance/model/attendanceTypes'
 import { formatDateTime } from '@/shared/format/formatDate'
 import { db } from '../db'
 import {
@@ -12,6 +18,7 @@ import {
   eventActivity,
   eventAttendanceAvailable,
   isAttendanceOpen,
+  isCurrentCode,
   recordsOf,
   sessionActivity,
   sheetEntries,
@@ -171,7 +178,52 @@ function attendanceRoutes(path: string, resolve: (params: Params, userId: string
   ]
 }
 
+/** Tìm buổi hoặc sự kiện cho người quét, chưa xét quyền: mọi lỗi tới đây đều trả như mã sai để không lộ buổi có tồn tại hay không. */
+function locateSession(params: Params): AttendanceActivity | null {
+  const session = db.sessions.find((candidate) => candidate.id === params.sessionId && candidate.clubId === String(params.clubId))
+  return session ? sessionActivity(session) : null
+}
+
+function locateEvent(params: Params): AttendanceActivity | null {
+  const event = db.events.find((candidate) => candidate.id === params.eventId && candidate.clubId === String(params.clubId))
+  return event && eventAttendanceAvailable(event) ? eventActivity(event) : null
+}
+
+/** FR-ATT-06: kiểm đăng nhập, mã (422 `INVALID_CODE`), thành viên (403), đã chốt, chưa mở (422); quét lại trả bản ghi cũ (BR-ATT-01). */
+function checkInRoute(path: string, locate: (params: Params) => AttendanceActivity | null) {
+  return http.post(`${API}${path}/attendance/check-ins`, async ({ request, params }) => {
+    await networkDelay()
+    const user = writer(request)
+    if (!user.ok) return user.response
+    const body = (await request.json()) as Partial<AttendanceCheckInRequest>
+    const activity = locate(params)
+    const day = activity && activity.days.length > 0 ? (typeof body.day === 'string' && activity.days.includes(body.day) ? body.day : undefined) : null
+    if (!activity || day === undefined || typeof body.code !== 'string' || !isCurrentCode(activity, day, body.code)) {
+      return problem(422, 'Mã điểm danh không đúng hoặc đã hết hạn. Quét lại mã đang chiếu.', 'INVALID_CODE')
+    }
+    const userId = user.value.id
+    if (!canAccessClub(userId, activity.clubId)) return problem(403, 'Chỉ thành viên CLB tự điểm danh được bằng mã QR.', 'NOT_A_MEMBER')
+    if (activity.readOnlyReason || sheetStateOf(activity, day).closedAt) return problem(422, 'Điểm danh đã chốt, không ghi nhận thêm.', 'ATTENDANCE_CLOSED')
+    if (!isAttendanceOpen(activity, day)) return problem(422, `Điểm danh mở lúc ${formatDateTime(activity.opensAt(day))}.`, 'ATTENDANCE_NOT_OPEN')
+    const result = (status: AttendanceStatus, recordedAt: string, alreadyRecorded: boolean): AttendanceCheckIn => ({
+      activity: { type: activity.type, id: activity.id, name: activity.name },
+      clubName: db.clubs.find((club) => club.id === activity.clubId)?.name ?? '',
+      day,
+      status,
+      recordedAt,
+      alreadyRecorded,
+    })
+    const existing = recordsOf(activity, day).find((record) => record.userId === userId)
+    if (existing) return HttpResponse.json(result(existing.status, existing.recordedAt, true))
+    const status: AttendanceStatus = Date.now() > Date.parse(activity.startsAt(day)) ? 'LATE' : 'PRESENT'
+    const row = writeAttendance(activity, day, userId, status, userId, 'QR')
+    return HttpResponse.json(result(status, row.record?.recordedAt ?? '', false), { status: 201 })
+  })
+}
+
 export const attendanceHandlers = [
   ...attendanceRoutes('/clubs/:clubId/sessions/:sessionId', resolveSession),
   ...attendanceRoutes('/clubs/:clubId/events/:eventId', resolveEvent),
+  checkInRoute('/clubs/:clubId/sessions/:sessionId', locateSession),
+  checkInRoute('/clubs/:clubId/events/:eventId', locateEvent),
 ]

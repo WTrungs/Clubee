@@ -2,6 +2,8 @@ import { httpClient } from '@/api/httpClient'
 import type {
   AttendanceActivityRef,
   AttendanceCandidate,
+  AttendanceCheckIn,
+  AttendanceCheckInRequest,
   AttendanceCode,
   AttendanceRow,
   AttendanceSheet,
@@ -26,4 +28,5 @@ export const attendanceRepository = {
     httpClient.get<AttendanceCandidate[]>(`${base(activity)}/candidates`, { query: { day: query.day ?? undefined, q: query.q || undefined } }),
   close: (activity: AttendanceActivityRef, request: CloseAttendanceRequest) => httpClient.post<AttendanceSheet>(`${base(activity)}/transitions`, request),
   code: (activity: AttendanceActivityRef, day: string | null) => httpClient.get<AttendanceCode>(`${base(activity)}/code`, { query: { day: day ?? undefined } }),
+  checkIn: (activity: AttendanceActivityRef, request: AttendanceCheckInRequest) => httpClient.post<AttendanceCheckIn>(`${base(activity)}/check-ins`, request),
 }

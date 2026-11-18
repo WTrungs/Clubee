@@ -3110,7 +3110,7 @@ paths:
       description: |
         Chỉ người phụ trách buổi (người tạo, ban chủ nhiệm, Trưởng ban, Phó ban của ban đó; còn Thử việc hoặc Chính thức).
         Mã chỉ cấp từ `opensAt` tới khi chốt (BR-ATT-02); đổi mới mỗi chu kỳ `refreshSeconds` (mặc định 30 giây, SRS 9.2), gọi lại trong cùng chu kỳ trả đúng mã cũ.
-        Phản hồi kèm `Cache-Control: no-store`. Quét mã (FR-ATT-06) chỉ có trên ứng dụng di động.
+        Phản hồi kèm `Cache-Control: no-store`. Người tham gia quét mã bằng `POST …/attendance/check-ins` (FR-ATT-06).
 
         Lỗi:
         - 403 `FORBIDDEN` (kèm lý do), `NOT_A_MEMBER`.
@@ -3128,6 +3128,48 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+  /clubs/{clubId}/sessions/{sessionId}/attendance/check-ins:
+    post:
+      tags: [ATT]
+      operationId: checkInSessionAttendance
+      summary: Tự điểm danh bằng mã QR đang chiếu (FR-ATT-06)
+      description: |
+        Người tham gia quét mã QR của buổi trên ứng dụng Android hoặc mục Quét mã điểm danh trên web. Kiểm tra theo thứ tự:
+        1. Đăng nhập (401).
+        2. `code` khớp mã của chu kỳ hiện tại hoặc chu kỳ liền trước của đúng buổi; sai, hết hạn, không có
+           buổi hoặc không đúng CLB đều trả 422 `INVALID_CODE` (không lộ buổi có tồn tại hay không).
+        3. Người quét là thành viên CLB (Thử việc, Chính thức, Tạm nghỉ); không thì 403 `NOT_A_MEMBER`.
+        4. Bảng đã chốt: 422 `ATTENDANCE_CLOSED`. Chưa tới giờ mở: 422 `ATTENDANCE_NOT_OPEN`.
+
+        Quét sau giờ bắt đầu của buổi ghi `LATE`, còn lại `PRESENT`;
+        cách ghi `QR`. Người không thuộc đối tượng được ghi là người phát sinh (FR-ATT-07).
+        Mỗi người một bản ghi (BR-ATT-01): đã có bản ghi thì trả 200 với bản ghi cũ và `alreadyRecorded: true`, không ghi đè, kể cả
+        khi bản ghi cũ là `EXCUSED`, `ABSENT` do người phụ trách ghi (giao diện báo người quét nhờ người phụ trách sửa).
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - $ref: '#/components/parameters/SessionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AttendanceCheckInRequest' }
+      responses:
+        '200':
+          description: Đã điểm danh từ trước; trả bản ghi cũ.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AttendanceCheckIn' }
+        '201':
+          description: Đã ghi Có mặt hoặc Đi muộn.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AttendanceCheckIn' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
         '422': { $ref: '#/components/responses/UnprocessableEntity' }
   /clubs/{clubId}/sessions/{sessionId}/attendance/transitions:
     post:
@@ -3285,7 +3327,7 @@ paths:
         Chỉ ban chủ nhiệm và nhân sự BTC đang hoạt động (Trưởng BTC, trưởng tiểu ban, nhân sự tiểu ban). Mỗi ngày của sự kiện có mã riêng;
         bỏ trống `day` thì máy chủ chọn ngày như khi đọc danh sách.
         Mã chỉ cấp từ `opensAt` của ngày đó tới khi chốt (BR-ATT-02); đổi mới mỗi chu kỳ `refreshSeconds` (mặc định 30 giây, SRS 9.2), gọi lại trong cùng chu kỳ trả đúng mã cũ.
-        Phản hồi kèm `Cache-Control: no-store`. Quét mã (FR-ATT-06) chỉ có trên ứng dụng di động.
+        Phản hồi kèm `Cache-Control: no-store`. Người tham gia quét mã bằng `POST …/attendance/check-ins` (FR-ATT-06).
 
         Lỗi:
         - 400 `VALIDATION` (ngày không thuộc sự kiện).
@@ -3308,6 +3350,48 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+  /clubs/{clubId}/events/{eventId}/attendance/check-ins:
+    post:
+      tags: [ATT]
+      operationId: checkInEventAttendance
+      summary: Tự điểm danh bằng mã QR đang chiếu (FR-ATT-06)
+      description: |
+        Người tham gia quét mã QR của sự kiện trên ứng dụng Android hoặc mục Quét mã điểm danh trên web. Kiểm tra theo thứ tự:
+        1. Đăng nhập (401).
+        2. `code` khớp mã của chu kỳ hiện tại hoặc chu kỳ liền trước của đúng sự kiện và ngày; sai, hết hạn, không có
+           sự kiện hoặc sự kiện chưa duyệt, đã hủy đều trả 422 `INVALID_CODE` (không lộ sự kiện có tồn tại hay không).
+        3. Người quét là thành viên CLB (Thử việc, Chính thức, Tạm nghỉ); không thì 403 `NOT_A_MEMBER`.
+        4. Bảng đã chốt hoặc sự kiện đã đóng: 422 `ATTENDANCE_CLOSED`. Chưa tới giờ mở: 422 `ATTENDANCE_NOT_OPEN`.
+
+        Quét sau giờ bắt đầu của ngày đó (ngày sau của sự kiện nhiều ngày dùng cùng giờ bắt đầu) ghi `LATE`, còn lại `PRESENT`;
+        cách ghi `QR`. Người không thuộc đối tượng được ghi là người phát sinh (FR-ATT-07).
+        Mỗi người một bản ghi (BR-ATT-01): đã có bản ghi thì trả 200 với bản ghi cũ và `alreadyRecorded: true`, không ghi đè, kể cả
+        khi bản ghi cũ là `EXCUSED`, `ABSENT` do người phụ trách ghi (giao diện báo người quét nhờ người phụ trách sửa).
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - $ref: '#/components/parameters/EventId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AttendanceCheckInRequest' }
+      responses:
+        '200':
+          description: Đã điểm danh từ trước; trả bản ghi cũ.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AttendanceCheckIn' }
+        '201':
+          description: Đã ghi Có mặt hoặc Đi muộn.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AttendanceCheckIn' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
         '422': { $ref: '#/components/responses/UnprocessableEntity' }
   /clubs/{clubId}/events/{eventId}/attendance/transitions:
     post:
@@ -6379,6 +6463,39 @@ components:
         refreshSeconds:
           type: integer
           description: Độ dài chu kỳ đổi mã của CLB (SRS 9.2).
+    AttendanceCheckInRequest:
+      type: object
+      required: [code, day]
+      properties:
+        code:
+          type: string
+          description: Giá trị `code` đọc từ mã QR.
+        day:
+          $ref: '#/components/schemas/NullableDate'
+          description: Giá trị `day` đọc từ mã QR; buổi sinh hoạt để `null`.
+    AttendanceCheckIn:
+      type: object
+      required: [activity, clubName, day, status, recordedAt, alreadyRecorded]
+      properties:
+        activity:
+          type: object
+          required: [type, id, name]
+          properties:
+            type:
+              type: string
+              enum: [SESSION, EVENT]
+            id: { type: string }
+            name: { type: string }
+        clubName: { type: string }
+        day: { $ref: '#/components/schemas/NullableDate' }
+        status:
+          description: '`PRESENT` hoặc `LATE` khi vừa ghi; quét lại thì là trạng thái của bản ghi cũ.'
+          allOf:
+            - $ref: '#/components/schemas/AttendanceStatus'
+        recordedAt: { type: string, format: date-time }
+        alreadyRecorded:
+          type: boolean
+          description: '`true` khi người này đã có bản ghi từ trước (BR-ATT-01).'
     MarkAttendanceRequest:
       type: object
       required: [day, status, version]

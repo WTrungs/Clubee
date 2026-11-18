@@ -91,6 +91,22 @@ export interface AttendanceCode {
   refreshSeconds: number
 }
 
+/** FR-ATT-06: mã đọc được từ QR; `day` chỉ có với sự kiện. */
+export interface AttendanceCheckInRequest {
+  code: string
+  day: string | null
+}
+
+/** Kết quả quét: Có mặt hoặc Đi muộn; quét lại thì trả bản ghi cũ kèm `alreadyRecorded` (BR-ATT-01). */
+export interface AttendanceCheckIn {
+  activity: { type: AttendanceActivityType; id: string; name: string }
+  clubName: string
+  day: string | null
+  status: AttendanceStatus
+  recordedAt: string
+  alreadyRecorded: boolean
+}
+
 export interface AttendanceCandidate {
   id: string
   fullName: string

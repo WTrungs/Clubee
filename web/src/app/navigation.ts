@@ -9,6 +9,7 @@ import {
   LayoutGrid,
   ListTodo,
   Network,
+  ScanLine,
   Shuffle,
   UserCog,
   UsersRound,
@@ -51,6 +52,7 @@ export function buildNavigation(clubId: string | undefined, clubName: string | u
         { to: '/clubs', label: 'CLB của tôi', icon: LayoutGrid, end: true },
         { to: '/directory', label: 'Tìm CLB', icon: Compass, end: true },
         { to: '/me/tasks', label: 'Công việc của tôi', icon: ListTodo, end: true },
+        { to: '/scan', label: 'Quét mã điểm danh', icon: ScanLine, end: true },
       ],
     },
   ]
