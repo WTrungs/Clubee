@@ -98,6 +98,8 @@ export interface LeaveDecisionRequest {
 export interface ResignBlocker {
   kind: 'POSITION' | 'TASK' | 'TASK_REVIEW' | 'APPOINTMENT'
   refId: string
+  /** CLB của khoản này; việc, chức vụ ở sự kiện chung thuộc CLB chủ trì (FR-EVT-08). */
+  clubId: string
   title: string
 }
 

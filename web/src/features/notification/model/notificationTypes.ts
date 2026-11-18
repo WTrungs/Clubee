@@ -7,7 +7,7 @@ export type NotificationKind = 'SYSTEM' | 'MANUAL'
 export type NotificationCategory = 'MEMBERSHIP' | 'POSITION' | 'TASK' | 'EVENT' | 'SESSION' | 'FINANCE' | 'TERM' | 'ANNOUNCEMENT'
 
 /** Nghĩa của `id` theo loại: giao dịch (`FINANCE`), phiên bàn giao, tab trang Thành viên (`MEMBERS`, null là mặc định), mã lời mời. */
-export type NotificationTargetType = 'CLUB' | 'STRUCTURE' | 'MEMBERS' | 'TASK' | 'EVENT' | 'SESSION' | 'FINANCE' | 'TERM' | 'HANDOVER' | 'DIRECTORY' | 'INVITATION'
+export type NotificationTargetType = 'CLUB' | 'STRUCTURE' | 'MEMBERS' | 'TASK' | 'EVENT' | 'EVENT_SHARED' | 'SESSION' | 'FINANCE' | 'TERM' | 'HANDOVER' | 'DIRECTORY' | 'INVITATION'
 
 /** Màn hình liên quan; mở ra thì màn đó tự kiểm tra quyền tại thời điểm mở (BR-SEC-02). */
 export interface NotificationTarget {

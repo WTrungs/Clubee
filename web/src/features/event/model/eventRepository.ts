@@ -1,21 +1,28 @@
 import { httpClient } from '@/api/httpClient'
 import type { Page } from '@/api/pagination'
 import type {
+  CoHost,
+  CoHostDecisionRequest,
   CreateEventRequest,
   CreateSubcommitteeRequest,
   EventDetail,
   EventQuery,
   EventSummary,
   EventTransitionRequest,
+  InviteCoHostRequest,
   MyRegistration,
   Registration,
+  RemoveCoHostRequest,
   RescheduleEventRequest,
+  SetSubcommitteeLeadRequest,
+  SharedEvent,
   StaffCandidate,
   Subcommittee,
 } from './eventTypes'
 
 const events = (clubId: string) => `/clubs/${encodeURIComponent(clubId)}/events`
 const event = (clubId: string, eventId: string) => `${events(clubId)}/${encodeURIComponent(eventId)}`
+const subcommittee = (clubId: string, eventId: string, subcommitteeId: string) => `${event(clubId, eventId)}/subcommittees/${encodeURIComponent(subcommitteeId)}`
 
 export const eventRepository = {
   list: (clubId: string, query: EventQuery) =>
@@ -31,12 +38,24 @@ export const eventRepository = {
   subcommittees: (clubId: string, eventId: string) => httpClient.get<Subcommittee[]>(`${event(clubId, eventId)}/subcommittees`),
   createSubcommittee: (clubId: string, eventId: string, request: CreateSubcommitteeRequest) =>
     httpClient.post<Subcommittee>(`${event(clubId, eventId)}/subcommittees`, request),
-  addStaff: (clubId: string, eventId: string, subcommitteeId: string, userId: string) =>
-    httpClient.post<Subcommittee>(`${event(clubId, eventId)}/subcommittees/${encodeURIComponent(subcommitteeId)}/members`, { userId }),
+  /** `coHostId` có giá trị thì thêm thành viên của CLB đồng tổ chức đó (FR-EVT-08). */
+  addStaff: (clubId: string, eventId: string, subcommitteeId: string, userId: string, coHostId: string | null = null) =>
+    httpClient.post<Subcommittee>(`${subcommittee(clubId, eventId, subcommitteeId)}/members`, coHostId ? { userId, coHostId } : { userId }),
   addCollaborator: (clubId: string, eventId: string, subcommitteeId: string, email: string) =>
-    httpClient.post<Subcommittee>(`${event(clubId, eventId)}/subcommittees/${encodeURIComponent(subcommitteeId)}/collaborators`, { email }),
-  staffCandidates: (clubId: string, eventId: string, q: string) =>
-    httpClient.get<StaffCandidate[]>(`${event(clubId, eventId)}/staff-candidates`, { query: { q } }),
+    httpClient.post<Subcommittee>(`${subcommittee(clubId, eventId, subcommitteeId)}/collaborators`, { email }),
+  setSubcommitteeLead: (clubId: string, eventId: string, subcommitteeId: string, request: SetSubcommitteeLeadRequest) =>
+    httpClient.put<Subcommittee>(`${subcommittee(clubId, eventId, subcommitteeId)}/lead`, request),
+  staffCandidates: (clubId: string, eventId: string, q: string, coHostId: string | null = null) =>
+    httpClient.get<StaffCandidate[]>(`${event(clubId, eventId)}/staff-candidates`, { query: { q, coHostId: coHostId ?? undefined } }),
+
+  coHosts: (clubId: string, eventId: string) => httpClient.get<CoHost[]>(`${event(clubId, eventId)}/co-hosts`),
+  inviteCoHost: (clubId: string, eventId: string, request: InviteCoHostRequest) => httpClient.post<CoHost>(`${event(clubId, eventId)}/co-hosts`, request),
+  removeCoHost: (clubId: string, eventId: string, coHostId: string, request: RemoveCoHostRequest) =>
+    httpClient.post<CoHost>(`${event(clubId, eventId)}/co-hosts/${encodeURIComponent(coHostId)}/removal`, request),
+  /** Lời mời đồng tổ chức gửi tới CLB này (tab Sự kiện chung). */
+  coHostInvitations: (clubId: string) => httpClient.get<SharedEvent[]>(`/clubs/${encodeURIComponent(clubId)}/co-host-invitations`),
+  decideCoHost: (clubId: string, invitationId: string, request: CoHostDecisionRequest) =>
+    httpClient.post<SharedEvent>(`/clubs/${encodeURIComponent(clubId)}/co-host-invitations/${encodeURIComponent(invitationId)}/decision`, request),
 
   registrations: (clubId: string, eventId: string, query: { q?: string; page?: number; size?: number }) =>
     httpClient.get<Page<Registration>>(`${event(clubId, eventId)}/registrations`, { query }),

@@ -30,6 +30,8 @@ export function notificationPath(target: NotificationTarget | null): string | nu
       return club ? `/clubs/${club}/members${id ? `?tab=${id}` : ''}` : null
     case 'EVENT':
       return club && id ? `/clubs/${club}/events/${id}` : null
+    case 'EVENT_SHARED':
+      return club ? `/clubs/${club}/events?tab=shared` : null
     case 'SESSION':
       return club && id ? `/clubs/${club}/sessions/${id}` : null
     case 'TASK':

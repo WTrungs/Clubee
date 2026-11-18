@@ -2326,7 +2326,8 @@ paths:
       summary: Tạo và giao việc (FR-TASK-01)
       description: |
         Phạm vi phải nằm trong `task-scopes` của người gọi (BR-TASK-01). Tên từ 3 ký tự; người chính thuộc phạm vi;
-        người phối hợp thuộc phạm vi và khác người chính; hạn sau hiện tại.
+        người phối hợp thuộc phạm vi và khác người chính; hạn sau hiện tại. Khách của sự kiện (nhân sự CLB đồng tổ chức làm
+        trưởng tiểu ban) gọi được, phạm vi chỉ là tiểu ban mình phụ trách (FR-EVT-08).
         Lỗi: 400 `VALIDATION`; 403 `NOT_A_MEMBER`, `SCOPE_FORBIDDEN`.
       security:
         - sessionCookie: []
@@ -2352,7 +2353,7 @@ paths:
       tags: [TASK]
       operationId: listAssignableScopes
       summary: Phạm vi được giao việc (BR-TASK-01)
-      description: Ban, tiểu ban người gọi được giao việc, kèm người nhận hợp lệ. Lỗi 403 `NOT_A_MEMBER`.
+      description: Ban, tiểu ban người gọi được giao việc, kèm người nhận hợp lệ; khách của sự kiện cũng gọi được (FR-EVT-08). Lỗi 403 `NOT_A_MEMBER`.
       parameters:
         - $ref: '#/components/parameters/ClubId'
       responses:
@@ -2741,14 +2742,21 @@ paths:
     get:
       tags: [EVT]
       operationId: listStaffCandidates
-      summary: Thành viên có thể mời vào BTC (FR-EVT-05)
+      summary: Thành viên có thể mời vào BTC (FR-EVT-05, FR-EVT-08)
       description: |
         Người có quyền mời ở ít nhất một tiểu ban. Chỉ trả tên và ban (SRS 3.5).
-        Lỗi: 403 `FORBIDDEN`; 404 `EVENT_NOT_FOUND`.
+        Có `coHostId`: thành viên Thử việc, Chính thức của CLB đồng tổ chức đó (đang Chấp nhận), bỏ người có tư cách ở CLB chủ
+        trì; ban là ban ở CLB của họ. Cần `MANAGE_EVENT_STAFF` ở phạm vi sự kiện.
+        Lỗi: 403 `FORBIDDEN`; 404 `EVENT_NOT_FOUND`; 422 `CO_HOST_NOT_ACTIVE`.
       parameters:
         - $ref: '#/components/parameters/ClubId'
         - $ref: '#/components/parameters/EventId'
         - $ref: '#/components/parameters/Q'
+        - name: coHostId
+          in: query
+          required: false
+          description: Id lời mời đồng tổ chức đang Chấp nhận; bỏ trống là thành viên CLB chủ trì.
+          schema: { type: string }
       responses:
         '200':
           description: Ứng viên.
@@ -2760,14 +2768,17 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
   /clubs/{clubId}/events/{eventId}/subcommittees/{subcommitteeId}/members:
     post:
       tags: [EVT]
       operationId: addSubcommitteeMember
-      summary: Mời thành viên vào tiểu ban (FR-EVT-05)
+      summary: Mời thành viên vào tiểu ban (FR-EVT-05, FR-EVT-08)
       description: |
         Trưởng BTC, trưởng tiểu ban đó hoặc ban chủ nhiệm. Chỉ mời thành viên Thử việc hoặc Chính thức của CLB chủ trì.
-        Lỗi: 400 `VALIDATION`; 403 `FORBIDDEN`; 404 `NOT_FOUND`; 409 `ALREADY_STAFF`.
+        Có `coHostId`: thêm thành viên của CLB đồng tổ chức đang Chấp nhận (ghi `kind: CO_HOST`); cần `MANAGE_EVENT_STAFF` ở
+        phạm vi sự kiện, người phải là ứng viên của `staff-candidates?coHostId=`.
+        Lỗi: 400 `VALIDATION`; 403 `FORBIDDEN`; 404 `NOT_FOUND`; 409 `ALREADY_STAFF`; 422 `CO_HOST_NOT_ACTIVE`.
       security:
         - sessionCookie: []
           csrfHeader: []
@@ -2791,6 +2802,7 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
   /clubs/{clubId}/events/{eventId}/subcommittees/{subcommitteeId}/collaborators:
     post:
       tags: [EVT]
@@ -2821,6 +2833,197 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Subcommittee' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+  /clubs/{clubId}/events/{eventId}/subcommittees/{subcommitteeId}/lead:
+    put:
+      tags: [EVT]
+      operationId: setSubcommitteeLead
+      summary: Chọn hoặc đổi trưởng tiểu ban (FR-EVT-08)
+      description: |
+        Cần `MANAGE_EVENT_STAFF` ở phạm vi sự kiện (trưởng tiểu ban không tự đổi). Người được chọn là nhân sự hiện có của tiểu
+        ban: thành viên Thử việc, Chính thức của CLB chủ trì hoặc nhân sự CLB đồng tổ chức; CTV không làm trưởng (BR-ORG-01);
+        không đang là trưởng tiểu ban khác (BR-ORG-04). Đang có trưởng thì `reason` bắt buộc; trưởng cũ kết thúc chức kèm lý
+        do, vẫn ở lại tiểu ban, và nhận thông báo. Chức còn mở của trưởng đang Tạm nghỉ (không còn hiệu lực, thẻ hiện chưa có
+        trưởng) cũng kết thúc, với lý do mặc định, để người đó quay lại không thành trưởng thứ hai (BR-ORG-04). Nhân sự CLB
+        đồng tổ chức phải còn Thử việc, Chính thức ở CLB gốc.
+        Thứ tự kiểm: 403, 422 `EVENT_READ_ONLY`, 400 `userId` không phải nhân sự, 422 `LEAD_NOT_ELIGIBLE`, `LEAD_TAKEN`, rồi
+        400 (đang là trưởng, thiếu lý do).
+        Lỗi: 400 `VALIDATION`; 403 `FORBIDDEN`; 404 `NOT_FOUND`; 422 `EVENT_READ_ONLY`, `LEAD_NOT_ELIGIBLE`, `LEAD_TAKEN`.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - $ref: '#/components/parameters/EventId'
+        - $ref: '#/components/parameters/SubcommitteeId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SetSubcommitteeLeadRequest' }
+      responses:
+        '200':
+          description: Tiểu ban sau khi đổi trưởng.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Subcommittee' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+  /clubs/{clubId}/events/{eventId}/co-hosts:
+    get:
+      tags: [EVT]
+      operationId: listCoHosts
+      summary: CLB đồng tổ chức của sự kiện (FR-EVT-08)
+      description: |
+        Người xem được cơ cấu BTC (`VIEW_STAFF`). Mọi lời mời, mới trước, kèm số nhân sự của từng CLB đang trong BTC.
+        Lỗi: 403 `FORBIDDEN`; 404 `EVENT_NOT_FOUND`.
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - $ref: '#/components/parameters/EventId'
+      responses:
+        '200':
+          description: Lời mời đồng tổ chức.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/CoHost' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [EVT]
+      operationId: inviteCoHost
+      summary: Mời CLB đồng tổ chức (FR-EVT-08, ST-COH)
+      description: |
+        Cần `MANAGE_EVENT_STAFF` ở phạm vi sự kiện (Trưởng BTC, ban chủ nhiệm); sự kiện còn hoạt động (Đã duyệt tới Đã kết
+        thúc). CLB được mời phải tồn tại và khác CLB chủ trì. Mỗi CLB chỉ có một lời mời Đã gửi hoặc Chấp nhận; lời mời đã
+        từ chối hoặc đã gỡ thì mời lại bằng lời mời mới. Người có `APPROVE_EVENT` ở CLB được mời nhận thông báo, đích
+        `EVENT_SHARED`.
+        Lỗi: 400 `VALIDATION` (`clubId`, `message` quá 500 ký tự); 403 `FORBIDDEN`; 404 `EVENT_NOT_FOUND`; 409
+        `CO_HOST_EXISTS`; 422 `EVENT_READ_ONLY`.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - $ref: '#/components/parameters/EventId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/InviteCoHostRequest' }
+      responses:
+        '201':
+          description: Lời mời vừa gửi.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CoHost' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+  /clubs/{clubId}/events/{eventId}/co-hosts/{coHostId}/removal:
+    post:
+      tags: [EVT]
+      operationId: removeCoHost
+      summary: Gỡ CLB đồng tổ chức (FR-EVT-08, ST-COH)
+      description: |
+        Quyền như khi mời. Chỉ gỡ CLB đang Chấp nhận, lý do 5–500 ký tự. Mọi nhân sự của CLB đó ở sự kiện thôi ngay, chức
+        trưởng tiểu ban của họ kết thúc kèm lý do; việc và dữ liệu họ tạo giữ nguyên (BR-DATA-01). Ban chủ nhiệm CLB kia và
+        người bị gỡ nhận thông báo.
+        Thứ tự kiểm: 403, 409, 422, 400.
+        Lỗi: 400 `VALIDATION`; 403 `FORBIDDEN`; 404 `CO_HOST_NOT_FOUND`; 409 `VERSION_CONFLICT`; 422 `EVENT_READ_ONLY`,
+        `CO_HOST_NOT_ACTIVE`.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - $ref: '#/components/parameters/EventId'
+        - name: coHostId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RemoveCoHostRequest' }
+      responses:
+        '200':
+          description: Lời mời sau khi gỡ.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CoHost' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+  /clubs/{clubId}/co-host-invitations:
+    get:
+      tags: [EVT]
+      operationId: listCoHostInvitations
+      summary: Lời mời đồng tổ chức gửi tới CLB (FR-EVT-08)
+      description: |
+        Ban chủ nhiệm CLB được mời (tab Sự kiện chung). Mọi lời mời, mới trước; `allowedActions` có `ACCEPT`, `DECLINE` khi
+        lời mời Đã gửi, sự kiện còn hoạt động và người xem có `APPROVE_EVENT`.
+        Lỗi: 403 `NOT_A_MEMBER`, `FORBIDDEN`.
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+      responses:
+        '200':
+          description: Lời mời.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/SharedEvent' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /clubs/{clubId}/co-host-invitations/{invitationId}/decision:
+    post:
+      tags: [EVT]
+      operationId: decideCoHostInvitation
+      summary: Chấp nhận hoặc từ chối lời mời đồng tổ chức (FR-EVT-08, ST-COH)
+      description: |
+        Cần `APPROVE_EVENT` ở CLB được mời. Chỉ khi lời mời Đã gửi; lời mời đã từ chối không chấp nhận lại được. Từ chối cần
+        ghi chú 5–500 ký tự. Người mời và Trưởng BTC nhận thông báo.
+        Thứ tự kiểm: 404 (không thuộc ban chủ nhiệm CLB này), 403, 409, 422, 400.
+        Lỗi: 400 `VALIDATION`; 403 `FORBIDDEN`; 404 `CO_HOST_NOT_FOUND`; 409 `VERSION_CONFLICT`; 422 `CO_HOST_NOT_PENDING`,
+        `EVENT_READ_ONLY`.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - name: invitationId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CoHostDecisionRequest' }
+      responses:
+        '200':
+          description: Lời mời sau khi trả lời.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SharedEvent' }
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
@@ -4384,7 +4587,8 @@ components:
         `REQUEST_PRESIDENCY_TRANSFER`: thành viên Chính thức, mọi người giữ chức ban chủ nhiệm không đăng nhập quá 30 ngày và CLB
         chưa có yêu cầu chuyển quyền chờ xử lý (FR-ACC-08).
         `VIEW_PERMISSIONS`: thuộc ban chủ nhiệm, xem được bảng phân quyền (FR-ORG-05).
-      enum: [CREATE_EVENT, PROPOSE_EVENT, ASSIGN_TASK, MANAGE_MEMBERS, MANAGE_ORG, ASSIGN_PRESIDENCY, EDIT_CLUB, SEND_ANNOUNCEMENT, CREATE_TERM, ASSIGN_POSITION, REQUEST_PRESIDENCY_TRANSFER, VIEW_PERMISSIONS]
+        `VIEW_SHARED_EVENTS`: thuộc ban chủ nhiệm, xem và trả lời lời mời đồng tổ chức ở tab Sự kiện chung (FR-EVT-08).
+      enum: [CREATE_EVENT, PROPOSE_EVENT, ASSIGN_TASK, MANAGE_MEMBERS, MANAGE_ORG, ASSIGN_PRESIDENCY, EDIT_CLUB, SEND_ANNOUNCEMENT, CREATE_TERM, ASSIGN_POSITION, REQUEST_PRESIDENCY_TRANSFER, VIEW_PERMISSIONS, VIEW_SHARED_EVENTS]
     TermSummary:
       type: object
       description: Nhiệm kỳ đang phụ trách CLB (Đang chạy hoặc Đang bàn giao).
@@ -4858,11 +5062,14 @@ components:
         version: { type: integer }
     ResignBlocker:
       type: object
-      description: Khoản còn tồn khiến chưa tự rời CLB được (BR-MEM-03).
-      required: [kind, refId, title]
+      description: |
+        Khoản còn tồn khiến chưa tự rời CLB được (BR-MEM-03), kể cả chức trưởng tiểu ban và việc ở sự kiện chung mà người này
+        tham gia với tư cách nhân sự CLB đồng tổ chức (FR-EVT-08).
+      required: [kind, refId, clubId, title]
       properties:
         kind: { type: string, enum: [POSITION, TASK, TASK_REVIEW, APPOINTMENT] }
         refId: { type: string }
+        clubId: { type: string, description: 'CLB của khoản; việc, chức vụ ở sự kiện chung thuộc CLB chủ trì.' }
         title: { type: string }
     MyMembership:
       type: object
@@ -5963,13 +6170,14 @@ components:
       type: object
       description: |
         Màn hình liên quan; màn đó tự kiểm tra quyền khi mở (BR-SEC-02). `FINANCE` trỏ tới một giao dịch (`id`), `SESSION` tới
-        một buổi sinh hoạt, `TERM` tới trang Nhiệm kỳ, `HANDOVER` tới một phiên bàn giao (`id`).
+        một buổi sinh hoạt, `TERM` tới trang Nhiệm kỳ, `HANDOVER` tới một phiên bàn giao (`id`), `EVENT_SHARED` tới tab Sự kiện
+        chung của CLB được mời đồng tổ chức.
       required: [type, clubId, id]
       properties:
         type:
           type: string
           description: '`MEMBERS` mở trang Thành viên; `id` là tab cần mở (ví dụ `leave`), `null` là tab mặc định. `INVITATION` mở trang lời mời; `id` là mã lời mời.'
-          enum: [CLUB, STRUCTURE, MEMBERS, TASK, EVENT, SESSION, FINANCE, TERM, HANDOVER, DIRECTORY, INVITATION]
+          enum: [CLUB, STRUCTURE, MEMBERS, TASK, EVENT, EVENT_SHARED, SESSION, FINANCE, TERM, HANDOVER, DIRECTORY, INVITATION]
         clubId: { $ref: '#/components/schemas/NullableString' }
         id: { $ref: '#/components/schemas/NullableString' }
     NotificationSummary:
@@ -6203,10 +6411,15 @@ components:
       allOf:
         - $ref: '#/components/schemas/PersonRef'
         - type: object
-          required: [departmentName, kind]
+          required: [departmentName, kind, homeClubName]
           properties:
-            departmentName: { $ref: '#/components/schemas/NullableString' }
+            departmentName:
+              $ref: '#/components/schemas/NullableString'
+              description: Ban ở CLB chủ trì; nhân sự CLB đồng tổ chức thì ban ở CLB của họ.
             kind: { $ref: '#/components/schemas/StaffKind' }
+            homeClubName:
+              $ref: '#/components/schemas/NullableString'
+              description: CLB gốc của nhân sự `CO_HOST`; `null` với thành viên CLB chủ trì và CTV.
     Subcommittee:
       type: object
       required: [id, name, description, quota, lead, members, allowedActions]
@@ -6226,9 +6439,12 @@ components:
           items: { $ref: '#/components/schemas/StaffMember' }
         allowedActions:
           type: array
+          description: |
+            `INVITE_MEMBER` (Trưởng tiểu ban cũng có); `ADD_COLLABORATOR`, `SET_LEAD` cần quyền ở cả sự kiện;
+            `ADD_CO_HOST_STAFF` thêm khi sự kiện có CLB đồng tổ chức đang Chấp nhận.
           items:
             type: string
-            enum: [INVITE_MEMBER, ADD_COLLABORATOR]
+            enum: [INVITE_MEMBER, ADD_COLLABORATOR, ADD_CO_HOST_STAFF, SET_LEAD]
     StaffCandidate:
       description: Khi mời chỉ thấy tên và ban (FR-EVT-05).
       allOf:
@@ -6325,6 +6541,102 @@ components:
       required: [userId]
       properties:
         userId: { type: string }
+        coHostId:
+          $ref: '#/components/schemas/NullableString'
+          description: Id lời mời đồng tổ chức đang Chấp nhận khi thêm nhân sự của CLB đó (FR-EVT-08).
+    SetSubcommitteeLeadRequest:
+      type: object
+      required: [userId, reason]
+      properties:
+        userId: { type: string, description: Nhân sự hiện có của tiểu ban. }
+        reason:
+          type: [string, 'null']
+          description: Bắt buộc 5–500 ký tự khi tiểu ban đang có trưởng.
+    CoHostStatus:
+      type: string
+      description: ST-COH. Đã gửi, Chấp nhận, Từ chối, Đã gỡ.
+      enum: [SENT, ACCEPTED, DECLINED, REMOVED]
+    CoHostClubRef:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: string }
+        name: { type: string }
+    CoHost:
+      type: object
+      description: CLB đồng tổ chức nhìn từ CLB chủ trì (FR-EVT-08). Quỹ sự kiện vẫn thuộc CLB chủ trì (BR-FIN-07).
+      required: [id, club, status, message, invitedBy, invitedAt, decidedAt, decisionNote, removedAt, removeReason, staffCount, allowedActions, version]
+      properties:
+        id: { type: string }
+        club: { $ref: '#/components/schemas/CoHostClubRef' }
+        status: { $ref: '#/components/schemas/CoHostStatus' }
+        message: { type: string }
+        invitedBy: { $ref: '#/components/schemas/PersonRef' }
+        invitedAt: { type: string, format: date-time }
+        decidedAt: { $ref: '#/components/schemas/NullableDateTime' }
+        decisionNote: { $ref: '#/components/schemas/NullableString' }
+        removedAt: { $ref: '#/components/schemas/NullableDateTime' }
+        removeReason: { $ref: '#/components/schemas/NullableString' }
+        staffCount: { type: integer, description: Số người của CLB này đang trong BTC. }
+        allowedActions:
+          type: array
+          items: { type: string, enum: [REMOVE] }
+        version: { type: integer }
+    SharedEvent:
+      type: object
+      description: Lời mời đồng tổ chức nhìn từ CLB được mời (tab Sự kiện chung).
+      required: [id, event, status, message, invitedBy, invitedAt, decidedBy, decidedAt, decisionNote, removedAt, removeReason, staffCount, allowedActions, version]
+      properties:
+        id: { type: string }
+        event:
+          type: object
+          required: [id, name, clubId, clubName, startAt, endAt, status]
+          properties:
+            id: { type: string }
+            name: { type: string }
+            clubId: { type: string, description: CLB chủ trì. }
+            clubName: { type: string }
+            startAt: { type: string, format: date-time }
+            endAt: { type: string, format: date-time }
+            status: { $ref: '#/components/schemas/EventStatus' }
+        status: { $ref: '#/components/schemas/CoHostStatus' }
+        message: { type: string }
+        invitedBy: { $ref: '#/components/schemas/PersonRef' }
+        invitedAt: { type: string, format: date-time }
+        decidedBy:
+          oneOf:
+            - $ref: '#/components/schemas/PersonRef'
+            - type: 'null'
+        decidedAt: { $ref: '#/components/schemas/NullableDateTime' }
+        decisionNote: { $ref: '#/components/schemas/NullableString' }
+        removedAt: { $ref: '#/components/schemas/NullableDateTime' }
+        removeReason: { $ref: '#/components/schemas/NullableString' }
+        staffCount: { type: integer, description: Số thành viên CLB này đang trong BTC sự kiện. }
+        allowedActions:
+          type: array
+          items: { type: string, enum: [ACCEPT, DECLINE] }
+        version: { type: integer }
+    InviteCoHostRequest:
+      type: object
+      required: [clubId, message]
+      properties:
+        clubId: { type: string }
+        message: { type: string, maxLength: 500 }
+    CoHostDecisionRequest:
+      type: object
+      required: [decision, note, version]
+      properties:
+        decision: { type: string, enum: [ACCEPT, DECLINE] }
+        note:
+          type: [string, 'null']
+          description: Bắt buộc 5–500 ký tự khi `DECLINE`.
+        version: { type: integer }
+    RemoveCoHostRequest:
+      type: object
+      required: [reason, version]
+      properties:
+        reason: { type: string, minLength: 5, maxLength: 500 }
+        version: { type: integer }
     AddCollaboratorRequest:
       type: object
       required: [email]

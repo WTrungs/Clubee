@@ -26,6 +26,8 @@ export function useEventStaffViewModel(clubId: string, eventId: string, enabled:
   const [createOpen, setCreateOpen] = useState(false)
   const [inviteTarget, setInviteTarget] = useState<Subcommittee | null>(null)
   const [candidateKeyword, setCandidateKeyword] = useState('')
+  // Nguồn nhân sự khi mời: null là CLB chủ trì, còn lại là id lời mời đồng tổ chức đang Chấp nhận (FR-EVT-08).
+  const [inviteSource, setInviteSource] = useState<string | null>(null)
   const debouncedKeyword = useDebouncedValue(candidateKeyword.trim(), 250)
 
   const subcommittees = useQuery({
@@ -34,8 +36,8 @@ export function useEventStaffViewModel(clubId: string, eventId: string, enabled:
     enabled,
   })
   const candidates = useQuery({
-    queryKey: eventQueryKeys.candidates(clubId, eventId, debouncedKeyword),
-    queryFn: () => eventRepository.staffCandidates(clubId, eventId, debouncedKeyword),
+    queryKey: eventQueryKeys.candidates(clubId, eventId, debouncedKeyword, inviteSource),
+    queryFn: () => eventRepository.staffCandidates(clubId, eventId, debouncedKeyword, inviteSource),
     enabled: enabled && inviteTarget !== null,
     placeholderData: keepPreviousData,
   })
@@ -74,10 +76,12 @@ export function useEventStaffViewModel(clubId: string, eventId: string, enabled:
   })
 
   const invite = useMutation({
-    mutationFn: ({ subcommitteeId, userId }: { subcommitteeId: string; userId: string; fullName: string }) =>
-      eventRepository.addStaff(clubId, eventId, subcommitteeId, userId),
+    mutationFn: ({ subcommitteeId, userId, coHostId }: { subcommitteeId: string; userId: string; fullName: string; coHostId: string | null }) =>
+      eventRepository.addStaff(clubId, eventId, subcommitteeId, userId, coHostId),
     onSuccess: async (updated, input) => {
       await queryClient.invalidateQueries({ queryKey: eventQueryKeys.subcommittees(clubId, eventId) })
+      // Số nhân sự của CLB đồng tổ chức hiện ở khối CLB đồng tổ chức.
+      if (input.coHostId) await queryClient.invalidateQueries({ queryKey: eventQueryKeys.coHosts(clubId, eventId) })
       setInviteTarget(updated)
       toast.success(`Đã thêm ${input.fullName} vào tiểu ban ${updated.name}.`)
     },
@@ -110,7 +114,13 @@ export function useEventStaffViewModel(clubId: string, eventId: string, enabled:
     inviteTarget,
     openInvite: (subcommittee: Subcommittee) => {
       setCandidateKeyword('')
+      setInviteSource(null)
       setInviteTarget(subcommittee)
+    },
+    inviteSource,
+    setInviteSource: (source: string | null) => {
+      setCandidateKeyword('')
+      setInviteSource(source)
     },
     closeInvite: () => setInviteTarget(null),
     candidateKeyword,
@@ -119,7 +129,7 @@ export function useEventStaffViewModel(clubId: string, eventId: string, enabled:
     candidatesLoading: candidates.isPending,
     candidatesError: candidates.error ? getErrorMessage(candidates.error) : null,
     invite: (userId: string, fullName: string) => {
-      if (inviteTarget) invite.mutate({ subcommitteeId: inviteTarget.id, userId, fullName })
+      if (inviteTarget) invite.mutate({ subcommitteeId: inviteTarget.id, userId, fullName, coHostId: inviteSource })
     },
     invitingUserId: invite.isPending ? (invite.variables?.userId ?? null) : null,
     isInTarget: (userId: string) =>

@@ -19,6 +19,8 @@ export type ClubAction =
   | 'REQUEST_PRESIDENCY_TRANSFER'
   /** FR-ORG-05: ban chủ nhiệm xem bảng phân quyền; sửa được hay không nằm ở `allowedActions` của bảng phân quyền. */
   | 'VIEW_PERMISSIONS'
+  /** FR-EVT-08: ban chủ nhiệm xem và trả lời lời mời đồng tổ chức ở tab Sự kiện chung. */
+  | 'VIEW_SHARED_EVENTS'
 
 /** Nhiệm kỳ đang phụ trách CLB: Đang chạy hoặc Đang bàn giao. */
 export interface TermSummary {

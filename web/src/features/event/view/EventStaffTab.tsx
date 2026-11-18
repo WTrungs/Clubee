@@ -1,6 +1,7 @@
 import { motion } from 'motion/react'
-import { Crown, Handshake, Plus, UserPlus, UsersRound } from 'lucide-react'
+import { Crown, Handshake, Plus, UserCog, UserPlus, UsersRound } from 'lucide-react'
 import { useId } from 'react'
+import { REASON_MAX } from '@/shared/lib/reasonRules'
 import { itemVariants, listVariants } from '@/shared/motion/presets'
 import { Avatar } from '@/shared/ui/Avatar'
 import { Badge } from '@/shared/ui/Badge'
@@ -13,15 +14,45 @@ import { SearchInput } from '@/shared/ui/ListControls'
 import { ProgressBar } from '@/shared/ui/ProgressBar'
 import { Skeleton } from '@/shared/ui/Skeleton'
 import { EmptyState, ErrorState } from '@/shared/ui/StateViews'
-import type { EventDetail, Subcommittee } from '../model/eventTypes'
+import type { CoHost, EventDetail, StaffMember, Subcommittee } from '../model/eventTypes'
 import { useAddCollaboratorViewModel, type AddCollaboratorViewModel } from '../viewModel/useAddCollaboratorViewModel'
+import { useCoHostsViewModel } from '../viewModel/useCoHostsViewModel'
 import { useEventStaffViewModel, type EventStaffViewModel } from '../viewModel/useEventStaffViewModel'
+import { useSetLeadViewModel, type SetLeadViewModel } from '../viewModel/useSetLeadViewModel'
+import { CoHostSection } from './CoHostSection'
 
-function SubcommitteeCard({ subcommittee, onInvite, onAddCollaborator }: { subcommittee: Subcommittee; onInvite: () => void; onAddCollaborator: () => void }) {
+/** Nhãn cạnh tên: CTV, CLB gốc của nhân sự CLB đồng tổ chức, hoặc ban ở CLB chủ trì. */
+function StaffTag({ member }: { member: StaffMember }) {
+  if (member.kind === 'COLLABORATOR') {
+    return (
+      <Badge tone="neutral" title="Cộng tác viên, người ngoài CLB">
+        CTV
+      </Badge>
+    )
+  }
+  if (member.kind === 'CO_HOST') {
+    return (
+      <Badge tone="info" title={`Nhân sự CLB đồng tổ chức: ${member.homeClubName ?? ''}`} className="max-w-36 truncate">
+        {member.homeClubName}
+      </Badge>
+    )
+  }
+  return member.departmentName ? <span className="text-xs text-muted-foreground">Ban {member.departmentName}</span> : null
+}
+
+interface SubcommitteeCardProps {
+  subcommittee: Subcommittee
+  onInvite: () => void
+  onAddCollaborator: () => void
+  onSetLead: () => void
+}
+
+function SubcommitteeCard({ subcommittee, onInvite, onAddCollaborator, onSetLead }: SubcommitteeCardProps) {
   const headcount = subcommittee.members.length + (subcommittee.lead ? 1 : 0)
   const overQuota = subcommittee.quota !== null && headcount > subcommittee.quota
   return (
-    <motion.li variants={itemVariants} layout className="flex flex-col gap-4 rounded-2xl border bg-card p-5 shadow-sm">
+    // min-w-0: thẻ là ô lưới, tên dài kèm nhãn CLB gốc không được kéo thẻ rộng quá cột ở màn hẹp.
+    <motion.li variants={itemVariants} layout className="flex min-w-0 flex-col gap-4 rounded-2xl border bg-card p-5 shadow-sm">
       {/* Nút xếp dưới tên: thẻ chỉ rộng khoảng 320 px ở màn hẹp và lưới 3 cột, đặt cạnh tên thì tên bị ép mỗi dòng một chữ. */}
       <div className="space-y-3">
         <div className="min-w-0">
@@ -39,6 +70,17 @@ function SubcommitteeCard({ subcommittee, onInvite, onAddCollaborator }: { subco
             <Button variant="outline" size="sm" onClick={onAddCollaborator} aria-label={`Thêm CTV vào tiểu ban ${subcommittee.name}`}>
               <Handshake aria-hidden />
               Thêm CTV
+            </Button>
+          )}
+          {subcommittee.allowedActions.includes('SET_LEAD') && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onSetLead}
+              aria-label={`${subcommittee.lead ? 'Đổi trưởng' : 'Chọn trưởng'} tiểu ban ${subcommittee.name}`}
+            >
+              <UserCog aria-hidden />
+              {subcommittee.lead ? 'Đổi trưởng' : 'Chọn trưởng'}
             </Button>
           )}
         </div>
@@ -59,6 +101,7 @@ function SubcommitteeCard({ subcommittee, onInvite, onAddCollaborator }: { subco
           <li className="flex items-center gap-2.5 text-sm">
             <Avatar name={subcommittee.lead.fullName} size="sm" />
             <span className="min-w-0 flex-1 truncate font-semibold">{subcommittee.lead.fullName}</span>
+            {subcommittee.lead.kind === 'CO_HOST' && <StaffTag member={subcommittee.lead} />}
             <Badge tone="progress">
               <Crown aria-hidden className="mr-1 inline size-3" />
               Trưởng tiểu ban
@@ -70,13 +113,7 @@ function SubcommitteeCard({ subcommittee, onInvite, onAddCollaborator }: { subco
           <li key={member.id} className="flex items-center gap-2.5 text-sm">
             <Avatar name={member.fullName} size="sm" />
             <span className="min-w-0 flex-1 truncate">{member.fullName}</span>
-            {member.kind === 'COLLABORATOR' ? (
-              <Badge tone="neutral" title="Cộng tác viên, người ngoài CLB">
-                CTV
-              </Badge>
-            ) : (
-              member.departmentName && <span className="text-xs text-muted-foreground">Ban {member.departmentName}</span>
-            )}
+            <StaffTag member={member} />
           </li>
         ))}
         {headcount === 0 && <li className="text-sm text-muted-foreground">Chưa có nhân sự.</li>}
@@ -132,13 +169,30 @@ function CreateSubcommitteeDialog({ staff }: { staff: EventStaffViewModel }) {
   )
 }
 
-/** FR-EVT-05: khi mời chỉ thấy tên và ban của thành viên. */
-function InviteDialog({ staff }: { staff: EventStaffViewModel }) {
+/** FR-EVT-05: khi mời chỉ thấy tên và ban của thành viên; FR-EVT-08: chọn nguồn là CLB đồng tổ chức đang Chấp nhận. */
+function InviteDialog({ staff, coHosts }: { staff: EventStaffViewModel; coHosts: CoHost[] }) {
   const target = staff.inviteTarget
+  const sources = target?.allowedActions.includes('ADD_CO_HOST_STAFF') ? coHosts : []
+  const sourceName = sources.find((coHost) => coHost.id === staff.inviteSource)?.club.name
   return (
     <Dialog open={target !== null} onOpenChange={(open) => !open && staff.closeInvite()}>
-      <DialogContent title={`Mời vào tiểu ban ${target?.name ?? ''}`} description="Chỉ thành viên Thử việc hoặc Chính thức của CLB chủ trì.">
+      <DialogContent
+        title={`Mời vào tiểu ban ${target?.name ?? ''}`}
+        description={sourceName ? `Thành viên Thử việc hoặc Chính thức của ${sourceName}.` : 'Chỉ thành viên Thử việc hoặc Chính thức của CLB chủ trì.'}
+      >
         <div className="space-y-3">
+          {sources.length > 0 && (
+            <FormField label="Nguồn nhân sự">
+              <NativeSelect value={staff.inviteSource ?? ''} onChange={(event) => staff.setInviteSource(event.target.value || null)}>
+                <option value="">Thành viên CLB chủ trì</option>
+                {sources.map((coHost) => (
+                  <option key={coHost.id} value={coHost.id}>
+                    {coHost.club.name} (đồng tổ chức)
+                  </option>
+                ))}
+              </NativeSelect>
+            </FormField>
+          )}
           <SearchInput label="Tìm thành viên" placeholder="Tìm theo tên…" value={staff.candidateKeyword} onValueChange={staff.setCandidateKeyword} />
           {staff.candidatesError ? (
             <FormAlert message={staff.candidatesError} />
@@ -214,9 +268,68 @@ function AddCollaboratorDialog({ vm }: { vm: AddCollaboratorViewModel }) {
   )
 }
 
+/** Đổi trưởng tiểu ban: chọn trong nhân sự hiện có (không phải CTV); đang có trưởng thì cần lý do. */
+function SetLeadDialog({ vm }: { vm: SetLeadViewModel }) {
+  const formId = useId()
+  const target = vm.target
+  return (
+    <Dialog open={target !== null} onOpenChange={(open) => !open && vm.close()}>
+      <DialogContent
+        title={`${vm.hasLead ? 'Đổi' : 'Chọn'} trưởng tiểu ban ${target?.name ?? ''}`}
+        description={
+          vm.hasLead
+            ? `${target?.lead?.fullName ?? ''} thôi chức trưởng, vẫn ở lại tiểu ban. Cộng tác viên không làm trưởng được.`
+            : 'Chọn trong nhân sự hiện có của tiểu ban. Cộng tác viên không làm trưởng được.'
+        }
+        footer={
+          <>
+            <Button variant="ghost" onClick={vm.close} disabled={vm.saving}>
+              Hủy bỏ
+            </Button>
+            <Button type="submit" form={formId} loading={vm.saving}>
+              Lưu trưởng tiểu ban
+            </Button>
+          </>
+        }
+      >
+        <form
+          id={formId}
+          noValidate
+          onSubmit={(event) => {
+            event.preventDefault()
+            vm.submit()
+          }}
+          className="space-y-4"
+        >
+          <FormField label="Trưởng tiểu ban mới" required error={vm.userIdError ?? undefined}>
+            <NativeSelect value={vm.userId} onChange={(event) => vm.setUserId(event.target.value)}>
+              <option value="">Chọn nhân sự</option>
+              {vm.choices.map((member) => (
+                <option key={member.id} value={member.id}>
+                  {member.fullName}
+                  {member.homeClubName ? ` · ${member.homeClubName}` : member.departmentName ? ` · Ban ${member.departmentName}` : ''}
+                </option>
+              ))}
+            </NativeSelect>
+          </FormField>
+          {vm.choices.length === 0 && <p className="text-sm text-muted-foreground">Tiểu ban chưa có nhân sự nào làm trưởng được. Hãy mời thêm người trước.</p>}
+          {vm.hasLead && (
+            <FormField label="Lý do" required error={vm.reasonError ?? undefined} hint="Người thôi chức nhận thông báo kèm lý do này.">
+              <Textarea rows={3} maxLength={REASON_MAX} value={vm.reason} onChange={(event) => vm.setReason(event.target.value)} />
+            </FormField>
+          )}
+          <FormAlert message={vm.formError} />
+        </form>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 export function EventStaffTab({ event, clubId, canManage }: { event: EventDetail; clubId: string; canManage: boolean }) {
   const staff = useEventStaffViewModel(clubId, event.id, true)
   const collaborator = useAddCollaboratorViewModel(clubId, event.id)
+  const coHosts = useCoHostsViewModel(clubId, event.id, true)
+  const setLead = useSetLeadViewModel(clubId, event.id)
 
   return (
     <div className="space-y-5">
@@ -233,6 +346,8 @@ export function EventStaffTab({ event, clubId, canManage }: { event: EventDetail
           </Button>
         )}
       </div>
+
+      <CoHostSection vm={coHosts} canManage={canManage} eventName={event.name} />
 
       {staff.loading && (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3" role="status" aria-label="Đang tải ban tổ chức">
@@ -252,14 +367,16 @@ export function EventStaffTab({ event, clubId, canManage }: { event: EventDetail
               subcommittee={subcommittee}
               onInvite={() => staff.openInvite(subcommittee)}
               onAddCollaborator={() => collaborator.open(subcommittee)}
+              onSetLead={() => setLead.open(subcommittee)}
             />
           ))}
         </motion.ul>
       )}
 
       {canManage && <CreateSubcommitteeDialog staff={staff} />}
-      <InviteDialog staff={staff} />
+      <InviteDialog staff={staff} coHosts={coHosts.accepted} />
       <AddCollaboratorDialog vm={collaborator} />
+      <SetLeadDialog vm={setLead} />
     </div>
   )
 }

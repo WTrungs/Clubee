@@ -161,8 +161,10 @@ export const resignBlockerGroups: Array<{ kind: ResignBlocker['kind']; label: st
 ]
 
 /** Việc còn tồn thì mở được ở Công việc của tôi; chức vụ, kết quả bầu do ban chủ nhiệm xử lý nên không có liên kết. */
-export function resignBlockerLink(blocker: ResignBlocker, clubId: string): string | null {
-  return blocker.kind === 'TASK' || blocker.kind === 'TASK_REVIEW' ? `/me/tasks?task=${encodeURIComponent(blocker.refId)}&taskClub=${encodeURIComponent(clubId)}` : null
+export function resignBlockerLink(blocker: ResignBlocker): string | null {
+  return blocker.kind === 'TASK' || blocker.kind === 'TASK_REVIEW'
+    ? `/me/tasks?task=${encodeURIComponent(blocker.refId)}&taskClub=${encodeURIComponent(blocker.clubId)}`
+    : null
 }
 
 export function removalSummary(name: string, backlogCount: number | null): string {

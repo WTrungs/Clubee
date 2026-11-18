@@ -37,9 +37,9 @@ describe('leave and resign display (FR-MEM-07, BR-MEM-03)', () => {
       WITHDRAWN: 'Đã rút',
       CLOSED: 'Đã đóng',
     })
-    expect(resignBlockerLink({ kind: 'TASK', refId: 't-poster', title: 'Poster' }, 'c-guitar')).toBe('/me/tasks?task=t-poster&taskClub=c-guitar')
-    expect(resignBlockerLink({ kind: 'TASK_REVIEW', refId: 't-a b', title: 'A' }, 'c-guitar')).toBe('/me/tasks?task=t-a%20b&taskClub=c-guitar')
-    expect(resignBlockerLink({ kind: 'POSITION', refId: 'p-1', title: 'Trưởng ban' }, 'c-guitar')).toBeNull()
+    expect(resignBlockerLink({ kind: 'TASK', refId: 't-poster', clubId: 'c-guitar', title: 'Poster' })).toBe('/me/tasks?task=t-poster&taskClub=c-guitar')
+    expect(resignBlockerLink({ kind: 'TASK_REVIEW', refId: 't-a b', clubId: 'c-english', title: 'A' })).toBe('/me/tasks?task=t-a%20b&taskClub=c-english')
+    expect(resignBlockerLink({ kind: 'POSITION', refId: 'p-1', clubId: 'c-guitar', title: 'Trưởng ban' })).toBeNull()
     expect(resignBlockerGroups.map((group) => group.kind)).toEqual(['POSITION', 'TASK', 'TASK_REVIEW', 'APPOINTMENT'])
   })
 })

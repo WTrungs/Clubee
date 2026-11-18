@@ -13,11 +13,13 @@ import {
 } from './seed/attendanceSeed'
 import { createClubSeed, type DbClub } from './seed/clubSeed'
 import {
+  createCoHostSeed,
   createEventSeed,
   createEventStaffSeed,
   createRegistrationSeed,
   createSubcommitteeSeed,
   type DbEvent,
+  type DbEventCoHost,
   type DbEventStaff,
   type DbRegistration,
   type DbSubcommittee,
@@ -85,6 +87,7 @@ export interface MockDb {
   events: DbEvent[]
   subcommittees: DbSubcommittee[]
   eventStaff: DbEventStaff[]
+  eventCoHosts: DbEventCoHost[]
   registrations: DbRegistration[]
   notifications: DbNotification[]
   notificationRecipients: DbNotificationRecipient[]
@@ -120,6 +123,7 @@ export function createSeed(): MockDb {
     events: createEventSeed(),
     subcommittees: createSubcommitteeSeed(),
     eventStaff: createEventStaffSeed(),
+    eventCoHosts: createCoHostSeed(),
     registrations: createRegistrationSeed(),
     notifications: notifications.notifications,
     notificationRecipients: notifications.recipients,

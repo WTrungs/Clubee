@@ -40,7 +40,7 @@ describe('adding a collaborator (FR-EVT-07, BR-ORG-01)', () => {
     expect((await fail(addCollaborator('u-long', TAM)))?.status).toBe(403)
     expect(staffRows('u-tam')).toHaveLength(0)
     signInAs('u-bao')
-    expect((await eventRepository.subcommittees('c-guitar', 'e-winter'))[0]?.allowedActions).toEqual(['INVITE_MEMBER', 'ADD_COLLABORATOR'])
+    expect((await eventRepository.subcommittees('c-guitar', 'e-winter'))[0]?.allowedActions).toEqual(['INVITE_MEMBER', 'ADD_COLLABORATOR', 'SET_LEAD'])
   })
 
   it('checks the email without revealing locked or unverified accounts', async () => {

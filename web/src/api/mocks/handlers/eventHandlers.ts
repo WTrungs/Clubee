@@ -14,8 +14,10 @@ import type {
   Registration,
   RescheduleEventRequest,
   ScheduleChange,
+  SetSubcommitteeLeadRequest,
   StaffCandidate,
   Subcommittee,
+  SubcommitteeAction,
 } from '@/features/event/model/eventTypes'
 import { db } from '../db'
 import { API, currentUser, matchesKeyword, networkDelay, newId, paginate, problem, writer } from '../mockHttp'
@@ -38,10 +40,11 @@ import {
 import { EVENT_STAFF_ACTIVE as STAFF_ACTIVE, endPositions, grantPosition, isBoardMember, positionHolderOf } from '../mockPermissions'
 import { can, forbidden } from '../mockAccess'
 import { eventTarget, notify } from '../mockNotifications'
-import { assignSubcommitteeLead, isEventGuest, isEventLead, isEventStaff, leadsOtherSubcommittee } from '../mockStaffEvents'
+import { assignSubcommitteeLead, canViewEvent, canViewStaff, isEventGuest, isEventLead, isEventStaff, leadsOtherSubcommittee } from '../mockStaffEvents'
+import { acceptedCoHost, clubNameOf, coHostCandidates, hasAcceptedCoHost } from '../mockCoHosts'
 import { isBoardAppointee, openHandoverOf } from '../mockTerms'
 import { nowIso } from '../mockTime'
-import type { DbEvent, DbRegistration, DbScheduleChange, DbSubcommittee } from '../seed/eventSeed'
+import type { DbEvent, DbEventStaff, DbRegistration, DbScheduleChange, DbSubcommittee } from '../seed/eventSeed'
 
 const CANCELLABLE: EventStatus[] = ['DRAFT', 'PENDING_APPROVAL', 'APPROVED', 'REGISTRATION_OPEN']
 const URL_PATTERN = /^https?:\/\/\S+$/
@@ -59,15 +62,6 @@ const statusLabel: Record<EventStatus, string> = {
 
 /** Sự kiện đã hủy hoặc đã đóng vẫn hiện người từng giữ chức để tra lịch sử. */
 const historyOnly = (event: DbEvent) => ({ includeEnded: !STAFF_ACTIVE.includes(event.status) })
-
-function canViewEvent(userId: string, event: DbEvent): boolean {
-  // Người ngoài CLB chỉ xem qua tư cách CTV hoặc nhân sự CLB đồng tổ chức; thành viên đã rời thì mất quyền (BR-MEM-04).
-  if (!canAccessClub(userId, event.clubId)) return isEventStaff(userId, event, { outsideOnly: true })
-  // Ban chủ nhiệm vẫn xem được đề xuất mình đã từ chối (FR-EVT-03: về Dự thảo kèm lý do).
-  if (event.status === 'DRAFT') return event.proposerId === userId || (event.rejectionReason !== null && isBoardMember(userId, event.clubId))
-  if (event.status === 'PENDING_APPROVAL') return event.proposerId === userId || isBoardMember(userId, event.clubId)
-  return true
-}
 
 function registrationOpen(event: DbEvent): boolean {
   return event.status === 'REGISTRATION_OPEN' && (!event.registrationDeadline || Date.parse(event.registrationDeadline) > Date.now())
@@ -97,7 +91,7 @@ function eventActions(userId: string, event: DbEvent): EventAction[] {
   if (closable(event) && runs) actions.push('CLOSE')
   if (STAFF_ACTIVE.includes(event.status) && can(userId, event.clubId, 'MANAGE_EVENT_STAFF', eventScope(event))) actions.push('MANAGE_SUBCOMMITTEES')
   if (registrationOpen(event) && isActiveMember(userId, event.clubId) && !myRegistration(userId, event)) actions.push('REGISTER')
-  if (board || lead || isEventStaff(userId, event)) actions.push('VIEW_STAFF', 'VIEW_REGISTRATIONS')
+  if (canViewStaff(userId, event)) actions.push('VIEW_STAFF', 'VIEW_REGISTRATIONS')
   const fund = eventFundOf(event.id)
   if (fund && canViewFund(userId, fund)) actions.push('VIEW_FUND')
   // Điểm danh sự kiện: ban chủ nhiệm và nhân sự BTC; sự kiện Đã đóng thì chỉ ban chủ nhiệm còn xem (FR-ATT-07).
@@ -156,12 +150,24 @@ function toScheduleChange(change: DbScheduleChange | undefined): ScheduleChange 
 function toSubcommittee(subcommittee: DbSubcommittee, event: DbEvent, userId: string): Subcommittee {
   const staff = db.eventStaff
     .filter((member) => member.subcommitteeId === subcommittee.id && member.leftAt === null)
-    .map((member) => ({ ...person(member.userId), departmentName: departmentNameOf(member.userId, event.clubId), kind: member.kind }))
+    .map((member) => ({
+      ...person(member.userId),
+      // Nhân sự CLB đồng tổ chức hiện ban ở CLB gốc của họ.
+      departmentName: departmentNameOf(member.userId, member.homeClubId ?? event.clubId),
+      kind: member.kind,
+      homeClubName: member.kind === 'CO_HOST' && member.homeClubId ? clubNameOf(member.homeClubId) : null,
+    }))
   const leadId = positionHolderOf('SUBCOMMITTEE_LEAD', subcommittee.id, historyOnly(event))
   const active = STAFF_ACTIVE.includes(event.status)
   const canInvite = active && can(userId, event.clubId, 'MANAGE_EVENT_STAFF', { type: 'SUBCOMMITTEE', id: subcommittee.id })
-  // Thêm CTV cần quyền ở cả sự kiện, nên trưởng tiểu ban không thêm được (FR-EVT-07).
-  const canAddCollaborator = active && can(userId, event.clubId, 'MANAGE_EVENT_STAFF', eventScope(event))
+  // Thêm CTV, nhân sự CLB đồng tổ chức, đổi trưởng cần quyền ở cả sự kiện, nên trưởng tiểu ban không làm được (FR-EVT-07, 08).
+  const managesEvent = active && can(userId, event.clubId, 'MANAGE_EVENT_STAFF', eventScope(event))
+  const actions: SubcommitteeAction[] = [
+    ...(canInvite ? (['INVITE_MEMBER'] as const) : []),
+    ...(managesEvent ? (['ADD_COLLABORATOR'] as const) : []),
+    ...(managesEvent && hasAcceptedCoHost(event.id) ? (['ADD_CO_HOST_STAFF'] as const) : []),
+    ...(managesEvent ? (['SET_LEAD'] as const) : []),
+  ]
   return {
     id: subcommittee.id,
     name: subcommittee.name,
@@ -169,7 +175,7 @@ function toSubcommittee(subcommittee: DbSubcommittee, event: DbEvent, userId: st
     quota: subcommittee.quota,
     lead: staff.find((member) => member.id === leadId) ?? null,
     members: staff.filter((member) => member.id !== leadId),
-    allowedActions: [...(canInvite ? (['INVITE_MEMBER'] as const) : []), ...(canAddCollaborator ? (['ADD_COLLABORATOR'] as const) : [])],
+    allowedActions: actions,
   }
 }
 
@@ -234,6 +240,38 @@ function notifyReschedule(event: DbEvent, change: DbScheduleChange, seated: DbRe
   // Người vừa là BTC vừa đăng ký đã nhận tin ở trên.
   const organizers = organizerIds(event).filter((userId) => !seatedIds.includes(userId) && !waitingIds.includes(userId))
   notify(organizers, { ...base, body: body(seated.length > 0 ? `${seated.length} người giữ chỗ cần xác nhận lại trước ${formatDateTime(deadline)}. ` : '') })
+}
+
+const staffRowOf = (subcommittee: DbSubcommittee, userId: string) =>
+  db.eventStaff.find((staff) => staff.subcommitteeId === subcommittee.id && staff.userId === userId && staff.leftAt === null)
+const isSubcommitteeStaff = (subcommittee: DbSubcommittee, userId: string) => staffRowOf(subcommittee, userId) !== undefined
+
+/** FR-EVT-08: thêm thành viên của CLB đồng tổ chức đang Chấp nhận vào tiểu ban; quyền ở cả sự kiện, người phải thuộc CLB đó. */
+function addCoHostStaff(event: DbEvent, subcommittee: DbSubcommittee, actorId: string, userId: string, coHostId: string) {
+  if (!can(actorId, event.clubId, 'MANAGE_EVENT_STAFF', eventScope(event))) {
+    return forbidden(event.clubId, 'MANAGE_EVENT_STAFF', 'thêm nhân sự CLB đồng tổ chức', eventScope(event))
+  }
+  const coHost = acceptedCoHost(event.id, coHostId)
+  if (!coHost) return problem(422, 'CLB này không còn đồng tổ chức sự kiện.', 'CO_HOST_NOT_ACTIVE')
+  if (!coHostCandidates(event, coHost, null).some((candidate) => candidate.id === userId)) {
+    return problem(400, `Chỉ thêm được thành viên Thử việc hoặc Chính thức của ${clubNameOf(coHost.clubId)}.`, 'VALIDATION', [
+      { field: 'userId', message: 'Người được thêm không hợp lệ.' },
+    ])
+  }
+  if (isSubcommitteeStaff(subcommittee, userId)) return problem(409, 'Người này đã là nhân sự của tiểu ban.', 'ALREADY_STAFF')
+  db.eventStaff.push({ userId, eventId: event.id, subcommitteeId: subcommittee.id, kind: 'CO_HOST', joinedAt: nowIso(), leftAt: null, homeClubId: coHost.clubId })
+  notifyEventRole(userId, event, `Bạn được thêm vào tiểu ban ${subcommittee.name} (đồng tổ chức) của`, actorId)
+  return HttpResponse.json(toSubcommittee(subcommittee, event, actorId))
+}
+
+/** Lý do không làm trưởng tiểu ban được (BR-ORG-01, BR-MEM-05): CTV, hoặc người không còn Thử việc, Chính thức ở CLB của họ. */
+function leadIneligibility(event: DbEvent, staff: DbEventStaff): string | null {
+  if (staff.kind === 'COLLABORATOR') return 'Cộng tác viên không làm trưởng tiểu ban được.'
+  if (staff.kind === 'MEMBER' && !isActiveMember(staff.userId, event.clubId)) return 'Người này không còn là thành viên Thử việc hoặc Chính thức của CLB.'
+  if (staff.kind === 'CO_HOST' && !isActiveMember(staff.userId, staff.homeClubId ?? '')) {
+    return 'Người này không còn là thành viên Thử việc hoặc Chính thức của CLB đồng tổ chức.'
+  }
+  return null
 }
 
 function sortForList(events: DbEvent[]): DbEvent[] {
@@ -488,7 +526,18 @@ export const eventHandlers = [
         .filter((subcommittee) => subcommittee.eventId === event.id)
         .some((subcommittee) => toSubcommittee(subcommittee, event, user.value.id).allowedActions.includes('INVITE_MEMBER'))
     if (!canPick) return problem(403, 'Bạn không có quyền mời nhân sự cho sự kiện này.', 'FORBIDDEN')
-    return HttpResponse.json(memberCandidates(event.clubId, new URL(request.url).searchParams.get('q')))
+    const url = new URL(request.url)
+    const keyword = url.searchParams.get('q')
+    const coHostId = url.searchParams.get('coHostId')
+    // Trưởng tiểu ban (kể cả nhân sự CLB đồng tổ chức) được mời thành viên CLB chủ trì nên thấy tên và ban của họ (SRS 3.1, 3.5); không thấy gì khác của CLB (BR-SEC-01).
+    if (!coHostId) return HttpResponse.json(memberCandidates(event.clubId, keyword))
+    // Nhân sự CLB đồng tổ chức chỉ người có quyền ở cả sự kiện thêm được (FR-EVT-08).
+    if (!can(user.value.id, event.clubId, 'MANAGE_EVENT_STAFF', eventScope(event))) {
+      return forbidden(event.clubId, 'MANAGE_EVENT_STAFF', 'thêm nhân sự CLB đồng tổ chức', eventScope(event))
+    }
+    const coHost = acceptedCoHost(event.id, coHostId)
+    if (!coHost) return problem(422, 'CLB này không còn đồng tổ chức sự kiện.', 'CO_HOST_NOT_ACTIVE')
+    return HttpResponse.json(coHostCandidates(event, coHost, keyword))
   }),
 
   http.post(`${API}/clubs/:clubId/events/:eventId/subcommittees/:subcommitteeId/members`, async ({ request, params }) => {
@@ -501,15 +550,14 @@ export const eventHandlers = [
     if (!toSubcommittee(subcommittee, event, user.value.id).allowedActions.includes('INVITE_MEMBER')) {
       return forbidden(event.clubId, 'MANAGE_EVENT_STAFF', 'mời nhân sự vào tiểu ban này', { type: 'SUBCOMMITTEE', id: subcommittee.id })
     }
-    const body = (await request.json()) as { userId?: string }
+    const body = (await request.json()) as { userId?: string; coHostId?: string | null }
+    if (body.coHostId) return addCoHostStaff(event, subcommittee, user.value.id, body.userId ?? '', body.coHostId)
     if (!body.userId || !memberCandidates(event.clubId, null).some((candidate) => candidate.id === body.userId)) {
       return problem(400, 'Chỉ mời được thành viên Thử việc hoặc Chính thức của CLB chủ trì.', 'VALIDATION', [
         { field: 'userId', message: 'Người được mời không hợp lệ.' },
       ])
     }
-    if (db.eventStaff.some((staff) => staff.subcommitteeId === subcommittee.id && staff.userId === body.userId && staff.leftAt === null)) {
-      return problem(409, 'Người này đã là nhân sự của tiểu ban.', 'ALREADY_STAFF')
-    }
+    if (isSubcommitteeStaff(subcommittee, body.userId)) return problem(409, 'Người này đã là nhân sự của tiểu ban.', 'ALREADY_STAFF')
     db.eventStaff.push({ userId: body.userId, eventId: event.id, subcommitteeId: subcommittee.id, kind: 'MEMBER', joinedAt: nowIso(), leftAt: null })
     notifyEventRole(body.userId, event, `Bạn được mời vào tiểu ban ${subcommittee.name} của`, user.value.id)
     return HttpResponse.json(toSubcommittee(subcommittee, event, user.value.id))
@@ -545,11 +593,56 @@ export const eventHandlers = [
             : 'Người này đang là thành viên CLB; dùng nút Mời để thêm như thành viên.'
       return problem(422, detail, 'IS_MEMBER', [{ field: 'email', message: 'Đang có tư cách ở CLB.' }])
     }
-    if (db.eventStaff.some((staff) => staff.subcommitteeId === subcommittee.id && staff.userId === account.id && staff.leftAt === null)) {
-      return problem(409, 'Người này đã là nhân sự của tiểu ban.', 'ALREADY_STAFF')
-    }
+    if (isSubcommitteeStaff(subcommittee, account.id)) return problem(409, 'Người này đã là nhân sự của tiểu ban.', 'ALREADY_STAFF')
     db.eventStaff.push({ userId: account.id, eventId: event.id, subcommitteeId: subcommittee.id, kind: 'COLLABORATOR', joinedAt: nowIso(), leftAt: null })
     notifyEventRole(account.id, event, `Bạn được thêm làm cộng tác viên tiểu ban ${subcommittee.name} của`, user.value.id)
+    return HttpResponse.json(toSubcommittee(subcommittee, event, user.value.id))
+  }),
+
+  http.put(`${API}/clubs/:clubId/events/:eventId/subcommittees/:subcommitteeId/lead`, async ({ request, params }) => {
+    await networkDelay()
+    const user = writer(request)
+    if (!user.ok) return user.response
+    const event = findEvent(params)
+    const subcommittee = db.subcommittees.find((candidate) => candidate.id === params.subcommitteeId && candidate.eventId === params.eventId)
+    if (!event || !subcommittee || !canViewEvent(user.value.id, event)) return problem(404, 'Không tìm thấy tiểu ban.', 'NOT_FOUND')
+    if (!can(user.value.id, event.clubId, 'MANAGE_EVENT_STAFF', eventScope(event))) {
+      return forbidden(event.clubId, 'MANAGE_EVENT_STAFF', 'đổi trưởng tiểu ban', eventScope(event))
+    }
+    if (!STAFF_ACTIVE.includes(event.status)) return problem(422, `Sự kiện ${statusLabel[event.status]} nên không đổi nhân sự được.`, 'EVENT_READ_ONLY')
+    const body = (await request.json()) as Partial<SetSubcommitteeLeadRequest>
+    const staff = staffRowOf(subcommittee, body.userId ?? '')
+    // Người chọn phải là nhân sự hiện có; kiểm trước vì các lỗi 422 cần biết người đó là ai.
+    if (!staff) return problem(400, 'Thông tin đổi trưởng tiểu ban chưa hợp lệ.', 'VALIDATION', [{ field: 'userId', message: 'Chọn trong nhân sự hiện có của tiểu ban.' }])
+    const ineligible = leadIneligibility(event, staff)
+    if (ineligible) return problem(422, ineligible, 'LEAD_NOT_ELIGIBLE', [{ field: 'userId', message: ineligible }])
+    if (leadsOtherSubcommittee(event.id, staff.userId, subcommittee.id)) {
+      return problem(422, 'Người này đã là trưởng một tiểu ban khác trong sự kiện.', 'LEAD_TAKEN', [{ field: 'userId', message: 'Đã là trưởng tiểu ban khác.' }])
+    }
+    // Trưởng đang có hiệu lực thì cần lý do. Chức còn mở của người đang Tạm nghỉ (không còn hiệu lực) cũng phải kết thúc,
+    // nếu không người đó quay lại thì tiểu ban có hai trưởng (BR-ORG-04).
+    const currentLeadId = positionHolderOf('SUBCOMMITTEE_LEAD', subcommittee.id)
+    const reason = (body.reason ?? '').trim()
+    const errors = [
+      ...(staff.userId === currentLeadId ? [{ field: 'userId', message: 'Người này đang là trưởng tiểu ban.' }] : []),
+      ...(currentLeadId && !reasonOk(reason) ? [{ field: 'reason', message: `Nhập lý do từ ${REASON_MIN} đến ${REASON_MAX} ký tự.` }] : []),
+    ]
+    if (errors.length > 0) return problem(400, 'Thông tin đổi trưởng tiểu ban chưa hợp lệ.', 'VALIDATION', errors)
+    const endReason = currentLeadId ? reason : 'Trưởng tiểu ban mới được chọn khi người giữ chức không còn đủ tư cách.'
+    // Trưởng cũ kết thúc chức kèm lý do, vẫn ở lại làm nhân sự của tiểu ban (BR-DATA-01).
+    const ended = endPositions((position) => position.role === 'SUBCOMMITTEE_LEAD' && position.scopeId === subcommittee.id, { reason: endReason })
+    notify(
+      ended.map((position) => position.userId),
+      {
+        clubId: event.clubId,
+        category: 'EVENT',
+        title: `Bạn thôi làm Trưởng tiểu ban ${subcommittee.name} của ${event.name}`,
+        body: `Lý do: ${endReason}`,
+        target: eventTarget(event.clubId, event.id),
+        actorId: user.value.id,
+      },
+    )
+    assignSubcommitteeLead(event, subcommittee, staff.userId, user.value.id)
     return HttpResponse.json(toSubcommittee(subcommittee, event, user.value.id))
   }),
 

@@ -2,7 +2,7 @@ import type { StaffEventSummary } from '@/features/account/model/accountTypes'
 import { db } from './db'
 import { canAccessClub } from './mockMembers'
 import { eventTarget, notify } from './mockNotifications'
-import { endPositions, EVENT_STAFF_ACTIVE, grantPosition, hasPosition, positionHolderOf } from './mockPermissions'
+import { endPositions, EVENT_STAFF_ACTIVE, grantPosition, hasPosition, isBoardMember, positionHolderOf } from './mockPermissions'
 import { nowIso } from './mockTime'
 import type { DbEvent, DbSubcommittee } from './seed/eventSeed'
 
@@ -43,6 +43,20 @@ export function isEventStaff(userId: string, event: DbEvent, { outsideOnly = fal
   )
 }
 
+/** Ai xem được sự kiện: người ngoài CLB chỉ qua tư cách CTV hoặc nhân sự CLB đồng tổ chức; thành viên đã rời thì mất quyền (BR-MEM-04). */
+export function canViewEvent(userId: string, event: DbEvent): boolean {
+  if (!canAccessClub(userId, event.clubId)) return isEventStaff(userId, event, { outsideOnly: true })
+  // Ban chủ nhiệm vẫn xem được đề xuất mình đã từ chối (FR-EVT-03: về Dự thảo kèm lý do).
+  if (event.status === 'DRAFT') return event.proposerId === userId || (event.rejectionReason !== null && isBoardMember(userId, event.clubId))
+  if (event.status === 'PENDING_APPROVAL') return event.proposerId === userId || isBoardMember(userId, event.clubId)
+  return true
+}
+
+/** Dữ liệu BTC chỉ ban chủ nhiệm, Trưởng BTC và nhân sự BTC xem (SRS 3.5). */
+export function canViewStaff(userId: string, event: DbEvent): boolean {
+  return isBoardMember(userId, event.clubId) || isEventLead(userId, event) || isEventStaff(userId, event)
+}
+
 /** Khách của sự kiện: không là thành viên nhưng đang làm BTC một sự kiện còn hoạt động của CLB (FR-EVT-07, SRS 3.5). */
 export function isEventGuest(userId: string, clubId: string): boolean {
   return staffEventsOf(userId).some((event) => event.clubId === clubId)
@@ -65,7 +79,7 @@ export function staffEventsOf(userId: string): StaffEventSummary[] {
           eventName: event.name,
           clubId: event.clubId,
           clubName: club?.name ?? '',
-          roleTitle: lead ? 'Trưởng BTC' : staff?.kind === 'COLLABORATOR' ? 'Cộng tác viên' : 'Nhân sự BTC',
+          roleTitle: lead ? 'Trưởng BTC' : staff?.kind === 'COLLABORATOR' ? 'Cộng tác viên' : 'Nhân sự CLB đồng tổ chức',
         },
       ]
     })

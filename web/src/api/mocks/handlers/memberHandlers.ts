@@ -26,6 +26,7 @@ import { API, currentUser, matchesKeyword, networkDelay, newId, paginate, proble
 import { invitationIsFor, invitationStatus } from '../mockInvitations'
 import { canAccessClub, closeDepartmentStint, membershipOf, openDepartmentStint, personRef, ROSTER_STATUSES, transferDepartment } from '../mockMembers'
 import { DEPARTMENT_ROLES, endPositions, isBoardMember, isPositionOpen, positionsIn, positionTitleOf, positionTitlesOf, presidentsCoverTerm, STANDING_ROLES } from '../mockPermissions'
+import { endCoHostStaffOf } from '../mockCoHosts'
 import { closePendingLeaveRequest, putOnLeaveBlock } from '../mockMembership'
 import { clubTarget, notify, structureTarget } from '../mockNotifications'
 import { isTaskActive } from '../mockScopes'
@@ -204,7 +205,7 @@ function notifyMembershipChange(membership: DbMembership, action: MemberTransiti
 }
 
 /** FR-MEM-08, BR-MEM-04: thu hồi ngay mọi chức vụ, rút khỏi BTC, đưa chức vụ và việc dở vào danh sách tồn đọng. */
-function removeFromClub(membership: DbMembership, reason: string): void {
+function removeFromClub(membership: DbMembership, reason: string, actorId: string): void {
   const { userId, clubId } = membership
   const createdAt = nowIso()
   const backlog = (kind: DbBacklogItem['kind'], refId: string) =>
@@ -216,6 +217,8 @@ function removeFromClub(membership: DbMembership, reason: string): void {
   for (const staff of db.eventStaff) {
     if (staff.userId === userId && clubEvents.has(staff.eventId) && staff.leftAt === null) staff.leftAt = createdAt
   }
+  // Hết tư cách nhân sự CLB đồng tổ chức ở sự kiện của CLB khác; Trưởng BTC bên đó tự tìm người thay (FR-EVT-08).
+  endCoHostStaffOf(userId, clubId, actorId)
   for (const task of db.tasks) {
     // Việc của sự kiện đã đóng, hủy chỉ còn để tra cứu nên không cần người thay (FR-EVT-16).
     if (task.clubId !== clubId || !isTaskActive(task)) continue
@@ -514,7 +517,7 @@ export const memberHandlers = [
       membership.leaveReason = reason
       closeDepartmentStint(membership, vnToday())
     }
-    if (action === 'REMOVE') removeFromClub(membership, reason)
+    if (action === 'REMOVE') removeFromClub(membership, reason, user.value.id)
     // Ban chủ nhiệm xử lý tư cách trực tiếp thì yêu cầu tạm nghỉ đang chờ (nếu có) không còn cần duyệt (FR-MEM-07).
     if (action === 'PUT_ON_LEAVE') closePendingLeaveRequest(membership.id, 'APPROVED', user.value.id, reason)
     if (action === 'REMOVE') closePendingLeaveRequest(membership.id, 'CLOSED', user.value.id, 'Thành viên đã bị đưa ra khỏi CLB.')

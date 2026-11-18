@@ -95,7 +95,15 @@ export type StaffKind = 'MEMBER' | 'COLLABORATOR' | 'CO_HOST'
 export interface StaffMember extends PersonRef {
   departmentName: string | null
   kind: StaffKind
+  /** CLB gốc của nhân sự CLB đồng tổ chức; null với thành viên CLB chủ trì và CTV. */
+  homeClubName: string | null
 }
+
+/**
+ * - `INVITE_MEMBER`: mời thành viên CLB chủ trì (Trưởng tiểu ban cũng được).
+ * - `ADD_COLLABORATOR`, `ADD_CO_HOST_STAFF`, `SET_LEAD`: cần quyền ở cả sự kiện (FR-EVT-07, 08).
+ */
+export type SubcommitteeAction = 'INVITE_MEMBER' | 'ADD_COLLABORATOR' | 'ADD_CO_HOST_STAFF' | 'SET_LEAD'
 
 export interface Subcommittee {
   id: string
@@ -105,10 +113,78 @@ export interface Subcommittee {
   quota: number | null
   lead: StaffMember | null
   members: StaffMember[]
-  allowedActions: Array<'INVITE_MEMBER' | 'ADD_COLLABORATOR'>
+  allowedActions: SubcommitteeAction[]
 }
 
-/** FR-EVT-05: khi mời chỉ thấy tên và ban. */
+/** ST-COH: Đã gửi, Chấp nhận, Từ chối, Đã gỡ. */
+export type CoHostStatus = 'SENT' | 'ACCEPTED' | 'DECLINED' | 'REMOVED'
+
+export interface ClubRef {
+  id: string
+  name: string
+}
+
+/** CLB đồng tổ chức nhìn từ sự kiện của CLB chủ trì (FR-EVT-08). */
+export interface CoHost {
+  id: string
+  club: ClubRef
+  status: CoHostStatus
+  message: string
+  invitedBy: PersonRef
+  invitedAt: string
+  decidedAt: string | null
+  /** Ghi chú khi từ chối. */
+  decisionNote: string | null
+  removedAt: string | null
+  removeReason: string | null
+  /** Nhân sự của CLB này đang ở trong BTC. */
+  staffCount: number
+  allowedActions: Array<'REMOVE'>
+  version: number
+}
+
+/** Lời mời đồng tổ chức nhìn từ CLB được mời (tab Sự kiện chung). */
+export interface SharedEvent {
+  id: string
+  event: { id: string; name: string; clubId: string; clubName: string; startAt: string; endAt: string; status: EventStatus }
+  status: CoHostStatus
+  message: string
+  invitedBy: PersonRef
+  invitedAt: string
+  decidedBy: PersonRef | null
+  decidedAt: string | null
+  decisionNote: string | null
+  removedAt: string | null
+  removeReason: string | null
+  staffCount: number
+  allowedActions: Array<'ACCEPT' | 'DECLINE'>
+  version: number
+}
+
+export interface InviteCoHostRequest {
+  clubId: string
+  message: string
+}
+
+export interface CoHostDecisionRequest {
+  decision: 'ACCEPT' | 'DECLINE'
+  /** Bắt buộc khi từ chối. */
+  note: string | null
+  version: number
+}
+
+export interface RemoveCoHostRequest {
+  reason: string
+  version: number
+}
+
+/** Đổi trưởng tiểu ban; lý do bắt buộc khi đang có trưởng (trưởng cũ kết thúc chức kèm lý do). */
+export interface SetSubcommitteeLeadRequest {
+  userId: string
+  reason: string | null
+}
+
+/** FR-EVT-05: khi mời chỉ thấy tên và ban; nhân sự CLB đồng tổ chức thì ban ở CLB của họ. */
 export interface StaffCandidate extends PersonRef {
   departmentName: string | null
 }

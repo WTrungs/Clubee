@@ -44,6 +44,8 @@ export const clubTarget = (clubId: string): NotificationTarget => ({ type: 'CLUB
 export const structureTarget = (clubId: string): NotificationTarget => ({ type: 'STRUCTURE', clubId, id: null })
 export const membersTarget = (clubId: string, tab: string | null = null): NotificationTarget => ({ type: 'MEMBERS', clubId, id: tab })
 export const eventTarget = (clubId: string, eventId: string): NotificationTarget => ({ type: 'EVENT', clubId, id: eventId })
+/** Tab Sự kiện chung của CLB được mời đồng tổ chức (FR-EVT-08). */
+export const sharedEventsTarget = (clubId: string): NotificationTarget => ({ type: 'EVENT_SHARED', clubId, id: null })
 export const sessionTarget = (clubId: string, sessionId: string): NotificationTarget => ({ type: 'SESSION', clubId, id: sessionId })
 export const taskTarget = (clubId: string, taskId: string): NotificationTarget => ({ type: 'TASK', clubId, id: taskId })
 export const financeTarget = (clubId: string, transactionId: string): NotificationTarget => ({ type: 'FINANCE', clubId, id: transactionId })

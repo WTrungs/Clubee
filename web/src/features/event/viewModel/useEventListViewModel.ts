@@ -1,5 +1,6 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
+import { useSearchParams } from 'react-router'
 import { useCurrentClub } from '@/features/club/viewModel/clubContext'
 import { useDebouncedValue } from '@/shared/hooks/useDebouncedValue'
 import { eventRepository } from '../model/eventRepository'
@@ -8,9 +9,13 @@ import { EVENT_FILTERS } from './eventDisplay'
 import { eventQueryKeys } from './eventQueryKeys'
 
 const PAGE_SIZE = 12
+const TAB_PARAM = 'tab'
+
+export type EventListTab = 'club' | 'shared'
 
 export function useEventListViewModel() {
   const { clubId, club } = useCurrentClub()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [keyword, setKeyword] = useState('')
   const debouncedKeyword = useDebouncedValue(keyword.trim(), 300)
   const [filterKey, setFilterKey] = useState<string>('all')
@@ -31,10 +36,21 @@ export function useEventListViewModel() {
 
   const canCreate = club.allowedActions.includes('CREATE_EVENT')
   const canPropose = club.allowedActions.includes('PROPOSE_EVENT')
+  // FR-EVT-08: tab Sự kiện chung chỉ ban chủ nhiệm thấy; liên kết từ thông báo mời mở thẳng tab này (`?tab=shared`).
+  const canViewShared = club.allowedActions.includes('VIEW_SHARED_EVENTS')
+  const tab: EventListTab = canViewShared && searchParams.get(TAB_PARAM) === 'shared' ? 'shared' : 'club'
 
   return {
     clubId,
     clubName: club.name,
+    canViewShared,
+    tab,
+    setTab: (value: string) => {
+      const next = new URLSearchParams(searchParams)
+      if (value === 'shared') next.set(TAB_PARAM, 'shared')
+      else next.delete(TAB_PARAM)
+      setSearchParams(next, { replace: true })
+    },
     keyword,
     setKeyword: (value: string) => {
       setKeyword(value)
@@ -61,3 +77,4 @@ export function useEventListViewModel() {
     setFormOpen,
   }
 }
+export type EventListViewModel = ReturnType<typeof useEventListViewModel>

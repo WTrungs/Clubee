@@ -3,6 +3,7 @@ import type { ApiError } from '@/api/apiError'
 import { db } from '@/api/mocks/db'
 import { vnToday } from '@/api/mocks/mockTime'
 import { clubRepository } from '@/features/club/model/clubRepository'
+import { eventRepository } from '@/features/event/model/eventRepository'
 import { signInAs } from '@/testUtils'
 import { memberRepository } from '../model/memberRepository'
 
@@ -72,5 +73,36 @@ describe('resigning (FR-MEM-07, BR-MEM-03)', () => {
     const sent = await memberRepository.requestLeave('c-guitar', 'Thực tập ở công ty xa trường.')
     await memberRepository.transitionMine('c-guitar', { action: 'RESIGN', reason: 'Không sắp xếp được thời gian.', version: sent.version })
     expect(db.leaveRequests.find((leave) => leave.id === sent.leaveRequest?.id)?.status).toBe('WITHDRAWN')
+  })
+})
+
+describe('resigning from the home club of a co-host member (FR-EVT-08, BR-MEM-03)', () => {
+  async function tamInLogistics() {
+    signInAs('u-tu')
+    await eventRepository.decideCoHost('c-english', 'ch-winter-english', { decision: 'ACCEPT', note: null, version: 1 })
+    signInAs('u-bao')
+    await eventRepository.addStaff('c-guitar', 'e-winter', 'sc-winter-logistics', 'u-tam', 'ch-winter-english')
+  }
+
+  it('lists the subcommittee lead post held in the host club, pointing at that club', async () => {
+    await tamInLogistics()
+    await eventRepository.setSubcommitteeLead('c-guitar', 'e-winter', 'sc-winter-logistics', { userId: 'u-tam', reason: 'Cần người lo phần song ngữ.' })
+    signInAs('u-tam')
+    const mine = await memberRepository.myMembership('c-english')
+    expect(mine.resignBlockers).toContainEqual(
+      expect.objectContaining({ kind: 'POSITION', clubId: 'c-guitar', title: 'Trưởng tiểu ban Hậu cần (Đêm nhạc Mùa đông, CLB Guitar Sinh viên)' }),
+    )
+    expect((await fail(memberRepository.transitionMine('c-english', { action: 'RESIGN', reason: 'Chuyển sang CLB khác.', version: mine.version })))?.status).toBe(422)
+  })
+
+  it('ends the co-host staff place on resigning and tells the event lead', async () => {
+    await tamInLogistics()
+    signInAs('u-tam')
+    const mine = await memberRepository.myMembership('c-english')
+    await memberRepository.transitionMine('c-english', { action: 'RESIGN', reason: 'Chuyển sang CLB khác.', version: mine.version })
+    expect(db.eventStaff.find((staff) => staff.userId === 'u-tam' && staff.eventId === 'e-winter')?.leftAt).not.toBeNull()
+    expect((await fail(eventRepository.get('c-guitar', 'e-winter')))?.status).toBe(404)
+    const told = db.notifications.find((notification) => notification.title === 'Dương Thanh Tâm thôi làm nhân sự Đêm nhạc Mùa đông')
+    expect(db.notificationRecipients.some((recipient) => recipient.notificationId === told?.id && recipient.userId === 'u-bao')).toBe(true)
   })
 })
