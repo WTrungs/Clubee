@@ -1,6 +1,7 @@
 import type { PermissionKey } from '@/features/org/model/permissionTypes'
 import type { DbAuditLog } from './mockAudit'
 import { createAdvanceSeed, type DbAdvance } from './seed/advanceSeed'
+import { createDuesSeed, type DbDuesCampaign, type DbDuesItem } from './seed/duesSeed'
 import type { DbPermissionMatrixMeta } from './mockPermissionMatrix'
 import type { DbTransferRequest } from './mockTransfers'
 import {
@@ -37,6 +38,7 @@ import type { DbHandover, DbHandoverItem } from './seed/termSeed'
 export type { DbAttendance, DbAttendanceCode, DbAttendanceSheet, DbSession } from './seed/attendanceSeed'
 export type { DbClub } from './seed/clubSeed'
 export type { DbAdvance } from './seed/advanceSeed'
+export type { DbDuesCampaign, DbDuesItem } from './seed/duesSeed'
 export type { DbFund, DbTransaction } from './seed/financeSeed'
 export type { DbInvitation } from './seed/invitationSeed'
 export type { DbAuditLog } from './mockAudit'
@@ -96,6 +98,8 @@ export interface MockDb {
   funds: DbFund[]
   transactions: DbTransaction[]
   advances: DbAdvance[]
+  duesCampaigns: DbDuesCampaign[]
+  duesItems: DbDuesItem[]
   sessions: DbSession[]
   attendance: DbAttendance[]
   attendanceSheets: DbAttendanceSheet[]
@@ -106,15 +110,18 @@ export interface MockDb {
 
 export function createSeed(): MockDb {
   const notifications = createNotificationSeed()
+  const users = createUserSeed()
+  const departments = createDepartmentSeed()
+  const memberships = createMembershipSeed()
   return {
-    users: createUserSeed(),
+    users,
     clubs: createClubSeed(),
     terms: createTermSeed(),
     // Không seed phiên bàn giao: test và e2e tự tạo, vì nhiều test cũ dựa vào nhiệm kỳ Đang chạy của c-guitar.
     handovers: [],
     handoverItems: [],
-    departments: createDepartmentSeed(),
-    memberships: createMembershipSeed(),
+    departments,
+    memberships,
     leaveRequests: createLeaveRequestSeed(),
     invitations: createInvitationSeed(),
     positions: createPositionSeed(),
@@ -133,6 +140,7 @@ export function createSeed(): MockDb {
     funds: createFundSeed(),
     transactions: createTransactionSeed(),
     advances: createAdvanceSeed(),
+    ...createDuesSeed({ memberships, users, departments }),
     sessions: createSessionSeed(),
     attendance: createAttendanceSeed(),
     attendanceSheets: createAttendanceSheetSeed(),

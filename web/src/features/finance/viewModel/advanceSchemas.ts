@@ -9,7 +9,7 @@ export const ADVANCE_PURPOSE_MAX = 500
 export const ADVANCE_SETTLE_MAX_DAYS = 90
 
 /** Ngày dd/mm/yyyy nằm trong [from, to] (yyyy-mm-dd); `to` null là không chặn trên. */
-function dateText(from: string | null, to: string | null, message: string) {
+export function dateText(from: string | null, to: string | null, message: string) {
   return z
     .string()
     .trim()

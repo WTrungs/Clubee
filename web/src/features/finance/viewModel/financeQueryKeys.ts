@@ -1,4 +1,5 @@
 import type { AdvanceQuery } from '../model/advanceTypes'
+import type { DuesCampaignQuery, DuesItemQuery } from '../model/duesTypes'
 import type { FundQuery, TransactionQuery } from '../model/financeTypes'
 
 export const financeQueryKeys = {
@@ -12,4 +13,8 @@ export const financeQueryKeys = {
   transaction: (clubId: string, transactionId: string, fundId: string | null) => ['finance', 'transaction', clubId, transactionId, fundId] as const,
   advanceList: (clubId: string, query: AdvanceQuery) => ['finance', 'advances', clubId, query] as const,
   advance: (clubId: string, advanceId: string) => ['finance', 'advance', clubId, advanceId] as const,
+  duesList: (clubId: string, query: DuesCampaignQuery) => ['finance', 'dues', clubId, query] as const,
+  duesCampaign: (clubId: string, campaignId: string) => ['finance', 'duesCampaign', clubId, campaignId] as const,
+  duesItems: (clubId: string, campaignId: string, query: DuesItemQuery) => ['finance', 'duesItems', clubId, campaignId, query] as const,
+  duesCandidates: (clubId: string, q: string) => ['finance', 'duesCandidates', clubId, q] as const,
 }

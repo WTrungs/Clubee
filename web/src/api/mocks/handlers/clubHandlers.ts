@@ -14,7 +14,7 @@ import { isContactPhone, isEmail, normalizePhone, safeHttpUrl } from '@/shared/l
 import { imageContentType, validateImageFile } from '@/shared/lib/validateImageFile'
 import { db, type DbClub } from '../db'
 import { announcementAudiences } from '../mockAnnouncements'
-import { createGeneralFund } from '../mockFinance'
+import { createGeneralFund, keepsLedger } from '../mockFinance'
 import { publicClubInfo } from '../mockInvitations'
 import { generalFundId } from '../seed/financeSeed'
 import { defaultClubSettings } from '../seed/clubSeed'
@@ -47,7 +47,8 @@ function clubActionsFor(userId: string, clubId: string): ClubAction[] {
   if (canAssign) actions.push('ASSIGN_TASK')
   if (announcementAudiences(userId, clubId).length > 0) actions.push('SEND_ANNOUNCEMENT')
   if (canRequestTransfer(userId, clubId)) actions.push('REQUEST_PRESIDENCY_TRANSFER')
-  if (isBoardMember(userId, clubId)) actions.push('VIEW_PERMISSIONS', 'VIEW_SHARED_EVENTS')
+  if (isBoardMember(userId, clubId)) actions.push('VIEW_PERMISSIONS', 'VIEW_SHARED_EVENTS', 'VIEW_DUES')
+  if (isBoardMember(userId, clubId) && keepsLedger(userId, clubId)) actions.push('OPEN_DUES')
   return actions
 }
 

@@ -21,6 +21,10 @@ export type ClubAction =
   | 'VIEW_PERMISSIONS'
   /** FR-EVT-08: ban chủ nhiệm xem và trả lời lời mời đồng tổ chức ở tab Sự kiện chung. */
   | 'VIEW_SHARED_EVENTS'
+  /** FR-FIN-09: ban chủ nhiệm xem tab Đóng quỹ. */
+  | 'VIEW_DUES'
+  /** FR-FIN-09: người giữ sổ (mặc định Thủ quỹ) mở đợt đóng quỹ. */
+  | 'OPEN_DUES'
 
 /** Nhiệm kỳ đang phụ trách CLB: Đang chạy hoặc Đang bàn giao. */
 export interface TermSummary {

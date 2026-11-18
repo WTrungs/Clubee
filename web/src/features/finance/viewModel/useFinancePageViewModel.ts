@@ -10,10 +10,10 @@ import { financeQueryKeys } from './financeQueryKeys'
 const PAGE_SIZE = 20
 const VIEW_PARAM = 'view'
 
-export type FinanceView = 'general' | 'events'
+export type FinanceView = 'general' | 'events' | 'dues'
 export type EventFundFilter = FundStatus | 'ALL'
 
-/** Trang Tài chính: Quỹ chung và danh sách quỹ sự kiện người gọi được xem (ban chủ nhiệm, BTC; SRS 3.5). */
+/** Trang Tài chính: Quỹ chung, quỹ sự kiện người gọi được xem (ban chủ nhiệm, BTC; SRS 3.5), đợt đóng quỹ (ban chủ nhiệm, FR-FIN-09). */
 export function useFinancePageViewModel() {
   const { clubId, club } = useCurrentClub()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -34,22 +34,27 @@ export function useFinancePageViewModel() {
   })
   useClampPage(page, list.data?.totalPages, setPage)
 
+  const canViewDues = club.allowedActions.includes('VIEW_DUES')
   const requested = searchParams.get(VIEW_PARAM)
-  const view: FinanceView = hasEventFunds && requested === 'events' ? 'events' : 'general'
+  // Không xem được tab được yêu cầu (ví dụ thành viên mở thông báo đóng quỹ) thì về sổ Quỹ chung.
+  const view: FinanceView = hasEventFunds && requested === 'events' ? 'events' : canViewDues && requested === 'dues' ? 'dues' : 'general'
 
   return {
     clubId,
     clubName: club.name,
     generalFundId: club.generalFundId,
     hasEventFunds,
+    canViewDues,
     eventFundCount: probe.data?.totalElements ?? 0,
     eventFundsError: probe.error,
     retryEventFunds: () => void probe.refetch(),
     view,
     setView: (value: string) => {
       const next = new URLSearchParams(searchParams)
-      if (value === 'events') next.set(VIEW_PARAM, 'events')
+      if (value === 'events' || value === 'dues') next.set(VIEW_PARAM, value)
       else next.delete(VIEW_PARAM)
+      // Đổi tab thì bỏ đợt đang mở.
+      next.delete('dues')
       setSearchParams(next, { replace: true })
     },
     filter,

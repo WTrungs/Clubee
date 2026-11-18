@@ -3987,6 +3987,230 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
         '422': { $ref: '#/components/responses/UnprocessableEntity' }
+  /clubs/{clubId}/dues-campaigns:
+    get:
+      tags: [FIN]
+      operationId: listDuesCampaigns
+      summary: Đợt đóng quỹ của CLB (FR-FIN-09)
+      description: |
+        Ban chủ nhiệm (SRS 3.5). Mọi route đóng quỹ đều cần thuộc ban chủ nhiệm, kể cả thao tác cần `RECORD_LEDGER`: người
+        được bảng phân quyền cấp `RECORD_LEDGER` mà không thuộc ban chủ nhiệm vẫn nhận 403. Đợt đang mở trước, rồi đợt mới mở
+        trước. Mỗi đợt kèm tiến độ thu.
+        Lỗi: 400 `VALIDATION` (`status`); 403 `NOT_A_MEMBER`, `FORBIDDEN`; 404 `CLUB_NOT_FOUND`.
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - { name: status, in: query, schema: { $ref: '#/components/schemas/DuesCampaignStatus' } }
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200':
+          description: Một trang đợt đóng quỹ.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DuesCampaignPage' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [FIN]
+      operationId: openDuesCampaign
+      summary: Mở đợt đóng quỹ (FR-FIN-09)
+      description: |
+        `RECORD_LEDGER` (mặc định Thủ quỹ). Tên kỳ 3–100 ký tự; mức nguyên dương tối đa 1.000.000.000; hạn nộp từ hôm nay.
+        Danh sách chụp thành viên Thử việc, Chính thức lúc mở (họ tên, ban, mức phải đóng không đổi theo hồ sơ về sau,
+        BR-DATA-02). `exemptions`: mỗi người một lần, thuộc danh sách; lý do 5–500 ký tự; `REDUCED` có `amount` từ 1 tới dưới
+        mức đóng (400 theo ô `exemptions[i].…`). Báo từng người còn phải đóng, nội dung có kỳ, mức của họ, hạn.
+        Thứ tự kiểm: 403, 400.
+        Lỗi: 400 `VALIDATION`; 403 `NOT_A_MEMBER`, `FORBIDDEN`; 404 `CLUB_NOT_FOUND`.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OpenDuesRequest' }
+      responses:
+        '201':
+          description: Đợt vừa mở.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DuesCampaignDetail' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /clubs/{clubId}/dues-candidates:
+    get:
+      tags: [FIN]
+      operationId: listDuesCandidates
+      summary: Thành viên phải đóng quỹ, để chọn người miễn giảm (FR-FIN-09)
+      description: |
+        Ban chủ nhiệm. Thành viên Thử việc, Chính thức; chỉ tên và ban (SRS 3.5).
+        Lỗi: 403 `NOT_A_MEMBER`, `FORBIDDEN`; 404 `CLUB_NOT_FOUND`.
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - { name: q, in: query, schema: { type: string } }
+      responses:
+        '200':
+          description: Danh sách thành viên.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/AttendanceCandidate' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /clubs/{clubId}/dues-campaigns/{campaignId}:
+    get:
+      tags: [FIN]
+      operationId: getDuesCampaign
+      summary: Chi tiết đợt đóng quỹ (FR-FIN-09)
+      description: |
+        Ban chủ nhiệm. Lỗi: 403 `NOT_A_MEMBER`, `FORBIDDEN`; 404 `CLUB_NOT_FOUND`, `CAMPAIGN_NOT_FOUND`.
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - { name: campaignId, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Chi tiết đợt.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DuesCampaignDetail' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [FIN]
+      operationId: updateDuesCampaign
+      summary: Sửa tên, hạn, mức đóng (FR-FIN-09)
+      description: |
+        `RECORD_LEDGER`. Đợt đã đóng: 422 `CAMPAIGN_CLOSED` (BR-FIN-06). Đổi mức khi đã có người nộp: 422 `HAS_PAYMENTS`;
+        mức mới áp cho người không miễn giảm và phải cao hơn mức sau giảm của người được giảm. Thứ tự kiểm: 403, 409, 422, 400.
+        Lỗi: 400 `VALIDATION`; 403 `NOT_A_MEMBER`, `FORBIDDEN`; 404 `CAMPAIGN_NOT_FOUND`; 409 `VERSION_CONFLICT`;
+        422 `CAMPAIGN_CLOSED`, `HAS_PAYMENTS`.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - { name: campaignId, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateDuesCampaignRequest' }
+      responses:
+        '200':
+          description: Đợt sau khi sửa.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DuesCampaignDetail' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+  /clubs/{clubId}/dues-campaigns/{campaignId}/items:
+    get:
+      tags: [FIN]
+      operationId: listDuesItems
+      summary: Người trong đợt đóng quỹ (FR-FIN-09)
+      description: |
+        Ban chủ nhiệm. Lọc theo tình trạng, tìm theo tên hoặc ban, sắp theo tên; trang mặc định 50.
+        Lỗi: 400 `VALIDATION` (`status`); 403 `NOT_A_MEMBER`, `FORBIDDEN`; 404 `CAMPAIGN_NOT_FOUND`.
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - { name: campaignId, in: path, required: true, schema: { type: string } }
+        - { name: status, in: query, schema: { $ref: '#/components/schemas/DuesItemStatus' } }
+        - { name: q, in: query, schema: { type: string } }
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200':
+          description: Một trang người trong đợt.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DuesItemPage' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /clubs/{clubId}/dues-campaigns/{campaignId}/items/{itemId}/exemption:
+    put:
+      tags: [FIN]
+      operationId: setDuesExemption
+      summary: Miễn giảm cho một người (FR-FIN-09)
+      description: |
+        `RECORD_LEDGER`; đợt đang mở (422 `CAMPAIGN_CLOSED`). `NONE` trả về mức đầy đủ. `EXEMPT`, `REDUCED` cần lý do 5–500 ký
+        tự; mức sau giảm từ 1 tới dưới mức đóng. Mức sau miễn giảm không thấp hơn số người đó đã nộp (422 `BELOW_PAID`).
+        `version` là phiên bản của dòng. Thứ tự kiểm: 403, 409, 422 đợt đã đóng, 400, 422 thấp hơn số đã nộp.
+        Lỗi: 400 `VALIDATION`; 403 `NOT_A_MEMBER`, `FORBIDDEN`; 404 `ITEM_NOT_FOUND`; 409 `VERSION_CONFLICT`;
+        422 `CAMPAIGN_CLOSED`, `BELOW_PAID`.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - { name: campaignId, in: path, required: true, schema: { type: string } }
+        - { name: itemId, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SetExemptionRequest' }
+      responses:
+        '200':
+          description: Dòng sau khi sửa.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DuesItem' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+  /clubs/{clubId}/dues-campaigns/{campaignId}/closure:
+    post:
+      tags: [FIN]
+      operationId: closeDuesCampaign
+      summary: Đóng đợt đóng quỹ (FR-FIN-09)
+      description: |
+        `RECORD_LEDGER`. Sau khi đóng: không nhận thêm khoản nộp, không sửa (BR-FIN-06); người chưa nộp vẫn nằm trong báo cáo.
+        Thứ tự kiểm: 403, 409, 422.
+        Lỗi: 403 `NOT_A_MEMBER`, `FORBIDDEN`; 404 `CAMPAIGN_NOT_FOUND`; 409 `VERSION_CONFLICT`; 422 `CAMPAIGN_CLOSED`.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - { name: campaignId, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [version]
+              properties:
+                version: { type: integer }
+      responses:
+        '200':
+          description: Đợt đã đóng.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DuesCampaignDetail' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
   /clubs/{clubId}/funds/{fundId}/transitions:
     post:
       tags: [FIN]
@@ -4851,7 +5075,8 @@ components:
         chưa có yêu cầu chuyển quyền chờ xử lý (FR-ACC-08).
         `VIEW_PERMISSIONS`: thuộc ban chủ nhiệm, xem được bảng phân quyền (FR-ORG-05).
         `VIEW_SHARED_EVENTS`: thuộc ban chủ nhiệm, xem và trả lời lời mời đồng tổ chức ở tab Sự kiện chung (FR-EVT-08).
-      enum: [CREATE_EVENT, PROPOSE_EVENT, ASSIGN_TASK, MANAGE_MEMBERS, MANAGE_ORG, ASSIGN_PRESIDENCY, EDIT_CLUB, SEND_ANNOUNCEMENT, CREATE_TERM, ASSIGN_POSITION, REQUEST_PRESIDENCY_TRANSFER, VIEW_PERMISSIONS, VIEW_SHARED_EVENTS]
+        `VIEW_DUES`: thuộc ban chủ nhiệm, xem tab Đóng quỹ (FR-FIN-09). `OPEN_DUES`: ban chủ nhiệm có `RECORD_LEDGER`, mở đợt đóng quỹ.
+      enum: [CREATE_EVENT, PROPOSE_EVENT, ASSIGN_TASK, MANAGE_MEMBERS, MANAGE_ORG, ASSIGN_PRESIDENCY, EDIT_CLUB, SEND_ANNOUNCEMENT, CREATE_TERM, ASSIGN_POSITION, REQUEST_PRESIDENCY_TRANSFER, VIEW_PERMISSIONS, VIEW_SHARED_EVENTS, VIEW_DUES, OPEN_DUES]
     TermSummary:
       type: object
       description: Nhiệm kỳ đang phụ trách CLB (Đang chạy hoặc Đang bàn giao).
@@ -6440,7 +6665,7 @@ components:
         type:
           type: string
           description: '`MEMBERS` mở trang Thành viên; `id` là tab cần mở (ví dụ `leave`), `null` là tab mặc định. `INVITATION` mở trang lời mời; `id` là mã lời mời.'
-          enum: [CLUB, STRUCTURE, MEMBERS, TASK, EVENT, EVENT_SHARED, SESSION, FINANCE, ADVANCE, TERM, HANDOVER, DIRECTORY, INVITATION]
+          enum: [CLUB, STRUCTURE, MEMBERS, TASK, EVENT, EVENT_SHARED, SESSION, FINANCE, ADVANCE, DUES, TERM, HANDOVER, DIRECTORY, INVITATION]
         clubId: { $ref: '#/components/schemas/NullableString' }
         id: { $ref: '#/components/schemas/NullableString' }
     NotificationSummary:
@@ -7337,6 +7562,122 @@ components:
         version: { type: integer }
         reason: { type: string, description: Bắt buộc 5–500 ký tự khi `REJECT`. }
         disbursedOn: { type: string, format: date, description: 'Khi `DISBURSE`; không sau hôm nay, bỏ trống là hôm nay.' }
+    DuesCampaignStatus:
+      type: string
+      description: Đang mở thì nhận khoản nộp; đã đóng thì không sửa, không nhận thêm (BR-FIN-06).
+      enum: [OPEN, CLOSED]
+    DuesItemStatus:
+      type: string
+      description: Tính từ mức phải đóng sau miễn giảm, số đã nộp và miễn giảm.
+      enum: [UNPAID, PARTIAL, PAID, EXEMPT]
+    DuesExemption:
+      type: object
+      required: [kind, reason, by, at]
+      properties:
+        kind: { type: string, enum: [EXEMPT, REDUCED] }
+        reason: { type: string }
+        by: { $ref: '#/components/schemas/PersonRef' }
+        at: { type: string, format: date-time }
+    DuesCampaignSummary:
+      type: object
+      required: [id, name, amount, dueOn, status, memberCount, settledCount, expectedAmount, collectedAmount, openedAt, closedAt]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        amount: { type: integer, description: Mức đóng mỗi người. }
+        dueOn: { type: string, format: date }
+        status: { $ref: '#/components/schemas/DuesCampaignStatus' }
+        memberCount: { type: integer, description: Số người trong danh sách chụp lúc mở. }
+        settledCount: { type: integer, description: Số người đã nộp đủ hoặc được miễn. }
+        expectedAmount: { type: integer, description: Tổng phải thu sau miễn giảm. }
+        collectedAmount: { type: integer, description: Tổng đã thu. }
+        openedAt: { type: string, format: date-time }
+        closedAt: { $ref: '#/components/schemas/NullableDateTime' }
+    DuesCampaignDetail:
+      allOf:
+        - $ref: '#/components/schemas/DuesCampaignSummary'
+        - type: object
+          required: [openedBy, closedBy, hasPayments, allowedActions, version]
+          properties:
+            openedBy: { $ref: '#/components/schemas/PersonRef' }
+            closedBy:
+              oneOf:
+                - $ref: '#/components/schemas/PersonRef'
+                - type: 'null'
+            hasPayments: { type: boolean }
+            allowedActions:
+              type: array
+              description: '`EDIT_AMOUNT` chỉ khi chưa ai nộp; `RECORD_PAYMENT` dùng ở FR-FIN-10.'
+              items: { type: string, enum: [EDIT, EDIT_AMOUNT, SET_EXEMPTION, RECORD_PAYMENT, CLOSE] }
+            version: { type: integer }
+    DuesCampaignPage:
+      allOf:
+        - $ref: '#/components/schemas/PageMeta'
+        - type: object
+          required: [content]
+          properties:
+            content:
+              type: array
+              items: { $ref: '#/components/schemas/DuesCampaignSummary' }
+    DuesItem:
+      type: object
+      required: [id, member, departmentName, amountDue, paidAmount, status, exemption, version]
+      properties:
+        id: { type: string }
+        member:
+          $ref: '#/components/schemas/PersonRef'
+          description: Họ tên chụp lúc mở đợt (BR-DATA-02).
+        departmentName: { $ref: '#/components/schemas/NullableString' }
+        amountDue: { type: integer, description: 'Mức phải đóng sau miễn giảm; 0 khi được miễn.' }
+        paidAmount: { type: integer }
+        status: { $ref: '#/components/schemas/DuesItemStatus' }
+        exemption:
+          oneOf:
+            - $ref: '#/components/schemas/DuesExemption'
+            - type: 'null'
+        version: { type: integer }
+    DuesItemPage:
+      allOf:
+        - $ref: '#/components/schemas/PageMeta'
+        - type: object
+          required: [content]
+          properties:
+            content:
+              type: array
+              items: { $ref: '#/components/schemas/DuesItem' }
+    OpenDuesRequest:
+      type: object
+      required: [name, amount, dueOn, exemptions]
+      properties:
+        name: { type: string, minLength: 3, maxLength: 100 }
+        amount: { type: integer, minimum: 1, maximum: 1000000000 }
+        dueOn: { type: string, format: date }
+        exemptions:
+          type: array
+          items:
+            type: object
+            required: [userId, kind, reason]
+            properties:
+              userId: { type: string }
+              kind: { type: string, enum: [EXEMPT, REDUCED] }
+              amount: { type: integer, description: 'Mức sau giảm khi `REDUCED`: từ 1 tới dưới mức đóng.' }
+              reason: { type: string, minLength: 5, maxLength: 500 }
+    UpdateDuesCampaignRequest:
+      type: object
+      required: [version]
+      properties:
+        name: { type: string, minLength: 3, maxLength: 100 }
+        dueOn: { type: string, format: date }
+        amount: { type: integer, minimum: 1, maximum: 1000000000, description: Chỉ khi chưa ai nộp. }
+        version: { type: integer }
+    SetExemptionRequest:
+      type: object
+      required: [kind, version]
+      properties:
+        kind: { type: string, enum: [EXEMPT, REDUCED, NONE] }
+        amount: { type: integer, description: Mức sau giảm khi `REDUCED`. }
+        reason: { type: string, description: Bắt buộc 5–500 ký tự khi `EXEMPT`, `REDUCED`. }
+        version: { type: integer, description: Phiên bản của dòng. }
     TransactionType:
       type: string
       enum: [INCOME, EXPENSE, ADJUSTMENT, TRANSFER]
