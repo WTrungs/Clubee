@@ -56,12 +56,15 @@ test.describe('Ban tổ chức sự kiện', () => {
 
     // Không tải lại trang: mock chạy trong trình duyệt nên tải lại là mất lời nhận vừa ghi.
     await switchUser(page, 'Châu Minh Tú', 'bao.tran@demo.test')
-    await page.evaluate(() => {
-      window.history.pushState({}, '', '/clubs/c-guitar/events/e-winter?tab=staff')
-      window.dispatchEvent(new PopStateEvent('popstate'))
-    })
     const section = page.getByRole('region', { name: 'CLB đồng tổ chức' })
-    await expect(section.getByText('Đang đồng tổ chức')).toBeVisible()
+    // Sau khi đăng nhập app còn tự chuyển về CLB gần nhất; lúc máy chậm lệnh chuyển trang dưới đây có thể bị đè, nên thử lại.
+    await expect(async () => {
+      await page.evaluate(() => {
+        window.history.pushState({}, '', '/clubs/c-guitar/events/e-winter?tab=staff')
+        window.dispatchEvent(new PopStateEvent('popstate'))
+      })
+      await expect(section.getByText('Đang đồng tổ chức')).toBeVisible({ timeout: 3_000 })
+    }).toPass({ timeout: 15_000 })
 
     await section.getByRole('button', { name: 'Mời CLB' }).click()
     const sheet = page.getByRole('dialog', { name: 'Mời CLB đồng tổ chức' })
