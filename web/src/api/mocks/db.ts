@@ -1,6 +1,7 @@
 import type { PermissionKey } from '@/features/org/model/permissionTypes'
 import type { DbAuditLog } from './mockAudit'
 import { createAdvanceSeed, type DbAdvance } from './seed/advanceSeed'
+import { createAuditSeed } from './seed/auditSeed'
 import { createDuesSeed, type DbDuesCampaign, type DbDuesItem } from './seed/duesSeed'
 import type { DbPermissionMatrixMeta } from './mockPermissionMatrix'
 import type { DbTransferRequest } from './mockTransfers'
@@ -113,7 +114,7 @@ export function createSeed(): MockDb {
   const users = createUserSeed()
   const departments = createDepartmentSeed()
   const memberships = createMembershipSeed()
-  return {
+  const seed: MockDb = {
     users,
     clubs: createClubSeed(),
     terms: createTermSeed(),
@@ -148,6 +149,8 @@ export function createSeed(): MockDb {
     auditLogs: [],
     transferRequests: [],
   }
+  seed.auditLogs = createAuditSeed(seed)
+  return seed
 }
 
 export const db: MockDb = createSeed()

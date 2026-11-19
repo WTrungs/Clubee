@@ -385,7 +385,7 @@ export const orgHandlers = [
         'LAST_PRESIDENT',
       )
     }
-    endPositions((candidate) => candidate.id === position.id, { reason, handoverOn })
+    endPositions((candidate) => candidate.id === position.id, { reason, handoverOn, actorId: user.value.id })
     notify([position.userId], {
       clubId,
       category: 'POSITION',

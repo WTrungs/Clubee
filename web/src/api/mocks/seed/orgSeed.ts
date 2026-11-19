@@ -52,6 +52,17 @@ export type PositionRole =
   | 'EVENT_LEAD'
   | 'SUBCOMMITTEE_LEAD'
 
+/** Tên chức vụ; đặt ở seed (không đọc `db`) để cả nhãn nhật ký lúc dựng seed cũng dùng được. */
+export const positionTitles: Record<PositionRole, string> = {
+  PRESIDENT: 'Chủ nhiệm',
+  VICE_PRESIDENT: 'Phó chủ nhiệm',
+  TREASURER: 'Thủ quỹ',
+  DEPARTMENT_HEAD: 'Trưởng ban',
+  DEPARTMENT_VICE_HEAD: 'Phó ban',
+  EVENT_LEAD: 'Trưởng BTC',
+  SUBCOMMITTEE_LEAD: 'Trưởng tiểu ban',
+}
+
 /** Chức vụ được gán (SRS 4.1). Thu hồi hoặc hết hạn chỉ ghi ngày kết thúc, bản ghi giữ nguyên (BR-ORG-03). */
 export interface DbPosition {
   id: string

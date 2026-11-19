@@ -12,7 +12,7 @@ import type {
 import { CLUB_SETTING_MESSAGES, inRange, NUMERIC_CLUB_SETTINGS, semesterErrors } from '@/shared/lib/clubSettingsRules'
 import { isContactPhone, isEmail, normalizePhone, safeHttpUrl } from '@/shared/lib/contactRules'
 import { imageContentType, validateImageFile } from '@/shared/lib/validateImageFile'
-import { db, type DbClub } from '../db'
+import { db, type DbClub, type DbMembership } from '../db'
 import { announcementAudiences } from '../mockAnnouncements'
 import { createGeneralFund, keepsLedger } from '../mockFinance'
 import { publicClubInfo } from '../mockInvitations'
@@ -20,7 +20,7 @@ import { generalFundId } from '../seed/financeSeed'
 import { defaultClubSettings } from '../seed/clubSeed'
 import { blankMemberInfo } from '../seed/memberSeed'
 import { API, currentUser, fileToDataUrl, matchesKeyword, networkDelay, newId, paginate, problem, writer } from '../mockHttp'
-import { canAccessClub, isActiveMember, memberCountOf, membershipOf, myMembershipIn, personRef } from '../mockMembers'
+import { canAccessClub, isActiveMember, memberCountOf, membershipOf, myMembershipIn, personRef, recordMembershipChange } from '../mockMembers'
 import { can, forbidden } from '../mockAccess'
 import { currentTermOf, grantPosition, isBoardMember, isPresidency, positionTitlesOf } from '../mockPermissions'
 import { assignableScopes } from '../mockScopes'
@@ -286,7 +286,7 @@ export const clubHandlers = [
       closedDepartments: null,
       version: 1,
     })
-    db.memberships.push({
+    const membership: DbMembership = {
       id: newId('m'),
       userId: user.value.id,
       clubId: club.id,
@@ -301,9 +301,11 @@ export const clubHandlers = [
       introduction: null,
       studentId: null,
       ...blankMemberInfo(),
-      history: [{ at: now, actorId: user.value.id, fromStatus: null, toStatus: 'ACTIVE', reason: null }],
+      history: [],
       version: 1,
-    })
+    }
+    db.memberships.push(membership)
+    recordMembershipChange(membership, { actorId: user.value.id, fromStatus: null, toStatus: 'ACTIVE', reason: null, at: now })
     grantPosition({ userId: user.value.id, clubId: club.id, role: 'PRESIDENT', scopeId: club.id, assignedBy: user.value.id })
     return HttpResponse.json(toClubDetail(club, user.value.id), { status: 201 })
   }),

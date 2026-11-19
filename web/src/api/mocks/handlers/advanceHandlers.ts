@@ -25,7 +25,7 @@ import {
   toAdvanceDetail,
   toAdvanceSummary,
 } from '../mockAdvances'
-import { approversOf, canApproveIn, canProposeIn, canReachClubFinance, fundBalance, fundName, keepsLedger, ledgerKeepersOf } from '../mockFinance'
+import { approversOf, canApproveIn, canProposeIn, canReachClubFinance, fundBalance, fundName, keepsLedger, ledgerKeepersOf, recordTransaction } from '../mockFinance'
 import { API, currentUser, matchesKeyword, networkDelay, newId, paginate, problem, writer } from '../mockHttp'
 import { personRef } from '../mockMembers'
 import { financeTarget, notify } from '../mockNotifications'
@@ -109,64 +109,36 @@ function lineErrors(body: Partial<SubmitSettlementLineRequest>, userId: string, 
 function closureTransaction(
   advance: DbAdvance,
   fields: Pick<DbTransaction, 'type' | 'direction' | 'amount' | 'description' | 'proposerId' | 'status'> & Partial<DbTransaction>,
+  actorId: string,
 ): DbTransaction {
-  const transaction: DbTransaction = {
-    id: newId('tx'),
-    clubId: advance.clubId,
-    fundId: advance.fundId,
-    category: advance.category,
-    attachmentIds: [],
-    occurredOn: null,
-    approverId: null,
-    posterId: null,
-    originalId: null,
-    targetFundId: null,
-    rejectionReason: null,
-    createdAt: nowIso(),
-    decidedAt: null,
-    postedAt: null,
-    cancelledBy: null,
-    cancelledAt: null,
-    cancellationReason: null,
-    version: 1,
-    advanceId: advance.id,
-    ...fields,
-  }
-  db.transactions.push(transaction)
-  return transaction
+  return recordTransaction({ clubId: advance.clubId, fundId: advance.fundId, category: advance.category, attachmentIds: [], advanceId: advance.id, ...fields }, actorId)
 }
 
 /** Ghi Đã ứng: sinh khoản chi Đã ghi sổ gắn `advanceId`, người duyệt là người duyệt tạm ứng (dùng cho R-01 ở báo cáo). */
 function disburse(advance: DbAdvance, userId: string, disbursedOn: string): void {
   const now = nowIso()
-  const transaction: DbTransaction = {
-    id: newId('tx'),
-    clubId: advance.clubId,
-    fundId: advance.fundId,
-    type: 'EXPENSE',
-    direction: 'OUT',
-    amount: advance.amount,
-    category: advance.category,
-    description: `Tạm ứng: ${advance.purpose} (${personRef(advance.requesterId).fullName})`,
-    occurredOn: disbursedOn,
-    status: 'POSTED',
-    proposerId: advance.requesterId,
-    approverId: advance.approverId,
-    posterId: userId,
-    attachmentIds: [],
-    originalId: null,
-    targetFundId: null,
-    rejectionReason: null,
-    createdAt: now,
-    decidedAt: advance.decidedAt,
-    postedAt: now,
-    cancelledBy: null,
-    cancelledAt: null,
-    cancellationReason: null,
-    version: 1,
-    advanceId: advance.id,
-  }
-  db.transactions.push(transaction)
+  const transaction = recordTransaction(
+    {
+      clubId: advance.clubId,
+      fundId: advance.fundId,
+      type: 'EXPENSE',
+      direction: 'OUT',
+      amount: advance.amount,
+      category: advance.category,
+      description: `Tạm ứng: ${advance.purpose} (${personRef(advance.requesterId).fullName})`,
+      occurredOn: disbursedOn,
+      status: 'POSTED',
+      proposerId: advance.requesterId,
+      approverId: advance.approverId,
+      posterId: userId,
+      attachmentIds: [],
+      createdAt: now,
+      decidedAt: advance.decidedAt,
+      postedAt: now,
+      advanceId: advance.id,
+    },
+    userId,
+  )
   Object.assign(advance, { status: 'DISBURSED', disbursedBy: userId, disbursedOn, disbursementTxId: transaction.id })
 }
 
@@ -458,29 +430,37 @@ export const advanceHandlers = [
     let transaction: DbTransaction | null = null
     if (difference > 0) {
       // Thừa: người ứng trả lại, ghi điều chỉnh tăng quỹ đã ghi sổ tham chiếu khoản chi ứng.
-      transaction = closureTransaction(advance, {
-        type: 'ADJUSTMENT',
-        direction: 'IN',
-        amount: difference,
-        description: `Hoàn tạm ứng: ${advance.purpose} (${requesterName})`,
-        proposerId: userId,
-        status: 'POSTED',
-        posterId: userId,
-        postedAt: now,
-        occurredOn: refundOn,
-        originalId: advance.disbursementTxId,
-      })
+      transaction = closureTransaction(
+        advance,
+        {
+          type: 'ADJUSTMENT',
+          direction: 'IN',
+          amount: difference,
+          description: `Hoàn tạm ứng: ${advance.purpose} (${requesterName})`,
+          proposerId: userId,
+          status: 'POSTED',
+          posterId: userId,
+          postedAt: now,
+          occurredOn: refundOn,
+          originalId: advance.disbursementTxId,
+        },
+        userId,
+      )
     } else if (difference < 0) {
       // Thiếu: khoản chi Đề xuất đứng tên người ứng, duyệt và ghi sổ như khoản chi thường; người ứng không tự duyệt được.
-      transaction = closureTransaction(advance, {
-        type: 'EXPENSE',
-        direction: 'OUT',
-        amount: -difference,
-        description: `Chi bổ sung tạm ứng: ${advance.purpose} (${requesterName})`,
-        proposerId: advance.requesterId,
-        status: 'PROPOSED',
-        attachmentIds: advance.lines.filter((line) => line.status === 'CONFIRMED').flatMap((line) => line.attachmentIds),
-      })
+      transaction = closureTransaction(
+        advance,
+        {
+          type: 'EXPENSE',
+          direction: 'OUT',
+          amount: -difference,
+          description: `Chi bổ sung tạm ứng: ${advance.purpose} (${requesterName})`,
+          proposerId: advance.requesterId,
+          status: 'PROPOSED',
+          attachmentIds: advance.lines.filter((line) => line.status === 'CONFIRMED').flatMap((line) => line.attachmentIds),
+        },
+        userId,
+      )
       // Người ứng không tự duyệt được khoản này nên không báo cho họ.
       notify(approversOf(fund).filter((approverId) => approverId !== advance.requesterId), {
         clubId,

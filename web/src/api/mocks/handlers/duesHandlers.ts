@@ -3,10 +3,10 @@ import type { DuesExemptionInput, OpenDuesRequest, RecordDuesPaymentRequest, Set
 import { formatDate } from '@/shared/format/formatDate'
 import { formatMoney } from '@/shared/format/formatMoney'
 import { REASON_MAX, REASON_MIN } from '@/shared/lib/reasonRules'
-import { db, type DbTransaction } from '../db'
+import { db } from '../db'
 import { forbidden } from '../mockAccess'
 import { canViewDues, duesItemStatus, duesTarget, hasPayments, itemsOf, owedOf, paidOf, toDuesDetail, toDuesItem, toDuesSummary } from '../mockDues'
-import { canReachClubFinance, keepsLedger } from '../mockFinance'
+import { canReachClubFinance, keepsLedger, recordTransaction } from '../mockFinance'
 import { API, currentUser, matchesKeyword, networkDelay, newId, paginate, problem, writer } from '../mockHttp'
 import { eligibleMembers } from '../mockMembers'
 import { notify } from '../mockNotifications'
@@ -318,34 +318,26 @@ export const duesHandlers = [
     if (!isRealDate(body.paidOn) || body.paidOn > vnToday()) errors.push({ field: 'paidOn', message: 'Ngày nộp không hợp lệ hoặc sau hôm nay.' })
     if (errors.length > 0) return problem(400, 'Thông tin khoản nộp chưa hợp lệ.', 'VALIDATION', errors)
     const now = nowIso()
-    const transaction: DbTransaction = {
-      id: newId('tx'),
-      clubId,
-      fundId: generalFundId(clubId),
-      type: 'INCOME',
-      direction: 'IN',
-      amount: body.amount as number,
-      category: 'MEMBER_DUES',
-      description: `Đóng quỹ ${campaign.name}: ${item.memberName}`,
-      occurredOn: body.paidOn as string,
-      status: 'POSTED',
-      proposerId: userId,
-      approverId: null,
-      posterId: userId,
-      attachmentIds: [],
-      originalId: null,
-      targetFundId: null,
-      rejectionReason: null,
-      createdAt: now,
-      decidedAt: null,
-      postedAt: now,
-      cancelledBy: null,
-      cancelledAt: null,
-      cancellationReason: null,
-      version: 1,
-      duesItemId: item.id,
-    }
-    db.transactions.push(transaction)
+    const transaction = recordTransaction(
+      {
+        clubId,
+        fundId: generalFundId(clubId),
+        type: 'INCOME',
+        direction: 'IN',
+        amount: body.amount as number,
+        category: 'MEMBER_DUES',
+        description: `Đóng quỹ ${campaign.name}: ${item.memberName}`,
+        occurredOn: body.paidOn as string,
+        status: 'POSTED',
+        proposerId: userId,
+        posterId: userId,
+        attachmentIds: [],
+        createdAt: now,
+        postedAt: now,
+        duesItemId: item.id,
+      },
+      userId,
+    )
     item.payments.push({ id: newId('duesp'), amount: transaction.amount, paidOn: transaction.occurredOn ?? vnToday(), confirmedBy: userId, confirmedAt: now, transactionId: transaction.id })
     item.version += 1
     campaign.version += 1

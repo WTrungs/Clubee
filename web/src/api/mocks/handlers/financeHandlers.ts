@@ -39,7 +39,10 @@ import {
   isDepartmentLead,
   keepsLedger,
   ledgerKeepersOf,
+  logTransactionChange,
   pendingCountOf,
+  recordTransaction,
+  type NewTransactionFields,
 } from '../mockFinance'
 import { API, currentUser, matchesKeyword, networkDelay, newId, paginate, problem, writer } from '../mockHttp'
 import { personRef } from '../mockMembers'
@@ -368,28 +371,8 @@ function commonErrors(body: Partial<CreateTransactionRequest>, userId: string, c
   return errors
 }
 
-function newTransaction(fields: Pick<DbTransaction, 'clubId' | 'fundId' | 'type' | 'direction' | 'amount' | 'category' | 'description' | 'proposerId' | 'attachmentIds'> & Partial<DbTransaction>): DbTransaction {
-  const transaction: DbTransaction = {
-    id: newId('tx'),
-    occurredOn: null,
-    status: 'PROPOSED',
-    approverId: null,
-    posterId: null,
-    originalId: null,
-    targetFundId: null,
-    rejectionReason: null,
-    createdAt: nowIso(),
-    decidedAt: null,
-    postedAt: null,
-    cancelledBy: null,
-    cancelledAt: null,
-    cancellationReason: null,
-    version: 1,
-    ...fields,
-  }
-  db.transactions.push(transaction)
-  return transaction
-}
+/** Ở các route của sổ quỹ, người tạo giao dịch luôn là người đề xuất. */
+const newTransaction = (fields: NewTransactionFields) => recordTransaction(fields, fields.proposerId)
 
 /** FR-FIN-01: Thủ quỹ ghi khoản thu, ghi thẳng vào Đã ghi sổ. */
 function recordIncome(body: Partial<CreateTransactionRequest>, fund: DbFund, userId: string): Response {
@@ -510,6 +493,7 @@ function transitionTransaction(transaction: DbTransaction, body: Partial<Transac
       ? problem(400, title, 'VALIDATION', [{ field: 'reason', message: `Lý do cần từ ${REASON_MIN} đến ${REASON_MAX} ký tự.` }])
       : null
   const now = nowIso()
+  const fromStatus = transaction.status
 
   switch (body.action) {
     case 'WITHDRAW':
@@ -587,6 +571,8 @@ function transitionTransaction(transaction: DbTransaction, body: Partial<Transac
     default:
       return problem(400, 'Thao tác không hợp lệ.', 'VALIDATION')
   }
+  const loggedReason = body.action === 'REJECT' || body.action === 'CANCEL' ? reason : null
+  logTransactionChange(transaction, fromStatus, userId, loggedReason)
   transaction.version += 1
   return HttpResponse.json(toDetail(transaction, userId))
 }

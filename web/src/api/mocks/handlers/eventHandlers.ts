@@ -246,9 +246,9 @@ function findEvent(params: Record<string, string | readonly string[] | undefined
 }
 
 /** Chức vụ sự kiện hết hiệu lực khi sự kiện Đã hủy hoặc Đã đóng; bản ghi giữ lại (BR-ORG-03, BR-DATA-01). */
-function endEventPositions(eventId: string, reason: string) {
+function endEventPositions(eventId: string, reason: string, actorId: string) {
   const subcommitteeIds = db.subcommittees.filter((subcommittee) => subcommittee.eventId === eventId).map((subcommittee) => subcommittee.id)
-  endPositions((position) => position.scopeId === eventId || subcommitteeIds.includes(position.scopeId), { reason })
+  endPositions((position) => position.scopeId === eventId || subcommitteeIds.includes(position.scopeId), { reason, actorId })
 }
 
 /** FR-NOT-02: báo người được giao vai trò trong ban tổ chức sự kiện. */
@@ -503,7 +503,7 @@ export const eventHandlers = [
         event.statusBeforeCancel = event.status
         event.status = 'CANCELLED'
         event.cancellationReason = reason
-        endEventPositions(event.id, 'Sự kiện đã hủy.')
+        endEventPositions(event.id, 'Sự kiện đã hủy.', user.value.id)
         break
       case 'CLOSE': {
         if (event.status !== 'ENDED') return invalid()
@@ -515,7 +515,7 @@ export const eventHandlers = [
         }
         if (!fundSettled(event)) return problem(422, 'Quỹ sự kiện chưa quyết toán nên chưa đóng được sự kiện.', 'FUND_NOT_SETTLED')
         event.status = 'CLOSED'
-        endEventPositions(event.id, 'Sự kiện đã đóng.')
+        endEventPositions(event.id, 'Sự kiện đã đóng.', user.value.id)
         break
       }
       default:
@@ -704,7 +704,7 @@ export const eventHandlers = [
     if (errors.length > 0) return problem(400, 'Thông tin đổi trưởng tiểu ban chưa hợp lệ.', 'VALIDATION', errors)
     const endReason = currentLeadId ? reason : 'Trưởng tiểu ban mới được chọn khi người giữ chức không còn đủ tư cách.'
     // Trưởng cũ kết thúc chức kèm lý do, vẫn ở lại làm nhân sự của tiểu ban (BR-DATA-01).
-    const ended = endPositions((position) => position.role === 'SUBCOMMITTEE_LEAD' && position.scopeId === subcommittee.id, { reason: endReason })
+    const ended = endPositions((position) => position.role === 'SUBCOMMITTEE_LEAD' && position.scopeId === subcommittee.id, { reason: endReason, actorId: user.value.id })
     notify(
       ended.map((position) => position.userId),
       {

@@ -4,7 +4,7 @@ import { can } from './mockAccess'
 import { advanceResignBlockers } from './mockAdvances'
 import { problem } from './mockHttp'
 import { coHostResignBlockers, endCoHostStaffOf } from './mockCoHosts'
-import { closeDepartmentStint, personRef } from './mockMembers'
+import { closeDepartmentStint, personRef, recordMembershipChange } from './mockMembers'
 import { isPositionOpen, positionTitleOf, STANDING_ROLES } from './mockPermissions'
 import { isTaskActive } from './mockScopes'
 import { openHandoverOf } from './mockTerms'
@@ -101,7 +101,7 @@ export function resignFromClub(membership: DbMembership, reason: string): void {
   }
   endCoHostStaffOf(membership.userId, membership.clubId, membership.userId)
   closePendingLeaveRequest(membership.id, 'WITHDRAWN', membership.userId, 'Người gửi đã rời CLB.')
-  membership.history.push({ at, actorId: membership.userId, fromStatus, toStatus: 'LEFT', reason })
+  recordMembershipChange(membership, { actorId: membership.userId, fromStatus, toStatus: 'LEFT', reason, at })
   membership.version += 1
 }
 

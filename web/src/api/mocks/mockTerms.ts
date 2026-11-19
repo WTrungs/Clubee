@@ -402,7 +402,7 @@ export function completeHandover(handover: DbHandover, actorId: string): void {
   const replacements = leadReplacementsOf(handover)
   const closedDepartments = activeDepartmentsOf(clubId).map((department) => ({ id: department.id, name: department.name }))
 
-  endPositions((position) => position.clubId === clubId && STANDING_ROLES.includes(position.role), { reason: `Kết thúc ${fromTerm.name}`, handoverOn: toTermStartOn })
+  endPositions((position) => position.clubId === clubId && STANDING_ROLES.includes(position.role), { reason: `Kết thúc ${fromTerm.name}`, handoverOn: toTermStartOn, actorId })
 
   // BR-TERM-04: ban bị bỏ chuyển Đã đóng; ban giữ lại vẫn là bản ghi cũ; ban mới thuộc nhiệm kỳ mới.
   for (const entry of plan) {

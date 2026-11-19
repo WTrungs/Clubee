@@ -13,6 +13,8 @@ import { orgRepository } from '../model/orgRepository'
 import type { PermissionChange } from '../model/permissionTypes'
 
 const fail = (promise: Promise<unknown>) => promise.then(() => null).catch((caught: unknown) => caught as ApiError)
+/** Nhật ký sửa bảng phân quyền; seed có sẵn nhật ký loại khác (gán chức vụ, giao dịch). */
+const permissionLogs = () => db.auditLogs.filter((log) => log.objectType === 'PERMISSION')
 const cell = (matrix: Awaited<ReturnType<typeof orgRepository.permissionMatrix>>, role: string, permission: string) =>
   matrix.cells.find((candidate) => candidate.role === role && candidate.permission === permission)
 const save = async (userId: string, changes: PermissionChange[]) => {
@@ -43,7 +45,7 @@ describe('viewing the permission matrix (FR-ORG-05)', () => {
     expect(await fail(orgRepository.resetPermissionMatrix('c-guitar', 1))).toMatchObject({ status: 403 })
     // NFR-SEC-03: bị từ chối thì dữ liệu không đổi.
     expect(db.permissionOverrides).toEqual([])
-    expect(db.auditLogs).toEqual([])
+    expect(permissionLogs()).toEqual([])
     expect((await orgRepository.permissionMatrix('c-guitar')).version).toBe(1)
     signInAs('u-ha')
     expect(await fail(orgRepository.permissionMatrix('c-guitar'))).toMatchObject({ status: 403, detail: 'Chỉ ban chủ nhiệm xem được bảng phân quyền.' })
@@ -130,7 +132,7 @@ describe('editing the matrix (FR-ORG-05, BR-ACL-01..05)', () => {
   it('does not bump the version when nothing changes', async () => {
     const saved = await save('u-anh', [{ role: 'TREASURER', permission: 'MANAGE_MEMBERS', enabled: true }])
     expect(saved.version).toBe(1)
-    expect(db.auditLogs).toEqual([])
+    expect(permissionLogs()).toEqual([])
   })
 })
 
