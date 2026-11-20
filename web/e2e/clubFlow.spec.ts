@@ -1,0 +1,119 @@
+import { expect, test, type Page } from '@playwright/test'
+import { loginAs, openNavLink, settleToast, snap } from './helpers.ts'
+
+/** Hồ sơ và tham số CLB nằm chung menu Quản lý CLB ở Tổng quan. */
+async function openClubMenu(page: Page, item: 'Sửa hồ sơ CLB' | 'Tham số CLB'): Promise<void> {
+  await page.getByRole('button', { name: 'Quản lý CLB' }).click()
+  await page.getByRole('menuitem', { name: item }).click()
+}
+
+const PNG_1PX = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64')
+
+test.describe('CLB', () => {
+  test('tạo CLB mới rồi vào thẳng Tổng quan với chức Chủ nhiệm', async ({ page }, testInfo) => {
+    await loginAs(page, 'ha.le@demo.test')
+    await page.getByRole('button', { name: 'Tạo CLB' }).click()
+    const sheet = page.getByRole('dialog', { name: 'Tạo CLB' })
+    await sheet.getByRole('button', { name: 'Tạo CLB' }).click()
+    await expect(sheet.getByText('Tên CLB cần ít nhất 3 ký tự.')).toBeVisible()
+    await sheet.getByRole('textbox', { name: 'Tên CLB' }).fill('CLB Nhiếp ảnh Sinh viên')
+    await sheet.getByRole('textbox', { name: 'Tên viết tắt' }).fill('NASV')
+    await sheet.getByRole('combobox', { name: 'Lĩnh vực' }).fill('Nghệ thuật')
+    await sheet.getByRole('textbox', { name: 'Mô tả' }).fill('Chụp ảnh, triển lãm và dạy nhiếp ảnh cơ bản cho tân sinh viên.')
+    await snap(page, testInfo, 'createClub', { fullPage: false })
+    await sheet.getByRole('button', { name: 'Tạo CLB' }).click()
+
+    await expect(page.getByText('Đã tạo CLB Nhiếp ảnh Sinh viên.', { exact: false })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'CLB Nhiếp ảnh Sinh viên', level: 1 })).toBeVisible()
+    await expect(page.getByText('Nghệ thuật · NASV · Nhiệm kỳ đầu tiên')).toBeVisible()
+    await expect(page.getByText('Chủ nhiệm', { exact: true }).first()).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Quản lý CLB' })).toBeVisible()
+    await snap(page, testInfo, 'newClubOverview')
+  })
+
+  test('ban chủ nhiệm sửa logo, liên hệ và chặn liên kết không phải http', async ({ page }, testInfo) => {
+    await loginAs(page, 'anh.nguyen@demo.test')
+    await page.goto('/clubs/c-guitar')
+    await openClubMenu(page, 'Sửa hồ sơ CLB')
+    const sheet = page.getByRole('dialog', { name: 'Sửa hồ sơ CLB' })
+
+    await sheet.getByLabel('Chọn logo CLB').setInputFiles({ name: 'logo.png', mimeType: 'image/png', buffer: PNG_1PX })
+    await expect(page.getByText('Đã cập nhật logo CLB.')).toBeVisible()
+
+    await sheet.getByRole('textbox', { name: 'Số điện thoại' }).fill('0283 725 2002')
+    await sheet.getByRole('textbox', { name: 'Trang web hoặc fanpage' }).fill('javascript:alert(1)')
+    await sheet.getByRole('button', { name: 'Lưu thay đổi' }).click()
+    await expect(sheet.getByText('Liên kết phải bắt đầu bằng http:// hoặc https://.')).toBeVisible()
+    await sheet.getByRole('textbox', { name: 'Trang web hoặc fanpage' }).fill('https://example.com/gsv')
+    await snap(page, testInfo, 'clubProfileSheet', { fullPage: false })
+    await sheet.getByRole('button', { name: 'Lưu thay đổi' }).click()
+
+    await expect(page.getByText('Đã lưu hồ sơ CLB.')).toBeVisible()
+    await expect(page.getByRole('link', { name: 'https://example.com/gsv' })).toHaveAttribute('rel', 'noopener noreferrer')
+    await expect(page.getByRole('link', { name: '02837252002' })).toBeVisible()
+    await snap(page, testInfo, 'clubAbout')
+
+    // Liên hệ công khai hiện cả ở danh bạ Tìm CLB (SRS 3.5).
+    await openNavLink(page, 'Tìm CLB')
+    const card = page.getByRole('listitem').filter({ has: page.getByRole('heading', { name: 'CLB Guitar Sinh viên' }) })
+    await expect(card.getByRole('link', { name: '02837252002' })).toBeVisible()
+    await expect(card.getByRole('link', { name: 'https://example.com/gsv' })).toHaveAttribute('rel', 'noopener noreferrer')
+    await snap(page, testInfo, 'clubDirectoryContacts')
+  })
+
+  test('thành viên thường xem liên hệ, nội quy nhưng không có nút sửa', async ({ page }) => {
+    await loginAs(page, 'ha.le@demo.test')
+    await page.goto('/clubs/c-guitar')
+    await expect(page.getByRole('heading', { name: 'Nội quy' })).toBeVisible()
+    await expect(page.getByText('Giữ gìn nhạc cụ chung, mượn và trả đúng hẹn.')).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Quản lý CLB' })).toHaveCount(0)
+  })
+
+  test('chủ nhiệm đổi ngưỡng chứng từ, form đề xuất chi dùng ngưỡng mới', async ({ page }, testInfo) => {
+    await loginAs(page, 'anh.nguyen@demo.test')
+    await page.goto('/clubs/c-guitar')
+    await snap(page, testInfo, 'clubOverviewMenu', { fullPage: false })
+    await openClubMenu(page, 'Tham số CLB')
+    const sheet = page.getByRole('dialog', { name: 'Tham số CLB' })
+    const threshold = sheet.getByRole('textbox', { name: 'Ngưỡng bắt buộc chứng từ' })
+    await expect(threshold).toHaveValue('200.000')
+
+    await sheet.getByRole('textbox', { name: 'Chu kỳ đổi mã QR' }).fill('5')
+    await threshold.fill('500000')
+    await expect(threshold).toHaveValue('500.000')
+    await sheet.getByRole('button', { name: 'Lưu tham số' }).click()
+    await expect(sheet.getByText('Chu kỳ đổi mã từ 10 đến 300 giây.')).toBeVisible()
+    await snap(page, testInfo, 'clubSettingsSheet', { fullPage: false })
+    await sheet.getByRole('textbox', { name: 'Chu kỳ đổi mã QR' }).fill('30')
+    await sheet.getByRole('button', { name: 'Lưu tham số' }).click()
+    await settleToast(page, 'Đã lưu tham số CLB.')
+    await expect(sheet).toHaveCount(0)
+
+    await openNavLink(page, 'Tài chính')
+    await page.getByRole('region', { name: 'Số dư Quỹ chung' }).getByRole('button', { name: 'Đề xuất chi' }).click()
+    await expect(page.getByRole('dialog', { name: 'Đề xuất chi' }).getByText('Trên 500.000 đ phải có chứng từ.')).toBeVisible()
+  })
+
+  test('chủ nhiệm đổi hạn hủy đăng ký và mốc học kỳ, mở lại thấy giá trị mới', async ({ page }, testInfo) => {
+    await loginAs(page, 'anh.nguyen@demo.test')
+    await page.goto('/clubs/c-guitar')
+    await openClubMenu(page, 'Tham số CLB')
+    const sheet = page.getByRole('dialog', { name: 'Tham số CLB' })
+    await sheet.getByRole('textbox', { name: 'Hạn hủy đăng ký' }).fill('12')
+    await sheet.getByRole('textbox', { name: 'Học kỳ 1 bắt đầu' }).fill('15/08')
+    await sheet.getByRole('switch', { name: /Tách kỳ hè/ }).click()
+    await sheet.getByRole('textbox', { name: 'Kỳ hè bắt đầu' }).fill('1/12')
+    await sheet.getByRole('button', { name: 'Lưu tham số' }).click()
+    await expect(sheet.getByText('Kỳ hè phải bắt đầu sau học kỳ 2 và trước học kỳ 1 năm sau.')).toBeVisible()
+    await sheet.getByRole('textbox', { name: 'Kỳ hè bắt đầu' }).fill('20/06')
+    await snap(page, testInfo, 'clubSettingsGroups', { fullPage: false })
+    await sheet.getByRole('button', { name: 'Lưu tham số' }).click()
+    await settleToast(page, 'Đã lưu tham số CLB.')
+    await expect(sheet).toHaveCount(0)
+
+    await openClubMenu(page, 'Tham số CLB')
+    await expect(sheet.getByRole('textbox', { name: 'Hạn hủy đăng ký' })).toHaveValue('12')
+    await expect(sheet.getByRole('textbox', { name: 'Học kỳ 1 bắt đầu' })).toHaveValue('15/08')
+    await expect(sheet.getByRole('textbox', { name: 'Kỳ hè bắt đầu' })).toHaveValue('20/06')
+  })
+})
