@@ -40,7 +40,7 @@ describe('creating a session (FR-ATT-01)', () => {
   it('lets a department head create a session for their department and tells its working members only', async () => {
     signInAs('u-linh')
     const created = await sessionRepository.create('c-guitar', request())
-    expect(created).toMatchObject({ scope: { type: 'DEPARTMENT', departmentId: 'd-media', departmentName: 'Truyền thông' }, allowedActions: ['VIEW_ATTENDANCE'] })
+    expect(created).toMatchObject({ scope: { type: 'DEPARTMENT', departmentId: 'd-media', departmentName: 'Truyền thông' }, allowedActions: ['VIEW_ATTENDANCE', 'EDIT', 'CANCEL'] })
     for (const userId of ['u-ha', 'u-vy']) expect(await sessionTitlesOf(userId)).toContain('Buổi sinh hoạt mới: Họp ban Truyền thông tuần này')
     // Tạm nghỉ (BR-MEM-05), người tạo và người ban khác không nhận.
     for (const userId of ['u-yen', 'u-linh', 'u-long']) expect(await sessionTitlesOf(userId)).toEqual([])
@@ -76,9 +76,9 @@ describe('reading sessions', () => {
   it('lists upcoming sessions soonest first and past sessions newest first', async () => {
     signInAs('u-ha')
     const upcoming = await sessionRepository.list('c-guitar', { when: 'UPCOMING' })
-    expect(upcoming.content.map((session) => session.id)).toEqual(['s-weekly-now', 's-media-plan', 's-music-rehearsal'])
+    expect(upcoming.content.map((session) => session.id)).toEqual(['s-weekly-now', 's-song-2', 's-media-plan', 's-music-rehearsal', 's-song-3', 's-song-4'])
     const past = await sessionRepository.list('c-guitar', { when: 'PAST' })
-    expect(past.content.map((session) => session.id)).toEqual(['s-fingerstyle', 's-media-photo'])
+    expect(past.content.map((session) => session.id)).toEqual(['s-fingerstyle', 's-song-1', 's-media-photo'])
   })
 
   it('filters by scope and keyword', async () => {
@@ -91,13 +91,14 @@ describe('reading sessions', () => {
     expect(keyword.content.map((session) => session.id)).toEqual(['s-music-rehearsal'])
   })
 
-  it('shows the attendance tab only to the people running the session', async () => {
+  it('shows the attendance tab only to the people running the session, and editing only before it starts (FR-ATT-02)', async () => {
     signInAs('u-ha')
     expect((await sessionRepository.get('c-guitar', 's-media-plan')).allowedActions).toEqual([])
     signInAs('u-linh')
-    expect((await sessionRepository.get('c-guitar', 's-media-plan')).allowedActions).toEqual(['VIEW_ATTENDANCE'])
+    expect((await sessionRepository.get('c-guitar', 's-media-plan')).allowedActions).toEqual(['VIEW_ATTENDANCE', 'EDIT', 'CANCEL'])
+    expect((await sessionRepository.get('c-guitar', 's-media-photo')).allowedActions).toEqual(['VIEW_ATTENDANCE'])
     signInAs('u-mai')
-    expect((await sessionRepository.get('c-guitar', 's-media-plan')).allowedActions).toEqual(['VIEW_ATTENDANCE'])
+    expect((await sessionRepository.get('c-guitar', 's-media-plan')).allowedActions).toEqual(['VIEW_ATTENDANCE', 'EDIT', 'CANCEL'])
   })
 
   it('keeps sessions inside their club (NFR-SEC-02)', async () => {

@@ -1,13 +1,15 @@
 import { useId } from 'react'
+import { formatLongDate } from '@/shared/format/formatDate'
+import { SERIES_MAX_SESSIONS } from '@/shared/lib/sessionRecurrence'
 import { Button } from '@/shared/ui/Button'
-import { DateTimeRow } from '@/shared/ui/DateTimeRow'
 import { FormAlert } from '@/shared/ui/FormAlert'
 import { FormField } from '@/shared/ui/FormField'
-import { Input, NativeSelect, Textarea } from '@/shared/ui/Input'
+import { Input, NativeSelect } from '@/shared/ui/Input'
 import { Sheet, SheetContent } from '@/shared/ui/Sheet'
 import type { SessionScopeOption } from '../model/sessionTypes'
 import { scopeKeyOf } from '../viewModel/sessionFormSchema'
 import { useSessionFormViewModel } from '../viewModel/useSessionFormViewModel'
+import { SessionFormFields } from './SessionFormFields'
 
 interface SessionFormSheetProps {
   clubId: string
@@ -45,7 +47,7 @@ export function SessionFormSheet({ clubId, clubName, scopes, open, onOpenChange 
               Hủy bỏ
             </Button>
             <Button type="submit" form={formId} loading={vm.pending} disabled={!vm.canSubmit}>
-              Tạo buổi
+              {vm.repeat === 'NONE' ? 'Tạo buổi' : vm.seriesDays.length > 1 && !vm.seriesTooLong ? `Tạo ${vm.seriesDays.length} buổi` : 'Tạo chuỗi buổi'}
             </Button>
           </>
         }
@@ -66,23 +68,40 @@ export function SessionFormSheet({ clubId, clubName, scopes, open, onOpenChange 
               ))}
             </NativeSelect>
           </FormField>
-          <FormField label="Tên buổi" required error={errors.title?.message}>
-            <Input placeholder="Ví dụ: Sinh hoạt định kỳ tuần 3" maxLength={150} {...register('title')} />
-          </FormField>
-          <FormField label="Nội dung" error={errors.description?.message}>
-            <Textarea placeholder="Chủ đề, cần chuẩn bị gì…" maxLength={3000} {...register('description')} />
-          </FormField>
+          <SessionFormFields form={vm.form} />
 
-          <DateTimeRow label="Bắt đầu" date={register('startDate')} time={register('startTime')} error={errors.startDate?.message ?? errors.startTime?.message} />
-          <DateTimeRow label="Kết thúc" date={register('endDate')} time={register('endTime')} error={errors.endDate?.message ?? errors.endTime?.message} />
-
-          <FormField label="Địa điểm" required error={errors.location?.message}>
-            <Input placeholder="Ví dụ: Phòng B4.12" maxLength={200} {...register('location')} />
-          </FormField>
-          <FormField label="Số chỗ" error={errors.capacity?.message} hint="Để trống nếu không giới hạn.">
-            <Input inputMode="numeric" placeholder="Không giới hạn" maxLength={5} {...register('capacity')} />
-          </FormField>
-          <DateTimeRow label="Hạn đăng ký" date={register('deadlineDate')} time={register('deadlineTime')} error={errors.deadlineDate?.message} required={false} />
+          <fieldset className="space-y-4 rounded-2xl border p-4">
+            <legend className="px-1 text-sm font-semibold">Chuỗi buổi</legend>
+            <FormField label="Lặp lại" hint="Mỗi buổi giữ giờ, độ dài và hạn đăng ký như buổi đầu; sau này sửa hay hủy từng buổi riêng.">
+              <NativeSelect {...register('repeat')}>
+                <option value="NONE">Không lặp</option>
+                <option value="WEEKLY">Hằng tuần</option>
+                <option value="MONTHLY">Hằng tháng</option>
+              </NativeSelect>
+            </FormField>
+            {vm.repeat !== 'NONE' && (
+              <>
+                <FormField label="Đến ngày" required error={errors.untilDate?.message} hint={`Tối đa ${SERIES_MAX_SESSIONS} buổi, trong vòng một năm.`}>
+                  <Input inputMode="numeric" placeholder="dd/mm/yyyy" maxLength={10} {...register('untilDate')} />
+                </FormField>
+                {vm.seriesDays.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-sm font-semibold">
+                      {vm.seriesTooLong ? `Hơn ${SERIES_MAX_SESSIONS} buổi, vượt giới hạn của một chuỗi` : `${vm.seriesDays.length} buổi`}
+                    </p>
+                    <ol aria-label="Ngày các buổi trong chuỗi" className="flex max-h-40 flex-wrap gap-1.5 overflow-y-auto">
+                      {vm.seriesDays.map((day, index) => (
+                        <li key={day} className="rounded-lg bg-muted px-2 py-1 text-xs font-medium tabular-nums">
+                          <span className="sr-only">Buổi {index + 1}: </span>
+                          {formatLongDate(`${day}T12:00:00+07:00`)}
+                        </li>
+                      ))}
+                    </ol>
+                  </div>
+                )}
+              </>
+            )}
+          </fieldset>
 
           <FormAlert message={vm.errorMessage} />
         </form>

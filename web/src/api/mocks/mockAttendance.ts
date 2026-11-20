@@ -60,6 +60,8 @@ export interface AttendanceActivity {
   /** Các ngày của sự kiện; buổi sinh hoạt để rỗng. */
   days: string[]
   readOnlyReason: string | null
+  /** Buổi sinh hoạt đã hủy (FR-ATT-02): không còn điểm danh. */
+  cancelled: boolean
   canView: (userId: string) => boolean
   canMark: (userId: string) => boolean
   canClose: (userId: string) => boolean
@@ -83,6 +85,7 @@ export function sessionActivity(session: DbSession): AttendanceActivity {
     name: session.title,
     days: [],
     readOnlyReason: null,
+    cancelled: session.cancelledAt !== null,
     canView: manages,
     canMark: manages,
     canClose: manages,
@@ -127,6 +130,7 @@ export function eventActivity(event: DbEvent): AttendanceActivity {
     name: event.name,
     days,
     readOnlyReason: event.status === 'CLOSED' ? 'Sự kiện đã đóng nên điểm danh chỉ xem được.' : null,
+    cancelled: false,
     canView: staff,
     canMark: staff,
     canClose: (userId) => board(userId) || isEventLead(userId, event),

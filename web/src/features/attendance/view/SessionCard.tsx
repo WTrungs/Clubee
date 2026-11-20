@@ -1,10 +1,11 @@
 import { motion } from 'motion/react'
-import { Clock, MapPin, UsersRound } from 'lucide-react'
+import { Clock, MapPin, Repeat, UsersRound } from 'lucide-react'
 import { Link } from 'react-router'
 import { formatTimeRange } from '@/shared/format/formatDate'
+import { cn } from '@/shared/lib/cn'
 import { itemVariants } from '@/shared/motion/presets'
 import type { SessionSummary } from '../model/sessionTypes'
-import { sessionScopeLabel } from '../viewModel/sessionDisplay'
+import { sessionScopeLabel, seriesLabel } from '../viewModel/sessionDisplay'
 import { SessionDateBlock, SessionTimingBadge } from './SessionMeta'
 
 export function SessionCard({ session }: { session: SessionSummary }) {
@@ -22,8 +23,14 @@ export function SessionCard({ session }: { session: SessionSummary }) {
               <UsersRound aria-hidden className="size-3.5" />
               {sessionScopeLabel(session.scope)}
             </span>
+            {session.series && (
+              <span className="inline-flex items-center gap-1 text-xs font-semibold text-muted-foreground">
+                <Repeat aria-hidden className="size-3.5" />
+                {seriesLabel(session.series)}
+              </span>
+            )}
           </span>
-          <span className="block leading-snug font-bold group-hover:text-primary">{session.title}</span>
+          <span className={cn('block leading-snug font-bold group-hover:text-primary', session.cancelled && 'text-muted-foreground line-through decoration-1')}>{session.title}</span>
           <span className="flex flex-col gap-1 text-sm text-muted-foreground">
             <span className="inline-flex items-center gap-1.5">
               <Clock aria-hidden className="size-4 shrink-0" />

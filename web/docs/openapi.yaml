@@ -3234,6 +3234,36 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+  /clubs/{clubId}/session-series:
+    post:
+      tags: [ATT]
+      operationId: createSessionSeries
+      summary: Tạo chuỗi buổi lặp (FR-ATT-02)
+      description: |
+        Thân như tạo một buổi, thêm `recurrence`. Buổi đầu là giờ trong thân; các buổi sau lặp hằng tuần hoặc hằng tháng (cùng ngày
+        trong tháng, tháng không có ngày đó thì bỏ qua) tới hết ngày `until`. Mỗi buổi giữ giờ, độ dài và độ lệch của hạn đăng ký
+        như buổi đầu. Chuỗi có 2–52 buổi và `until` cách buổi đầu tối đa 366 ngày. Các buổi tạo ra độc lập: sửa, hủy từng buổi riêng.
+        Quyền và kiểm tra như `POST /sessions`. Gửi một thông báo cho cả chuỗi.
+        Lỗi: 400 `VALIDATION` (trường `recurrence.frequency`, `recurrence.until` kèm lý do); 403 `FORBIDDEN`, `NOT_A_MEMBER`.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateSessionSeriesRequest' }
+      responses:
+        '201':
+          description: Chuỗi vừa tạo.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CreateSessionSeriesResult' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
   /clubs/{clubId}/session-scopes:
     get:
       tags: [ATT]
@@ -3259,7 +3289,8 @@ paths:
       summary: Chi tiết buổi sinh hoạt
       description: |
         `allowedActions` có `VIEW_ATTENDANCE` khi người gọi là người phụ trách buổi: người tạo, ban chủ nhiệm, Trưởng ban,
-        Phó ban của ban đó (còn Thử việc hoặc Chính thức). Lỗi: 403 `NOT_A_MEMBER`; 404 `SESSION_NOT_FOUND`.
+        Phó ban của ban đó (còn Thử việc hoặc Chính thức); thêm `EDIT`, `CANCEL` khi buổi chưa bắt đầu. Buổi đã hủy không có thao tác nào.
+        Lỗi: 403 `NOT_A_MEMBER`; 404 `SESSION_NOT_FOUND`.
       parameters:
         - $ref: '#/components/parameters/ClubId'
         - $ref: '#/components/parameters/SessionId'
@@ -3272,6 +3303,81 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [ATT]
+      operationId: updateSession
+      summary: Sửa một buổi sinh hoạt (FR-ATT-02)
+      description: |
+        Chỉ người phụ trách buổi, trước giờ bắt đầu. Chỉ đổi buổi này, các buổi khác trong chuỗi giữ nguyên; không đổi được phạm vi.
+        Kiểm tra trường như khi tạo. Đổi giờ hoặc địa điểm thì báo đối tượng của buổi.
+
+        Lỗi (theo thứ tự):
+        - 403 `FORBIDDEN`, `NOT_A_MEMBER`, `CSRF`.
+        - 404 `SESSION_NOT_FOUND`.
+        - 409 `VERSION_CONFLICT`.
+        - 422 `SESSION_CANCELLED`, `SESSION_STARTED`.
+        - 400 `VALIDATION`.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - $ref: '#/components/parameters/SessionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateSessionRequest' }
+      responses:
+        '200':
+          description: Buổi sau khi sửa.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SessionDetail' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+  /clubs/{clubId}/sessions/{sessionId}/cancellation:
+    post:
+      tags: [ATT]
+      operationId: cancelSession
+      summary: Hủy một buổi sinh hoạt (FR-ATT-02)
+      description: |
+        Chỉ người phụ trách buổi, trước giờ bắt đầu, bắt buộc lý do 5–500 ký tự. Chỉ hủy buổi này. Báo đối tượng của buổi kèm lý do.
+        Buổi đã hủy không điểm danh được: các route điểm danh và quét mã trả 422 `SESSION_CANCELLED`.
+
+        Lỗi (theo thứ tự):
+        - 403 `FORBIDDEN`, `NOT_A_MEMBER`, `CSRF`.
+        - 404 `SESSION_NOT_FOUND`.
+        - 409 `VERSION_CONFLICT`.
+        - 422 `SESSION_CANCELLED`, `SESSION_STARTED`.
+        - 400 `VALIDATION` (lý do).
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - $ref: '#/components/parameters/SessionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CancelSessionRequest' }
+      responses:
+        '200':
+          description: Buổi đã hủy.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SessionDetail' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
   /clubs/{clubId}/sessions/{sessionId}/attendance:
     get:
       tags: [ATT]
@@ -3286,6 +3392,7 @@ paths:
         - 400 `VALIDATION` (bộ lọc `status` không hợp lệ).
         - 403 `FORBIDDEN`, `NOT_A_MEMBER`.
         - 404 `SESSION_NOT_FOUND`.
+        - 422 `SESSION_CANCELLED` (buổi đã hủy không có điểm danh).
       parameters:
         - $ref: '#/components/parameters/ClubId'
         - $ref: '#/components/parameters/SessionId'
@@ -3307,6 +3414,7 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
   /clubs/{clubId}/sessions/{sessionId}/attendance/records/{userId}:
     put:
       tags: [ATT]
@@ -3322,7 +3430,7 @@ paths:
         - 403 `FORBIDDEN` (kèm lý do), `CSRF`.
         - 404 `SESSION_NOT_FOUND`, `MEMBER_NOT_FOUND`.
         - 409 `VERSION_CONFLICT`.
-        - 422 `ATTENDANCE_NOT_OPEN` (kèm giờ mở), `ATTENDANCE_CLOSED`.
+        - 422 `SESSION_CANCELLED`, `ATTENDANCE_NOT_OPEN` (kèm giờ mở), `ATTENDANCE_CLOSED`.
       security:
         - sessionCookie: []
           csrfHeader: []
@@ -3354,7 +3462,7 @@ paths:
       summary: Thành viên có thể thêm làm người phát sinh (FR-ATT-07)
       description: |
         Chỉ người được điểm danh. Thành viên CLB (Thử việc, Chính thức, Tạm nghỉ) chưa có trong danh sách; tối đa 20 người, chỉ tên và ban.
-        Lỗi: 400 `VALIDATION`; 403 `FORBIDDEN`; 404 `SESSION_NOT_FOUND`.
+        Lỗi: 400 `VALIDATION`; 403 `FORBIDDEN`; 404 `SESSION_NOT_FOUND`; 422 `SESSION_CANCELLED`.
       parameters:
         - $ref: '#/components/parameters/ClubId'
         - $ref: '#/components/parameters/SessionId'
@@ -3371,6 +3479,7 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
   /clubs/{clubId}/sessions/{sessionId}/attendance/code:
     get:
       tags: [ATT]
@@ -3384,7 +3493,7 @@ paths:
         Lỗi:
         - 403 `FORBIDDEN` (kèm lý do), `NOT_A_MEMBER`.
         - 404 `SESSION_NOT_FOUND`.
-        - 422 `ATTENDANCE_NOT_OPEN` (kèm giờ mở), `ATTENDANCE_CLOSED`.
+        - 422 `SESSION_CANCELLED`, `ATTENDANCE_NOT_OPEN` (kèm giờ mở), `ATTENDANCE_CLOSED`.
       parameters:
         - $ref: '#/components/parameters/ClubId'
         - $ref: '#/components/parameters/SessionId'
@@ -3409,7 +3518,7 @@ paths:
         2. `code` khớp mã của chu kỳ hiện tại hoặc chu kỳ liền trước của đúng buổi; sai, hết hạn, không có
            buổi hoặc không đúng CLB đều trả 422 `INVALID_CODE` (không lộ buổi có tồn tại hay không).
         3. Người quét là thành viên CLB (Thử việc, Chính thức, Tạm nghỉ); không thì 403 `NOT_A_MEMBER`.
-        4. Bảng đã chốt: 422 `ATTENDANCE_CLOSED`. Chưa tới giờ mở: 422 `ATTENDANCE_NOT_OPEN`.
+        4. Buổi đã hủy: 422 `SESSION_CANCELLED`. Bảng đã chốt: 422 `ATTENDANCE_CLOSED`. Chưa tới giờ mở: 422 `ATTENDANCE_NOT_OPEN`.
 
         Quét sau giờ bắt đầu của buổi ghi `LATE`, còn lại `PRESENT`;
         cách ghi `QR`. Người không thuộc đối tượng được ghi là người phát sinh (FR-ATT-07).
@@ -3455,7 +3564,7 @@ paths:
         - 403 `FORBIDDEN` (kèm lý do), `CSRF`.
         - 404 `SESSION_NOT_FOUND`.
         - 409 `VERSION_CONFLICT`.
-        - 422 `ATTENDANCE_NOT_OPEN`, `ATTENDANCE_CLOSED`.
+        - 422 `SESSION_CANCELLED`, `ATTENDANCE_NOT_OPEN`, `ATTENDANCE_CLOSED`.
       security:
         - sessionCookie: []
           csrfHeader: []
@@ -7303,7 +7412,7 @@ components:
         name: { type: string }
     SessionSummary:
       type: object
-      required: [id, clubId, title, scope, startAt, endAt, location, capacity, registrationDeadline, attendanceClosed]
+      required: [id, clubId, title, scope, startAt, endAt, location, capacity, registrationDeadline, attendanceClosed, series, cancelled]
       properties:
         id: { type: string }
         clubId: { type: string }
@@ -7320,11 +7429,22 @@ components:
         attendanceClosed:
           type: boolean
           description: Đã chốt điểm danh (FR-ATT-08), danh sách chỉ xem được.
+        series:
+          description: Vị trí trong chuỗi lặp (FR-ATT-02); `null` với buổi đơn lẻ.
+          oneOf:
+            - type: 'null'
+            - type: object
+              required: [id, index, count]
+              properties:
+                id: { type: string }
+                index: { type: integer, minimum: 1 }
+                count: { type: integer, minimum: 2 }
+        cancelled: { type: boolean }
     SessionDetail:
       allOf:
         - $ref: '#/components/schemas/SessionSummary'
         - type: object
-          required: [description, creator, createdAt, allowedActions, version]
+          required: [description, creator, createdAt, allowedActions, cancellation, version]
           properties:
             description: { type: string }
             creator: { $ref: '#/components/schemas/PersonRef' }
@@ -7333,7 +7453,17 @@ components:
               type: array
               items:
                 type: string
-                enum: [VIEW_ATTENDANCE]
+                enum: [VIEW_ATTENDANCE, EDIT, CANCEL]
+            cancellation:
+              description: Có khi buổi đã hủy.
+              oneOf:
+                - type: 'null'
+                - type: object
+                  required: [by, at, reason]
+                  properties:
+                    by: { $ref: '#/components/schemas/PersonRef' }
+                    at: { type: string, format: date-time }
+                    reason: { type: string }
             version: { type: integer }
     SessionPage:
       allOf:
@@ -7359,6 +7489,44 @@ components:
         location: { type: string, minLength: 1, maxLength: 200 }
         capacity: { type: [integer, 'null'], minimum: 1, maximum: 99999 }
         registrationDeadline: { $ref: '#/components/schemas/NullableDateTime' }
+    CreateSessionSeriesRequest:
+      allOf:
+        - $ref: '#/components/schemas/CreateSessionRequest'
+        - type: object
+          required: [recurrence]
+          properties:
+            recurrence:
+              type: object
+              required: [frequency, until]
+              properties:
+                frequency: { type: string, enum: [WEEKLY, MONTHLY] }
+                until: { type: string, format: date, description: Ngày cuối có thể có buổi (yyyy-mm-dd). }
+    CreateSessionSeriesResult:
+      type: object
+      required: [seriesId, sessions]
+      properties:
+        seriesId: { type: string }
+        sessions:
+          type: array
+          items: { $ref: '#/components/schemas/SessionSummary' }
+    UpdateSessionRequest:
+      type: object
+      required: [title, description, startAt, endAt, location, capacity, registrationDeadline, version]
+      properties:
+        title: { type: string, minLength: 3, maxLength: 150 }
+        description: { type: string, maxLength: 3000 }
+        startAt: { type: string, format: date-time }
+        endAt: { type: string, format: date-time }
+        location: { type: string, minLength: 1, maxLength: 200 }
+        capacity: { type: [integer, 'null'], minimum: 1, maximum: 99999 }
+        registrationDeadline: { $ref: '#/components/schemas/NullableDateTime' }
+        version: { type: integer }
+    CancelSessionRequest:
+      type: object
+      required: [reason, version]
+      properties:
+        reason: { type: string, minLength: 5, maxLength: 500 }
+        version: { type: integer }
     AttendanceStatus:
       type: string
       description: Có mặt, Đi muộn, Vắng có phép, Vắng không phép.

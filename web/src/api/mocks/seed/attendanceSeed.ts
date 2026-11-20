@@ -20,6 +20,12 @@ export interface DbSession {
   registrationDeadline: string | null
   createdBy: string
   createdAt: string
+  /** Chuỗi lặp mà buổi thuộc về (FR-ATT-02); sửa một buổi không đổi các buổi khác cùng chuỗi. */
+  seriesId: string | null
+  /** Buổi bị hủy vẫn giữ lại để tra cứu (BR-DATA-01). */
+  cancelledAt: string | null
+  cancelledBy: string | null
+  cancelReason: string | null
   version: number
 }
 
@@ -66,14 +72,34 @@ const MINUTE_MS = 60 * 1000
 const minutesFromNow = (minutes: number) => toVnIso(Math.floor(Date.now() / MINUTE_MS) * MINUTE_MS + minutes * MINUTE_MS)
 
 export function createSessionSeed(): DbSession[] {
-  const session = (spec: Omit<DbSession, 'clubId' | 'description' | 'capacity' | 'registrationDeadline' | 'version'> & Partial<DbSession>): DbSession => ({
+  type Defaulted = 'clubId' | 'description' | 'capacity' | 'registrationDeadline' | 'seriesId' | 'cancelledAt' | 'cancelledBy' | 'cancelReason' | 'version'
+  const session = (spec: Omit<DbSession, Defaulted> & Partial<DbSession>): DbSession => ({
     clubId: 'c-guitar',
     description: '',
     capacity: null,
     registrationDeadline: null,
+    seriesId: null,
+    cancelledAt: null,
+    cancelledBy: null,
+    cancelReason: null,
     version: 1,
     ...spec,
   })
+  // Chuỗi hằng tuần của ban Chuyên môn (FR-ATT-02): buổi đầu đã qua và đã chốt điểm danh, ba buổi sắp tới.
+  const songSeries = [-6, 1, 8, 15].map((daysFromToday, index) =>
+    session({
+      id: `s-song-${index + 1}`,
+      departmentId: 'd-music',
+      title: 'Tập hát đệm',
+      description: 'Mỗi tuần một bài, luân phiên người hát chính và người đệm.',
+      startAt: vnDayAt(daysFromToday, 18, 30),
+      endAt: vnDayAt(daysFromToday, 20, 30),
+      location: 'Phòng B4.12',
+      createdBy: 'u-anh',
+      createdAt: vnDayAt(-1, 10),
+      seriesId: 'ser-guitar-song',
+    }),
+  )
   return [
     session({
       id: 's-weekly-now',
@@ -143,6 +169,7 @@ export function createSessionSeed(): DbSession[] {
       createdBy: 'u-tu',
       createdAt: vnDayAt(-3, 9),
     }),
+    ...songSeries,
   ]
 }
 
@@ -159,6 +186,7 @@ export function createAttendanceSeed(): DbAttendance[] {
   const now: [AttendanceActivityType, string, null] = ['SESSION', 's-weekly-now', null]
   const photo: [AttendanceActivityType, string, null] = ['SESSION', 's-media-photo', null]
   const fingerstyle: [AttendanceActivityType, string, null] = ['SESSION', 's-fingerstyle', null]
+  const song: [AttendanceActivityType, string, null] = ['SESSION', 's-song-1', null]
   const exchange: [AttendanceActivityType, string, string] = ['EVENT', 'e-exchange', vnDate(-10)]
   const livestream: [AttendanceActivityType, string, string] = ['EVENT', 'e-livestream', vnDate(0)]
   return [
@@ -172,6 +200,12 @@ export function createAttendanceSeed(): DbAttendance[] {
     record('a-photo-vy', photo, 'u-vy', 'ABSENT', 'u-linh', vnDayAt(-7, 20, 15)),
     record('a-finger-nam', fingerstyle, 'u-nam', 'PRESENT', 'u-anh', vnDayAt(-2, 18, 2)),
     record('a-finger-thao', fingerstyle, 'u-thao', 'LATE', 'u-anh', vnDayAt(-2, 18, 20)),
+    record('a-song-anh', song, 'u-anh', 'PRESENT', 'u-anh', vnDayAt(-6, 18, 25)),
+    record('a-song-bao', song, 'u-bao', 'PRESENT', 'u-bao', vnDayAt(-6, 18, 28), { method: 'QR' }),
+    record('a-song-nam', song, 'u-nam', 'PRESENT', 'u-nam', vnDayAt(-6, 18, 29), { method: 'QR' }),
+    record('a-song-huy', song, 'u-huy', 'LATE', 'u-huy', vnDayAt(-6, 18, 50), { method: 'QR' }),
+    record('a-song-kiet', song, 'u-kiet', 'EXCUSED', 'u-anh', vnDayAt(-6, 18, 30)),
+    record('a-song-thao', song, 'u-thao', 'ABSENT', 'u-anh', vnDayAt(-6, 20, 40)),
     record('a-exchange-anh', exchange, 'u-anh', 'PRESENT', 'u-huy', vnDayAt(-10, 17, 55)),
     record('a-exchange-bao', exchange, 'u-bao', 'PRESENT', 'u-huy', vnDayAt(-10, 17, 58)),
     record('a-live-ha', livestream, 'u-ha', 'PRESENT', 'u-ha', vnDayAt(0, 0, 10), { method: 'QR' }),
@@ -191,6 +225,7 @@ export function createAttendanceSheetSeed(): DbAttendanceSheet[] {
     sheet('SESSION', 's-weekly-now', null, 4),
     sheet('SESSION', 's-media-photo', null, 5, [vnDayAt(-7, 20, 15), 'u-linh']),
     sheet('SESSION', 's-fingerstyle', null, 2),
+    sheet('SESSION', 's-song-1', null, 7, [vnDayAt(-6, 20, 40), 'u-anh']),
     sheet('EVENT', 'e-exchange', vnDate(-10), 2),
     sheet('EVENT', 'e-livestream', vnDate(0), 1),
   ]

@@ -37,7 +37,12 @@ function resolveSession(params: Params, userId: string): Resolved {
   if (!canAccessClub(userId, clubId)) return { ok: false, response: problem(403, 'Bạn không phải thành viên của CLB này.', 'NOT_A_MEMBER') }
   const session = db.sessions.find((candidate) => candidate.id === params.sessionId && candidate.clubId === clubId)
   if (!session) return { ok: false, response: problem(404, 'Không tìm thấy buổi sinh hoạt.', 'SESSION_NOT_FOUND') }
-  return { ok: true, activity: sessionActivity(session) }
+  const activity = sessionActivity(session)
+  if (activity.cancelled) {
+    if (!activity.canView(userId)) return { ok: false, response: problem(403, activity.forbidden.view, 'FORBIDDEN') }
+    return { ok: false, response: problem(422, 'Buổi sinh hoạt đã hủy nên không có điểm danh.', 'SESSION_CANCELLED') }
+  }
+  return { ok: true, activity }
 }
 
 function resolveEvent(params: Params, userId: string): Resolved {
@@ -203,6 +208,7 @@ function checkInRoute(path: string, locate: (params: Params) => AttendanceActivi
     }
     const userId = user.value.id
     if (!canAccessClub(userId, activity.clubId)) return problem(403, 'Chỉ thành viên CLB tự điểm danh được bằng mã QR.', 'NOT_A_MEMBER')
+    if (activity.cancelled) return problem(422, 'Buổi sinh hoạt đã hủy nên không điểm danh được.', 'SESSION_CANCELLED')
     if (activity.readOnlyReason || sheetStateOf(activity, day).closedAt) return problem(422, 'Điểm danh đã chốt, không ghi nhận thêm.', 'ATTENDANCE_CLOSED')
     if (!isAttendanceOpen(activity, day)) return problem(422, `Điểm danh mở lúc ${formatDateTime(activity.opensAt(day))}.`, 'ATTENDANCE_NOT_OPEN')
     const result = (status: AttendanceStatus, recordedAt: string, alreadyRecorded: boolean): AttendanceCheckIn => ({
