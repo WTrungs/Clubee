@@ -3291,6 +3291,8 @@ paths:
         `allowedActions` có `VIEW_ATTENDANCE` khi người gọi là người phụ trách buổi: người tạo, ban chủ nhiệm, Trưởng ban,
         Phó ban của ban đó (còn Thử việc hoặc Chính thức); thêm `VIEW_REGISTRATIONS` khi buổi có số chỗ, `EDIT`, `CANCEL` khi buổi chưa bắt đầu.
         `REGISTER` khi người gọi thuộc đối tượng, buổi có số chỗ, còn hạn đăng ký và người gọi chưa có đăng ký còn hiệu lực.
+        Người phụ trách có thêm `VIEW_ABSENCE_REQUESTS`. `REQUEST_ABSENCE` khi người gọi thuộc đối tượng điểm danh, buổi chưa bắt đầu,
+        chưa chốt và người gọi chưa có đơn xin phép còn hiệu lực (FR-ATT-04).
         Buổi đã hủy không có thao tác nào.
         Lỗi: 403 `NOT_A_MEMBER`; 404 `SESSION_NOT_FOUND`.
       parameters:
@@ -3465,6 +3467,161 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+  /clubs/{clubId}/sessions/{sessionId}/absence-requests:
+    get:
+      tags: [ATT]
+      operationId: listAbsenceRequests
+      summary: Đơn xin phép vắng của buổi (FR-ATT-04)
+      description: |
+        Chỉ người phụ trách buổi. Mọi đơn, Chờ duyệt trước, rồi Đã duyệt, Bị từ chối, Đã rút; cùng trạng thái thì đơn gửi trước đứng trước.
+        `allowedActions` của dòng có `DECIDE` khi đơn Chờ duyệt, buổi chưa hủy và chưa chốt điểm danh.
+        Lỗi: 403 `FORBIDDEN`, `NOT_A_MEMBER`; 404 `SESSION_NOT_FOUND`.
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - $ref: '#/components/parameters/SessionId'
+      responses:
+        '200':
+          description: Các đơn.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/AbsenceRequestRow' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [ATT]
+      operationId: requestAbsence
+      summary: Xin phép vắng một buổi (FR-ATT-04, BR-ATT-03)
+      description: |
+        Người gửi thuộc đối tượng điểm danh của buổi (buổi có số chỗ: người đang giữ chỗ). Gửi trước giờ bắt đầu; mỗi buổi tối đa
+        một đơn còn hiệu lực (Chờ duyệt hoặc Đã duyệt). Báo người tạo buổi, hoặc mọi người phụ trách buổi nếu người tạo không còn phụ trách.
+        Khi chốt điểm danh, người có đơn đã duyệt mà chưa có bản ghi được ghi Vắng có phép.
+
+        Lỗi (theo thứ tự):
+        - 403 `NOT_A_MEMBER`, `CSRF`.
+        - 404 `SESSION_NOT_FOUND`.
+        - 403 `FORBIDDEN` (không thuộc đối tượng).
+        - 409 `ALREADY_REQUESTED`.
+        - 422 `SESSION_CANCELLED`, `SESSION_STARTED` (đã tới giờ bắt đầu hoặc đã chốt).
+        - 400 `VALIDATION` (lý do 5–500 ký tự).
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - $ref: '#/components/parameters/SessionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: { type: string, minLength: 5, maxLength: 500 }
+      responses:
+        '201':
+          description: Buổi sau khi gửi đơn, có `myAbsenceRequest`.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SessionDetail' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+  /clubs/{clubId}/sessions/{sessionId}/absence-requests/{requestId}/withdrawal:
+    post:
+      tags: [ATT]
+      operationId: withdrawAbsenceRequest
+      summary: Rút đơn xin phép (FR-ATT-04)
+      description: |
+        Chỉ người gửi, khi đơn Chờ duyệt hoặc Đã duyệt và buổi chưa bắt đầu, chưa hủy.
+        Lỗi: 403 `CSRF`; 404 `ABSENCE_REQUEST_NOT_FOUND`; 409 `VERSION_CONFLICT`; 422 `ABSENCE_NOT_WITHDRAWABLE`.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - $ref: '#/components/parameters/SessionId'
+        - name: requestId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [version]
+              properties:
+                version: { type: integer }
+      responses:
+        '200':
+          description: Buổi sau khi rút đơn.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SessionDetail' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+  /clubs/{clubId}/sessions/{sessionId}/absence-requests/{requestId}/decision:
+    post:
+      tags: [ATT]
+      operationId: decideAbsenceRequest
+      summary: Duyệt hoặc từ chối đơn xin phép (FR-ATT-04)
+      description: |
+        Chỉ người phụ trách buổi, trước khi chốt điểm danh (sau khi chốt thì sửa ở bảng điểm danh, FR-ATT-08). Từ chối bắt buộc lý do.
+        Báo người gửi kết quả.
+
+        Lỗi (theo thứ tự):
+        - 403 `NOT_A_MEMBER`, `CSRF`.
+        - 404 `ABSENCE_REQUEST_NOT_FOUND`.
+        - 403 `FORBIDDEN` (không phụ trách buổi).
+        - 409 `VERSION_CONFLICT`.
+        - 422 `SESSION_CANCELLED`, `ATTENDANCE_CLOSED`, `ABSENCE_ALREADY_DECIDED`.
+        - 400 `VALIDATION` (`decision`, `note`).
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - $ref: '#/components/parameters/SessionId'
+        - name: requestId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [decision, note, version]
+              properties:
+                decision: { type: string, enum: [APPROVE, REJECT] }
+                note:
+                  $ref: '#/components/schemas/NullableString'
+                  description: Bắt buộc 5–500 ký tự khi từ chối.
+                version: { type: integer }
+      responses:
+        '200':
+          description: Đơn sau khi xử lý.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AbsenceRequestRow' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
         '422': { $ref: '#/components/responses/UnprocessableEntity' }
   /clubs/{clubId}/sessions/{sessionId}/attendance:
     get:
@@ -3643,7 +3800,7 @@ paths:
       operationId: closeSessionAttendance
       summary: Chốt điểm danh (FR-ATT-08, phần chốt)
       description: |
-        Chỉ người phụ trách buổi. Người thuộc đối tượng mà chưa có bản ghi được ghi Vắng không phép; sau khi chốt danh sách chỉ xem được
+        Chỉ người phụ trách buổi. Người thuộc đối tượng mà chưa có bản ghi được ghi Vắng không phép (có đơn xin phép đã duyệt thì Vắng có phép, FR-ATT-04); sau khi chốt danh sách chỉ xem được
         và mã QR hết hiệu lực (BR-ATT-02). Gửi `version` của danh sách đang thấy; lệch thì 409 để số người bị ghi Vắng luôn đúng.
         Sửa sau chốt (phần còn lại của FR-ATT-08) chưa có.
 
@@ -7532,7 +7689,7 @@ components:
       allOf:
         - $ref: '#/components/schemas/SessionSummary'
         - type: object
-          required: [description, creator, createdAt, allowedActions, cancellation, seats, myRegistration, version]
+          required: [description, creator, createdAt, allowedActions, cancellation, seats, myRegistration, myAbsenceRequest, pendingAbsenceCount, version]
           properties:
             description: { type: string }
             creator: { $ref: '#/components/schemas/PersonRef' }
@@ -7541,7 +7698,7 @@ components:
               type: array
               items:
                 type: string
-                enum: [VIEW_ATTENDANCE, VIEW_REGISTRATIONS, EDIT, CANCEL, REGISTER]
+                enum: [VIEW_ATTENDANCE, VIEW_REGISTRATIONS, VIEW_ABSENCE_REQUESTS, EDIT, CANCEL, REGISTER, REQUEST_ABSENCE]
             cancellation:
               description: Có khi buổi đã hủy.
               oneOf:
@@ -7567,6 +7724,14 @@ components:
               oneOf:
                 - type: 'null'
                 - $ref: '#/components/schemas/MySessionRegistration'
+            myAbsenceRequest:
+              description: Đơn xin phép gần nhất của người gọi, trừ đơn đã rút.
+              oneOf:
+                - type: 'null'
+                - $ref: '#/components/schemas/MyAbsenceRequest'
+            pendingAbsenceCount:
+              type: [integer, 'null']
+              description: Số đơn chờ duyệt; `null` với người không phụ trách buổi.
             version: { type: integer }
     SessionPage:
       allOf:
@@ -7660,6 +7825,46 @@ components:
             content:
               type: array
               items: { $ref: '#/components/schemas/SessionRegistrationRow' }
+    AbsenceRequestStatus:
+      type: string
+      description: Chờ duyệt, Đã duyệt, Bị từ chối, Đã rút.
+      enum: [PENDING, APPROVED, REJECTED, WITHDRAWN]
+    AbsenceDecision:
+      oneOf:
+        - type: 'null'
+        - type: object
+          required: [by, at, note]
+          properties:
+            by: { $ref: '#/components/schemas/PersonRef' }
+            at: { type: string, format: date-time }
+            note: { $ref: '#/components/schemas/NullableString' }
+    MyAbsenceRequest:
+      type: object
+      required: [id, status, reason, createdAt, decision, allowedActions, version]
+      properties:
+        id: { type: string }
+        status: { $ref: '#/components/schemas/AbsenceRequestStatus' }
+        reason: { type: string }
+        createdAt: { type: string, format: date-time }
+        decision: { $ref: '#/components/schemas/AbsenceDecision' }
+        allowedActions:
+          type: array
+          items: { type: string, enum: [WITHDRAW] }
+        version: { type: integer }
+    AbsenceRequestRow:
+      type: object
+      required: [id, requester, status, reason, createdAt, decision, allowedActions, version]
+      properties:
+        id: { type: string }
+        requester: { $ref: '#/components/schemas/PersonRef' }
+        status: { $ref: '#/components/schemas/AbsenceRequestStatus' }
+        reason: { type: string }
+        createdAt: { type: string, format: date-time }
+        decision: { $ref: '#/components/schemas/AbsenceDecision' }
+        allowedActions:
+          type: array
+          items: { type: string, enum: [DECIDE] }
+        version: { type: integer }
     CancelSessionRequest:
       type: object
       required: [reason, version]
@@ -7687,7 +7892,7 @@ components:
         version: { type: integer }
     AttendanceRow:
       type: object
-      required: [person, departmentName, extra, record]
+      required: [person, departmentName, extra, record, absenceRequest]
       properties:
         person: { $ref: '#/components/schemas/PersonRef' }
         departmentName: { $ref: '#/components/schemas/NullableString' }
@@ -7698,9 +7903,18 @@ components:
           oneOf:
             - $ref: '#/components/schemas/AttendanceRecord'
             - type: 'null'
+        absenceRequest:
+          description: Đơn xin phép đang chờ hoặc đã duyệt (FR-ATT-04); sự kiện luôn `null`.
+          oneOf:
+            - type: 'null'
+            - type: object
+              required: [status, reason]
+              properties:
+                status: { type: string, enum: [PENDING, APPROVED] }
+                reason: { type: string }
     AttendanceCounts:
       type: object
-      required: [expected, present, late, excused, absent, unmarked, extra]
+      required: [expected, present, late, excused, absent, unmarked, unmarkedExcused, extra]
       properties:
         expected:
           type: integer
@@ -7710,6 +7924,9 @@ components:
         excused: { type: integer }
         absent: { type: integer }
         unmarked: { type: integer }
+        unmarkedExcused:
+          type: integer
+          description: Trong số chưa có bản ghi, người có đơn xin phép đã duyệt; lúc chốt được ghi Vắng có phép.
         extra: { type: integer }
     AttendanceSheet:
       type: object

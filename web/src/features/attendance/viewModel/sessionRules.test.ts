@@ -40,7 +40,7 @@ describe('creating a session (FR-ATT-01)', () => {
   it('lets a department head create a session for their department and tells its working members only', async () => {
     signInAs('u-linh')
     const created = await sessionRepository.create('c-guitar', request())
-    expect(created).toMatchObject({ scope: { type: 'DEPARTMENT', departmentId: 'd-media', departmentName: 'Truyền thông' }, allowedActions: ['VIEW_ATTENDANCE', 'EDIT', 'CANCEL'] })
+    expect(created).toMatchObject({ scope: { type: 'DEPARTMENT', departmentId: 'd-media', departmentName: 'Truyền thông' }, allowedActions: ['VIEW_ATTENDANCE', 'VIEW_ABSENCE_REQUESTS', 'EDIT', 'CANCEL', 'REQUEST_ABSENCE'] })
     for (const userId of ['u-ha', 'u-vy']) expect(await sessionTitlesOf(userId)).toContain('Buổi sinh hoạt mới: Họp ban Truyền thông tuần này')
     // Tạm nghỉ (BR-MEM-05), người tạo và người ban khác không nhận.
     for (const userId of ['u-yen', 'u-linh', 'u-long']) expect(await sessionTitlesOf(userId)).toEqual([])
@@ -95,10 +95,17 @@ describe('reading sessions', () => {
     signInAs('u-ha')
     expect((await sessionRepository.get('c-guitar', 's-media-plan')).allowedActions).toEqual(['REGISTER'])
     signInAs('u-linh')
-    expect((await sessionRepository.get('c-guitar', 's-media-plan')).allowedActions).toEqual(['VIEW_ATTENDANCE', 'VIEW_REGISTRATIONS', 'EDIT', 'CANCEL'])
-    expect((await sessionRepository.get('c-guitar', 's-media-photo')).allowedActions).toEqual(['VIEW_ATTENDANCE'])
+    expect((await sessionRepository.get('c-guitar', 's-media-plan')).allowedActions).toEqual([
+      'VIEW_ATTENDANCE',
+      'VIEW_REGISTRATIONS',
+      'VIEW_ABSENCE_REQUESTS',
+      'EDIT',
+      'CANCEL',
+      'REQUEST_ABSENCE',
+    ])
+    expect((await sessionRepository.get('c-guitar', 's-media-photo')).allowedActions).toEqual(['VIEW_ATTENDANCE', 'VIEW_ABSENCE_REQUESTS'])
     signInAs('u-mai')
-    expect((await sessionRepository.get('c-guitar', 's-media-plan')).allowedActions).toEqual(['VIEW_ATTENDANCE', 'VIEW_REGISTRATIONS', 'EDIT', 'CANCEL'])
+    expect((await sessionRepository.get('c-guitar', 's-media-plan')).allowedActions).toEqual(['VIEW_ATTENDANCE', 'VIEW_REGISTRATIONS', 'VIEW_ABSENCE_REQUESTS', 'EDIT', 'CANCEL'])
   })
 
   it('keeps sessions inside their club (NFR-SEC-02)', async () => {

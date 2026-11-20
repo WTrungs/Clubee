@@ -6,10 +6,12 @@ import { createDuesSeed, type DbDuesCampaign, type DbDuesItem } from './seed/due
 import type { DbPermissionMatrixMeta } from './mockPermissionMatrix'
 import type { DbTransferRequest } from './mockTransfers'
 import {
+  createAbsenceRequestSeed,
   createAttendanceSeed,
   createAttendanceSheetSeed,
   createSessionRegistrationSeed,
   createSessionSeed,
+  type DbAbsenceRequest,
   type DbAttendance,
   type DbAttendanceCode,
   type DbAttendanceSheet,
@@ -38,7 +40,7 @@ import { createAttachmentSeed, createTaskSeed, type DbAttachment, type DbTask } 
 import type { DbHandover, DbHandoverItem } from './seed/termSeed'
 
 /** Dữ liệu tổng hợp, không phải người thật (security.md); bản ghi ở dạng phía máy chủ, handler map sang DTO. */
-export type { DbAttendance, DbAttendanceCode, DbAttendanceSheet, DbSession, DbSessionRegistration } from './seed/attendanceSeed'
+export type { DbAbsenceRequest, DbAttendance, DbAttendanceCode, DbAttendanceSheet, DbSession, DbSessionRegistration } from './seed/attendanceSeed'
 export type { DbClub } from './seed/clubSeed'
 export type { DbAdvance } from './seed/advanceSeed'
 export type { DbDuesCampaign, DbDuesItem } from './seed/duesSeed'
@@ -105,6 +107,7 @@ export interface MockDb {
   duesItems: DbDuesItem[]
   sessions: DbSession[]
   sessionRegistrations: DbSessionRegistration[]
+  absenceRequests: DbAbsenceRequest[]
   attendance: DbAttendance[]
   attendanceSheets: DbAttendanceSheet[]
   attendanceCodes: DbAttendanceCode[]
@@ -147,6 +150,7 @@ export function createSeed(): MockDb {
     ...createDuesSeed({ memberships, users, departments }),
     sessions: createSessionSeed(),
     sessionRegistrations: [],
+    absenceRequests: createAbsenceRequestSeed(),
     attendance: createAttendanceSeed(),
     attendanceSheets: createAttendanceSheetSeed(),
     attendanceCodes: [],

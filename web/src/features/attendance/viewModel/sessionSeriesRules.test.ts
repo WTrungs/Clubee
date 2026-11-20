@@ -68,7 +68,7 @@ describe('editing one session of a series (FR-ATT-02)', () => {
   it('changes only that session and tells its audience when the time or place moves', async () => {
     signInAs('u-anh')
     const second = await sessionRepository.get('c-guitar', 's-song-2')
-    expect(second).toMatchObject({ series: { id: 'ser-guitar-song', index: 2, count: 4 }, allowedActions: ['VIEW_ATTENDANCE', 'EDIT', 'CANCEL'] })
+    expect(second).toMatchObject({ series: { id: 'ser-guitar-song', index: 2, count: 4 }, allowedActions: ['VIEW_ATTENDANCE', 'VIEW_ABSENCE_REQUESTS', 'EDIT', 'CANCEL', 'REQUEST_ABSENCE'] })
     const third = await sessionRepository.get('c-guitar', 's-song-3')
 
     const renamed = await sessionRepository.update('c-guitar', 's-song-2', updateOf(second, { title: 'Tập hát đệm: bài mới' }))
@@ -94,7 +94,7 @@ describe('editing one session of a series (FR-ATT-02)', () => {
     expect(await fail(sessionRepository.update('c-guitar', 's-song-3', updateOf(session, { version: 99, title: '' })))).toMatchObject({ status: 409 })
     expect(await fail(sessionRepository.update('c-guitar', 's-song-3', updateOf(session, { title: '' })))).toMatchObject({ status: 400 })
     const past = await sessionRepository.get('c-guitar', 's-song-1')
-    expect(past.allowedActions).toEqual(['VIEW_ATTENDANCE'])
+    expect(past.allowedActions).toEqual(['VIEW_ATTENDANCE', 'VIEW_ABSENCE_REQUESTS'])
     expect(await fail(sessionRepository.update('c-guitar', 's-song-1', updateOf(past, { title: '' })))).toMatchObject({ status: 422, code: 'SESSION_STARTED' })
     expect(await fail(sessionRepository.cancel('c-guitar', 's-song-1', { reason: 'Muốn hủy buổi đã qua.', version: past.version }))).toMatchObject({ status: 422, code: 'SESSION_STARTED' })
   })

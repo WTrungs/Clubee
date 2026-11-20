@@ -1,6 +1,6 @@
 import type { Tone } from '@/shared/ui/tone'
 import { formatDateTime } from '@/shared/format/formatDate'
-import type { MySessionRegistration, SessionScope, SessionSeats, SessionSummary } from '../model/sessionTypes'
+import type { AbsenceRequestStatus, MySessionRegistration, SessionScope, SessionSeats, SessionSummary } from '../model/sessionTypes'
 
 export type SessionTiming = 'CANCELLED' | 'UPCOMING' | 'ONGOING' | 'ENDED' | 'CLOSED'
 
@@ -64,3 +64,13 @@ export function sessionCancelRegistrationText(mine: Pick<MySessionRegistration, 
   if (mine.status === 'WAITLISTED') return `Bạn sẽ rời danh sách chờ. Bạn vẫn đăng ký lại được khi buổi còn nhận đăng ký. ${deadline}`
   return `Bạn sẽ mất chỗ và người đầu danh sách chờ được nhận chỗ thay. Bạn vẫn đăng ký lại được khi buổi còn nhận đăng ký. ${deadline}`
 }
+
+export const absenceStatusDisplay: Record<AbsenceRequestStatus, { label: string; tone: Tone }> = {
+  PENDING: { label: 'Chờ duyệt', tone: 'warning' },
+  APPROVED: { label: 'Đã duyệt', tone: 'success' },
+  REJECTED: { label: 'Bị từ chối', tone: 'danger' },
+  WITHDRAWN: { label: 'Đã rút', tone: 'neutral' },
+}
+
+/** Nhãn tab Xin phép kèm số đơn chờ duyệt (FR-ATT-04). */
+export const absenceTabLabel = (pending: number | null) => (pending ? `Xin phép (${pending})` : 'Xin phép')

@@ -1,5 +1,5 @@
 import type { AttendanceActivityType, AttendanceMethod, AttendanceStatus } from '@/features/attendance/model/attendanceTypes'
-import type { SessionRegistrationStatus } from '@/features/attendance/model/sessionTypes'
+import type { AbsenceRequestStatus, SessionRegistrationStatus } from '@/features/attendance/model/sessionTypes'
 import type { DbMembership } from './memberSeed'
 import { toVnIso, vnDate, vnDayAt } from '../mockTime'
 
@@ -41,6 +41,20 @@ export interface DbSessionRegistration {
   cancelledAt: string | null
   /** Lúc được đôn từ danh sách chờ (BR-EVT-03). */
   promotedAt: string | null
+}
+
+/** Đơn xin phép vắng một buổi sinh hoạt (FR-ATT-04); đơn đã rút, bị từ chối vẫn giữ để tra cứu. */
+export interface DbAbsenceRequest {
+  id: string
+  sessionId: string
+  userId: string
+  reason: string
+  status: AbsenceRequestStatus
+  createdAt: string
+  decidedBy: string | null
+  decidedAt: string | null
+  decisionNote: string | null
+  version: number
 }
 
 /** Mỗi người tối đa một bản ghi cho mỗi buổi, hoặc mỗi ngày của sự kiện (BR-ATT-01). */
@@ -266,4 +280,13 @@ export function createSessionRegistrationSeed(source: { memberships: readonly Db
     .filter((membership) => membership.joinedOn === null || membership.joinedOn <= fingerstyleDay)
     .map((membership, index) => registration(`sr-finger-${index + 1}`, 's-fingerstyle', membership.userId, vnDayAt(-5, 9, index)))
   return [...fingerstyleSeats, registration('sr-plan-vy', 's-media-plan', 'u-vy', vnDayAt(-1, 21, 30)), registration('sr-plan-linh', 's-media-plan', 'u-linh', vnDayAt(-1, 21, 40))]
+}
+
+/** Đơn xin phép mẫu: một đơn đã duyệt ở buổi đã chốt (khớp bản ghi Vắng có phép), một đơn chờ duyệt ở buổi tập sắp tới. */
+export function createAbsenceRequestSeed(): DbAbsenceRequest[] {
+  const base = { decidedBy: null, decidedAt: null, decisionNote: null, version: 1 }
+  return [
+    { ...base, id: 'ab-song-kiet', sessionId: 's-song-1', userId: 'u-kiet', reason: 'Trùng lịch thi giữa kỳ môn Giải tích.', status: 'APPROVED', createdAt: vnDayAt(-8, 20), decidedBy: 'u-anh', decidedAt: vnDayAt(-7, 9), version: 2 },
+    { ...base, id: 'ab-rehearsal-nam', sessionId: 's-music-rehearsal', userId: 'u-nam', reason: 'Về quê dự đám cưới anh trai.', status: 'PENDING', createdAt: vnDayAt(-1, 19) },
+  ]
 }

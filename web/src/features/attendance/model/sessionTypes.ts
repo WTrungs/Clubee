@@ -24,7 +24,50 @@ export type SessionWhen = 'UPCOMING' | 'PAST'
  * Trưởng ban, Phó ban của ban đó; sửa, hủy chỉ trước giờ bắt đầu. `REGISTER` có khi người gọi thuộc đối tượng, buổi có số chỗ,
  * còn hạn đăng ký và người gọi chưa có đăng ký còn hiệu lực (FR-ATT-03).
  */
-export type SessionAction = 'VIEW_ATTENDANCE' | 'VIEW_REGISTRATIONS' | 'EDIT' | 'CANCEL' | 'REGISTER'
+export type SessionAction = 'VIEW_ATTENDANCE' | 'VIEW_REGISTRATIONS' | 'VIEW_ABSENCE_REQUESTS' | 'EDIT' | 'CANCEL' | 'REGISTER' | 'REQUEST_ABSENCE'
+
+/** Chờ duyệt, Đã duyệt, Bị từ chối, Đã rút (FR-ATT-04). */
+export type AbsenceRequestStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'WITHDRAWN'
+
+export interface AbsenceDecision {
+  by: PersonRef
+  at: string
+  /** Bắt buộc khi từ chối. */
+  note: string | null
+}
+
+export interface MyAbsenceRequest {
+  id: string
+  status: AbsenceRequestStatus
+  reason: string
+  createdAt: string
+  decision: AbsenceDecision | null
+  /** Rút được khi đơn còn Chờ duyệt hoặc Đã duyệt và buổi chưa bắt đầu. */
+  allowedActions: Array<'WITHDRAW'>
+  version: number
+}
+
+export interface AbsenceRequestRow {
+  id: string
+  requester: PersonRef
+  status: AbsenceRequestStatus
+  reason: string
+  createdAt: string
+  decision: AbsenceDecision | null
+  /** Duyệt, từ chối khi đơn Chờ duyệt và chưa chốt điểm danh. */
+  allowedActions: Array<'DECIDE'>
+  version: number
+}
+
+export interface CreateAbsenceRequest {
+  reason: string
+}
+
+export interface AbsenceDecisionRequest {
+  decision: 'APPROVE' | 'REJECT'
+  note: string | null
+  version: number
+}
 
 /** Nhận chỗ, Danh sách chờ, Đã hủy (FR-ATT-03). */
 export type SessionRegistrationStatus = 'CONFIRMED' | 'WAITLISTED' | 'CANCELLED'
@@ -96,6 +139,10 @@ export interface SessionDetail extends SessionSummary {
   seats: SessionSeats | null
   /** Đăng ký còn hiệu lực của người gọi. */
   myRegistration: MySessionRegistration | null
+  /** Đơn xin phép vắng gần nhất của người gọi, trừ đơn đã rút (FR-ATT-04). */
+  myAbsenceRequest: MyAbsenceRequest | null
+  /** Số đơn chờ duyệt; chỉ người phụ trách buổi thấy, người khác nhận `null`. */
+  pendingAbsenceCount: number | null
   version: number
 }
 

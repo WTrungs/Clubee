@@ -14,6 +14,8 @@ import { Tabs, TabsBar, TabsContent } from '@/shared/ui/Tabs'
 import { capacityLabel, sessionScopeLabel, seriesLabel } from '../viewModel/sessionDisplay'
 import { useSessionDetailViewModel } from '../viewModel/useSessionDetailViewModel'
 import { AttendancePanel } from './AttendancePanel'
+import { AbsenceRequestList } from './AbsenceRequestList'
+import { MyAbsenceCard } from './MyAbsenceCard'
 import { SessionEditSheet } from './SessionEditSheet'
 import { SessionRegistrationList } from './SessionRegistrationList'
 import { SessionSeatPanel } from './SessionSeatPanel'
@@ -118,6 +120,7 @@ export function SessionDetailPage() {
         <TabsBar items={vm.tabs} active={vm.tab} aria-label="Nội dung buổi sinh hoạt" />
         <TabsContent value="info" className="space-y-5 pt-5">
           {session.seats && <SessionSeatPanel clubId={vm.clubId} session={session} seats={session.seats} />}
+          <MyAbsenceCard clubId={vm.clubId} session={session} />
           <section aria-labelledby="session-info" className="space-y-5 rounded-2xl border bg-card p-5 shadow-sm">
             <h2 id="session-info" className="text-base font-bold">
               Thông tin buổi
@@ -150,6 +153,11 @@ export function SessionDetailPage() {
         {vm.canViewRegistrations && (
           <TabsContent value="registrations" className="pt-5">
             <SessionRegistrationList clubId={vm.clubId} sessionId={vm.sessionId} />
+          </TabsContent>
+        )}
+        {vm.canViewAbsences && (
+          <TabsContent value="absences" className="pt-5">
+            <AbsenceRequestList clubId={vm.clubId} sessionId={vm.sessionId} />
           </TabsContent>
         )}
         {vm.canViewAttendance && (

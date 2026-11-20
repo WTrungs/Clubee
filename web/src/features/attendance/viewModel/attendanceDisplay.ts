@@ -47,10 +47,15 @@ export function attendanceNotice(sheet: Pick<AttendanceSheet, 'opensAt' | 'close
 }
 
 /** Nội dung hộp xác nhận chốt, nêu số người sắp bị ghi Vắng không phép. */
-export function closeConfirmText(counts: Pick<AttendanceCounts, 'unmarked'>): string {
+export function closeConfirmText(counts: Pick<AttendanceCounts, 'unmarked' | 'unmarkedExcused'>): string {
   const after = 'Sau khi chốt, danh sách chỉ xem được.'
   if (counts.unmarked === 0) return `Mọi người trong danh sách đã có trạng thái. ${after}`
-  return `${counts.unmarked} người chưa điểm danh sẽ được ghi Vắng không phép. ${after}`
+  const absent = counts.unmarked - counts.unmarkedExcused
+  const parts = [
+    ...(absent > 0 ? [`${absent} người chưa điểm danh sẽ được ghi Vắng không phép`] : []),
+    ...(counts.unmarkedExcused > 0 ? [`${counts.unmarkedExcused} người có đơn xin phép đã duyệt sẽ được ghi Vắng có phép`] : []),
+  ]
+  return `${parts.join('; ')}. ${after}`
 }
 
 /** Số giây còn lại tới mốc `expiresAt` (mili giây), làm tròn lên và không âm. */

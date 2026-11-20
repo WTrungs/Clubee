@@ -25,7 +25,7 @@ describe('attendanceDisplay', () => {
   })
 
   it('counts every filter and states how many people closing marks absent', () => {
-    const counts = { expected: 10, present: 4, late: 1, excused: 1, absent: 0, unmarked: 4, extra: 2 }
+    const counts = { expected: 10, present: 4, late: 1, excused: 1, absent: 0, unmarked: 4, unmarkedExcused: 0, extra: 2 }
     expect(attendanceFilters(counts).map((item) => [item.value, item.count])).toEqual([
       ['', 12],
       ['UNMARKED', 4],
@@ -35,8 +35,13 @@ describe('attendanceDisplay', () => {
       ['ABSENT', 0],
       ['EXTRA', 2],
     ])
-    expect(closeConfirmText({ unmarked: 4 })).toBe('4 người chưa điểm danh sẽ được ghi Vắng không phép. Sau khi chốt, danh sách chỉ xem được.')
-    expect(closeConfirmText({ unmarked: 0 })).toBe('Mọi người trong danh sách đã có trạng thái. Sau khi chốt, danh sách chỉ xem được.')
+    expect(closeConfirmText({ unmarked: 4, unmarkedExcused: 0 })).toBe('4 người chưa điểm danh sẽ được ghi Vắng không phép. Sau khi chốt, danh sách chỉ xem được.')
+    expect(closeConfirmText({ unmarked: 0, unmarkedExcused: 0 })).toBe('Mọi người trong danh sách đã có trạng thái. Sau khi chốt, danh sách chỉ xem được.')
+    // FR-ATT-04: người có đơn đã duyệt được ghi Vắng có phép.
+    expect(closeConfirmText({ unmarked: 4, unmarkedExcused: 1 })).toBe(
+      '3 người chưa điểm danh sẽ được ghi Vắng không phép; 1 người có đơn xin phép đã duyệt sẽ được ghi Vắng có phép. Sau khi chốt, danh sách chỉ xem được.',
+    )
+    expect(closeConfirmText({ unmarked: 2, unmarkedExcused: 2 })).toBe('2 người có đơn xin phép đã duyệt sẽ được ghi Vắng có phép. Sau khi chốt, danh sách chỉ xem được.')
   })
 
   it('labels the days of a multi-day event', () => {

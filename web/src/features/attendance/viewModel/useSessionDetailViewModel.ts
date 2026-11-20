@@ -6,8 +6,9 @@ import { getErrorMessage, isConflict } from '@/api/apiError'
 import { useCurrentClub } from '@/features/club/viewModel/clubContext'
 import { sessionRepository } from '../model/sessionRepository'
 import { attendanceQueryKeys } from './attendanceQueryKeys'
+import { absenceTabLabel } from './sessionDisplay'
 
-export type SessionTab = 'info' | 'registrations' | 'attendance'
+export type SessionTab = 'info' | 'registrations' | 'absences' | 'attendance'
 
 export function useSessionDetailViewModel() {
   const { clubId } = useCurrentClub()
@@ -41,9 +42,11 @@ export function useSessionDetailViewModel() {
     },
   })
   const canViewRegistrations = actions.includes('VIEW_REGISTRATIONS')
+  const canViewAbsences = actions.includes('VIEW_ABSENCE_REQUESTS')
   const tabs: Array<{ value: SessionTab; label: string }> = [
     { value: 'info', label: 'Thông tin' },
     ...(canViewRegistrations ? [{ value: 'registrations' as const, label: 'Đăng ký' }] : []),
+    ...(canViewAbsences ? [{ value: 'absences' as const, label: absenceTabLabel(session.data?.pendingAbsenceCount ?? null) }] : []),
     ...(canViewAttendance ? [{ value: 'attendance' as const, label: 'Điểm danh' }] : []),
   ]
   const requested = searchParams.get('tab')
@@ -58,6 +61,7 @@ export function useSessionDetailViewModel() {
     refetch: () => void session.refetch(),
     canViewAttendance,
     canViewRegistrations,
+    canViewAbsences,
     canEdit: actions.includes('EDIT'),
     canCancel: actions.includes('CANCEL'),
     editOpen,

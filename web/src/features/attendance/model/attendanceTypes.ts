@@ -31,6 +31,13 @@ export interface AttendanceRow {
   /** Người phát sinh: không thuộc đối tượng của buổi mà vẫn đến (FR-ATT-07). */
   extra: boolean
   record: AttendanceRecord | null
+  /** Đơn xin phép vắng đang chờ hoặc đã duyệt của người này (FR-ATT-04); sự kiện luôn `null`. */
+  absenceRequest: AttendanceAbsenceNote | null
+}
+
+export interface AttendanceAbsenceNote {
+  status: 'PENDING' | 'APPROVED'
+  reason: string
 }
 
 export interface AttendanceCounts {
@@ -42,6 +49,8 @@ export interface AttendanceCounts {
   absent: number
   /** Người thuộc đối tượng mà chưa có bản ghi. */
   unmarked: number
+  /** Trong số chưa có bản ghi, người có đơn xin phép đã duyệt: lúc chốt được ghi Vắng có phép (FR-ATT-04). */
+  unmarkedExcused: number
   extra: number
 }
 

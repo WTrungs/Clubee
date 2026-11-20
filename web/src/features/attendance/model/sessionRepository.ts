@@ -1,7 +1,10 @@
 import { httpClient } from '@/api/httpClient'
 import type { Page } from '@/api/pagination'
 import type {
+  AbsenceDecisionRequest,
+  AbsenceRequestRow,
   CancelSessionRequest,
+  CreateAbsenceRequest,
   CreateSessionRequest,
   CreateSessionSeriesRequest,
   CreateSessionSeriesResult,
@@ -34,5 +37,13 @@ export const sessionRepository = {
     httpClient.post<SessionDetail>(`${sessions(clubId)}/${encodeURIComponent(sessionId)}/registrations/${encodeURIComponent(registrationId)}/cancellation`, {}),
   registrations: (clubId: string, sessionId: string, query: { q?: string; page?: number; size?: number }) =>
     httpClient.get<Page<SessionRegistrationRow>>(`${sessions(clubId)}/${encodeURIComponent(sessionId)}/registrations`, { query }),
+  /** FR-ATT-04: xin phép vắng, rút đơn; người phụ trách xem và duyệt. */
+  requestAbsence: (clubId: string, sessionId: string, request: CreateAbsenceRequest) =>
+    httpClient.post<SessionDetail>(`${sessions(clubId)}/${encodeURIComponent(sessionId)}/absence-requests`, request),
+  withdrawAbsence: (clubId: string, sessionId: string, requestId: string, version: number) =>
+    httpClient.post<SessionDetail>(`${sessions(clubId)}/${encodeURIComponent(sessionId)}/absence-requests/${encodeURIComponent(requestId)}/withdrawal`, { version }),
+  absenceRequests: (clubId: string, sessionId: string) => httpClient.get<AbsenceRequestRow[]>(`${sessions(clubId)}/${encodeURIComponent(sessionId)}/absence-requests`),
+  decideAbsence: (clubId: string, sessionId: string, requestId: string, request: AbsenceDecisionRequest) =>
+    httpClient.post<AbsenceRequestRow>(`${sessions(clubId)}/${encodeURIComponent(sessionId)}/absence-requests/${encodeURIComponent(requestId)}/decision`, request),
   scopes: (clubId: string) => httpClient.get<SessionScopeOption[]>(`/clubs/${encodeURIComponent(clubId)}/session-scopes`),
 }

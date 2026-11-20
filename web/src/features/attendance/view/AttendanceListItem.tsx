@@ -33,6 +33,11 @@ export function AttendanceListItem({ row, canMark, pending, now, onMark }: Atten
           <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <span className="truncate font-semibold">{name}</span>
             {row.extra && <Badge tone="progress">Phát sinh</Badge>}
+            {row.absenceRequest && (
+              <Badge tone={row.absenceRequest.status === 'APPROVED' ? 'info' : 'warning'}>
+                {row.absenceRequest.status === 'APPROVED' ? 'Có đơn đã duyệt' : 'Có đơn chờ duyệt'}
+              </Badge>
+            )}
             {pending && <Spinner label={`Đang lưu trạng thái của ${name}`} className="text-primary" />}
           </p>
           <p className="flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">

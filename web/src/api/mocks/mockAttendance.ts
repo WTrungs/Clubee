@@ -1,4 +1,5 @@
 import type {
+  AttendanceAbsenceNote,
   AttendanceAction,
   AttendanceActivityType,
   AttendanceCode,
@@ -18,6 +19,7 @@ import { departmentNameOf, eligibleMembers, isActiveMember, personRef, WORKING_S
 import { can } from './mockAccess'
 import { EVENT_STAFF_ACTIVE, isBoardMember } from './mockPermissions'
 import { isEventLead, isEventStaff } from './mockStaffEvents'
+import { absenceNoteOf, approvedAbsentees } from './mockAbsence'
 import { holdsSeat } from './mockRegistrations'
 import { activeSessionRegistrations } from './mockSessionRegistrations'
 import { nowIso, shiftDate, toVnIso } from './mockTime'
@@ -70,6 +72,9 @@ export interface AttendanceActivity {
   /** Giờ bắt đầu của buổi hoặc của ngày; quét sau giờ này ghi Đi muộn (FR-ATT-06). */
   startsAt: (day: string | null) => string
   expected: (day: string | null) => string[]
+  /** Người có đơn xin phép đã duyệt: lúc chốt ghi Vắng có phép thay vì Vắng không phép (FR-ATT-04). */
+  excused: () => string[]
+  absenceOf: (userId: string) => AttendanceAbsenceNote | null
   forbidden: { view: string; mark: string; qr: string; close: string }
 }
 
@@ -104,6 +109,8 @@ export function sessionActivity(session: DbSession): AttendanceActivity {
         .filter((membership) => membership.joinedOn === null || membership.joinedOn <= sessionDay)
         .map((membership) => membership.userId)
     },
+    excused: () => approvedAbsentees(session.id),
+    absenceOf: (userId) => absenceNoteOf(userId, session.id),
     forbidden: {
       view: 'Chỉ người phụ trách buổi và ban chủ nhiệm xem được điểm danh.',
       mark: 'Chỉ người phụ trách buổi và ban chủ nhiệm được điểm danh.',
@@ -145,6 +152,9 @@ export function eventActivity(event: DbEvent): AttendanceActivity {
     startsAt: (day) => (day === null || day === days[0] ? event.startAt : `${day}T${toVnIso(Date.parse(event.startAt)).slice(11)}`),
     // Người Chờ xác nhận lại vẫn giữ chỗ tới hạn, và hạn có thể trùng giờ bắt đầu, sau lúc mở điểm danh.
     expected: () => db.registrations.filter((registration) => registration.eventId === event.id && holdsSeat(registration)).map((registration) => registration.userId),
+    // Xin phép vắng chỉ áp dụng cho buổi sinh hoạt; với sự kiện, người không đi được thì hủy đăng ký.
+    excused: () => [],
+    absenceOf: () => null,
     forbidden: {
       view: 'Chỉ ban chủ nhiệm và nhân sự BTC đang hoạt động xem được điểm danh sự kiện.',
       mark: 'Chỉ ban chủ nhiệm và nhân sự BTC đang hoạt động được điểm danh sự kiện.',
@@ -198,7 +208,7 @@ export function sheetEntries(activity: AttendanceActivity, day: string | null): 
   })
 }
 
-function countsOf(entries: SheetEntry[]): AttendanceCounts {
+function countsOf(entries: SheetEntry[], excused: ReadonlySet<string>): AttendanceCounts {
   const withStatus = (status: AttendanceStatus) => entries.filter((entry) => entry.record?.status === status).length
   return {
     expected: entries.filter((entry) => !entry.extra).length,
@@ -207,6 +217,7 @@ function countsOf(entries: SheetEntry[]): AttendanceCounts {
     excused: withStatus('EXCUSED'),
     absent: withStatus('ABSENT'),
     unmarked: entries.filter((entry) => !entry.extra && !entry.record).length,
+    unmarkedExcused: entries.filter((entry) => !entry.extra && !entry.record && excused.has(entry.userId)).length,
     extra: entries.filter((entry) => entry.extra).length,
   }
 }
@@ -225,6 +236,7 @@ export function toAttendanceRow(activity: AttendanceActivity, entry: SheetEntry)
           version: entry.record.version,
         }
       : null,
+    absenceRequest: activity.absenceOf(entry.userId),
   }
 }
 
@@ -290,7 +302,7 @@ export function buildSheet(activity: AttendanceActivity, userId: string, day: st
     closedAt: state.closedAt,
     closedBy: state.closedBy ? personRef(state.closedBy) : null,
     readOnlyReason: activity.readOnlyReason,
-    counts: countsOf(entries),
+    counts: countsOf(entries, new Set(activity.excused())),
     allowedActions: attendanceActionsFor(activity, userId, day),
     version: state.version,
     rows: { ...page, content: page.content.map(({ entry }) => toAttendanceRow(activity, entry)) },
@@ -331,10 +343,11 @@ export function writeAttendance(
   return toAttendanceRow(activity, entry ?? { userId, extra: false, record: undefined })
 }
 
-/** FR-ATT-08 (phần chốt): người thuộc đối tượng mà chưa có bản ghi thành Vắng không phép; trả số người vừa được ghi. */
+/** FR-ATT-08 (phần chốt): người thuộc đối tượng mà chưa có bản ghi thành Vắng không phép, hoặc Vắng có phép nếu có đơn đã duyệt (FR-ATT-04). */
 export function closeAttendance(activity: AttendanceActivity, day: string | null, actorId: string): number {
   const sheet = ensureSheet(activity, day)
   const unmarked = sheetEntries(activity, day).filter((entry) => !entry.extra && !entry.record)
+  const excused = new Set(activity.excused())
   const at = nowIso()
   for (const entry of unmarked) {
     db.attendance.push({
@@ -343,7 +356,7 @@ export function closeAttendance(activity: AttendanceActivity, day: string | null
       activityId: activity.id,
       day,
       userId: entry.userId,
-      status: 'ABSENT',
+      status: excused.has(entry.userId) ? 'EXCUSED' : 'ABSENT',
       method: 'MANUAL',
       extra: false,
       recordedBy: actorId,
