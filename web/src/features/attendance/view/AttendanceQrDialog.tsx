@@ -18,7 +18,7 @@ interface AttendanceQrDialogProps {
   vm: AttendanceViewModel
 }
 
-/** FR-ATT-05: chiếu mã QR cho người tham gia quét bằng ứng dụng di động; màn hẹp phủ kín màn hình. */
+/** FR-ATT-05: chiếu mã QR cho người tham gia quét bằng ứng dụng Android hoặc trang quét trên web; màn hẹp phủ kín màn hình. */
 export function AttendanceQrDialog({ activity, vm }: AttendanceQrDialogProps) {
   const contentRef = useRef<HTMLDivElement>(null)
   const fullscreen = useFullscreen(contentRef)
@@ -103,6 +103,8 @@ function QrBody({ activity, vm, name, large }: QrBodyProps) {
           <div className="h-full origin-left rounded-full bg-primary transition-transform duration-300 ease-out" style={{ transform: `scaleX(${qr.remainingRatio})` }} />
         </div>
       </div>
+
+      <p className="text-center text-sm text-muted-foreground">Quét bằng ứng dụng Android hoặc mục Quét mã điểm danh trên web.</p>
 
       {sheet && (
         <p role="status" className="text-center text-sm text-muted-foreground">

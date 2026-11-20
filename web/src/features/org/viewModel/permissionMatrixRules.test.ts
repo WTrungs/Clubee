@@ -36,7 +36,7 @@ describe('viewing the permission matrix (FR-ORG-05)', () => {
     expect(cell(matrix, 'TREASURER', 'MANAGE_MEMBERS')).toMatchObject({ state: 'EDITABLE', enabled: true })
     expect((await clubRepository.getClub('c-guitar')).allowedActions).toContain('VIEW_PERMISSIONS')
 
-    // Thủ quỹ xem được nhưng không có quyền chỉnh ma trận; thành viên thường không xem được.
+    // Thủ quỹ xem được nhưng không có quyền chỉnh bảng phân quyền; thành viên thường không xem được.
     signInAs('u-mai')
     expect((await orgRepository.permissionMatrix('c-guitar')).allowedActions).toEqual([])
     expect(await fail(orgRepository.updatePermissionMatrix('c-guitar', { changes: [{ role: 'DEPARTMENT_HEAD', permission: 'ASSIGN_TASK', enabled: false }], version: 1 }))).toMatchObject({ status: 403 })
@@ -46,7 +46,7 @@ describe('viewing the permission matrix (FR-ORG-05)', () => {
     expect(db.auditLogs).toEqual([])
     expect((await orgRepository.permissionMatrix('c-guitar')).version).toBe(1)
     signInAs('u-ha')
-    expect(await fail(orgRepository.permissionMatrix('c-guitar'))).toMatchObject({ status: 403, detail: 'Chỉ ban chủ nhiệm xem được ma trận quyền.' })
+    expect(await fail(orgRepository.permissionMatrix('c-guitar'))).toMatchObject({ status: 403, detail: 'Chỉ ban chủ nhiệm xem được bảng phân quyền.' })
     expect((await clubRepository.getClub('c-guitar')).allowedActions).not.toContain('VIEW_PERMISSIONS')
   })
 })

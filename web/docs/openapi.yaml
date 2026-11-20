@@ -564,7 +564,7 @@ paths:
       description: |
         Ai có tài khoản cũng tạo được, không cần duyệt; không chặn trùng tên (nền tảng phục vụ nhiều trường). Một lần ghi
         tạo: CLB ở Hoạt động (thu thập MSSV tắt, có bước thử việc, SRS 9.2), nhiệm kỳ đầu "Nhiệm kỳ đầu tiên" Đang chạy
-        từ hôm nay đến hết 12 tháng, tư cách Chính thức và chức Chủ nhiệm cho người tạo, ma trận quyền mặc định
+        từ hôm nay đến hết 12 tháng, tư cách Chính thức và chức Chủ nhiệm cho người tạo, bảng phân quyền mặc định
         (mock dùng quyền cố định cho tới khi có FR-ORG-05).
         Kiểm tra: tên 3–100 ký tự, tên viết tắt 2–10, lĩnh vực 2–50 (chữ tự do), mô tả 10–1000.
         Lỗi: 400 `VALIDATION`.
@@ -639,17 +639,17 @@ paths:
     get:
       tags: [ORG]
       operationId: getPermissionMatrix
-      summary: Ma trận quyền của CLB (FR-ORG-05)
+      summary: Bảng phân quyền theo chức vụ của CLB (FR-ORG-05)
       description: |
         Ban chủ nhiệm xem được. Mỗi ô có trạng thái với người xem: `LOCKED` (BR-ACL-04, 05, kèm lý do), `OWN_ROLE` (chức vụ
         người xem đang giữ, BR-ACL-03), `NOT_APPLICABLE` (vô nghĩa với phạm vi của chức vụ, BR-ACL-02), `EDITABLE`.
-        `allowedActions` có `EDIT`, `RESET` khi người xem có quyền chỉnh ma trận. Quyền xem thông tin (SRS 3.5) không nằm ở đây.
+        `allowedActions` có `EDIT`, `RESET` khi người xem có quyền chỉnh bảng phân quyền. Quyền xem thông tin (SRS 3.5) không nằm ở đây.
         Lỗi: 403 `NOT_A_MEMBER`, `FORBIDDEN`.
       parameters:
         - $ref: '#/components/parameters/ClubId'
       responses:
         '200':
-          description: Ma trận.
+          description: Bảng phân quyền.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/PermissionMatrix' }
@@ -658,12 +658,12 @@ paths:
     put:
       tags: [ORG]
       operationId: updatePermissionMatrix
-      summary: Sửa nhiều ô ma trận quyền một lần (FR-ORG-05)
+      summary: Sửa nhiều ô bảng phân quyền một lần (FR-ORG-05)
       description: |
-        Tất cả hoặc không gì. Thứ tự kiểm: quyền chỉnh ma trận (403) → hàng của chức vụ người gọi đang giữ (403 `OWN_ROLE`) →
+        Tất cả hoặc không gì. Thứ tự kiểm: quyền chỉnh bảng phân quyền (403) → hàng của chức vụ người gọi đang giữ (403 `OWN_ROLE`) →
         version (409) → ô khóa hoặc không áp dụng (422 `PERMISSION_LOCKED`, `errors[]` theo `changes[i]`). Ô trở về mặc định thì
         bỏ bản ghi khác mặc định. Mỗi ô đổi ghi nhật ký trước, sau (BR-DATA-03); người đang giữ chức vụ bị đổi nhận một thông báo
-        gộp theo chức vụ (R-02). Có hiệu lực ngay: lần đọc sau mọi `allowedActions` tính theo ma trận mới.
+        gộp theo chức vụ (R-02). Có hiệu lực ngay: lần đọc sau mọi `allowedActions` tính theo bảng phân quyền mới.
         Lỗi: 400 `VALIDATION`; 403 `NOT_A_MEMBER`, `FORBIDDEN`, `OWN_ROLE`; 409 `VERSION_CONFLICT`; 422 `PERMISSION_LOCKED`.
       security:
         - sessionCookie: []
@@ -677,7 +677,7 @@ paths:
             schema: { $ref: '#/components/schemas/UpdatePermissionMatrixRequest' }
       responses:
         '200':
-          description: Ma trận sau khi sửa.
+          description: Bảng phân quyền sau khi sửa.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/PermissionMatrix' }
@@ -690,7 +690,7 @@ paths:
     post:
       tags: [ORG]
       operationId: resetPermissionMatrix
-      summary: Khôi phục ma trận về mặc định (FR-ORG-05)
+      summary: Khôi phục bảng phân quyền về mặc định (FR-ORG-05)
       description: |
         Đưa mọi ô người gọi sửa được về mặc định; hàng của chức vụ người gọi đang giữ giữ nguyên, số ô còn lệch ở
         `changedFromDefault`. Ghi nhật ký từng ô, thông báo như khi sửa.
@@ -707,7 +707,7 @@ paths:
             schema: { $ref: '#/components/schemas/VersionOnly' }
       responses:
         '200':
-          description: Ma trận sau khi khôi phục.
+          description: Bảng phân quyền sau khi khôi phục.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/PermissionMatrix' }
@@ -718,7 +718,7 @@ paths:
     get:
       tags: [ORG]
       operationId: listPermissionMatrixChanges
-      summary: Thay đổi gần đây của ma trận quyền (FR-ORG-05)
+      summary: Thay đổi gần đây của bảng phân quyền (FR-ORG-05)
       description: Ban chủ nhiệm xem được; mới nhất trước, giá trị trước và sau của từng ô. Lỗi 403 `NOT_A_MEMBER`, `FORBIDDEN`.
       parameters:
         - $ref: '#/components/parameters/ClubId'
@@ -824,7 +824,7 @@ paths:
       description: |
         Các tham số cấp CLB đang dùng (SRS 9.2): bước thử việc, hạn liên kết mời, hạn hủy đăng ký, hạn xác nhận lại khi dời giờ,
         số phút mở điểm danh trước giờ, chu kỳ đổi mã QR, nhắc hạn công việc, ngưỡng chi bắt buộc chứng từ, hạn quyết toán tạm ứng,
-        mốc học kỳ cho báo cáo. Chỉ người có quyền cấu hình CLB theo ma trận (mặc định là ban chủ nhiệm).
+        mốc học kỳ cho báo cáo. Chỉ người có quyền cấu hình CLB theo bảng phân quyền (mặc định là ban chủ nhiệm).
         Lỗi: 403 `NOT_A_MEMBER`, `FORBIDDEN`; 404 `CLUB_NOT_FOUND`.
       parameters:
         - $ref: '#/components/parameters/ClubId'
@@ -909,7 +909,7 @@ paths:
       summary: Nhóm nhận thông báo người gọi được chọn (FR-NOT-01)
       description: |
         Theo phạm vi chức vụ tại thời điểm gọi. Ban chủ nhiệm: toàn CLB (Thử việc, Chính thức, Tạm nghỉ), mọi ban đang
-        hoạt động, ban tổ chức mọi sự kiện đang chạy (Đã duyệt đến Đã quyết toán). Trưởng ban, Phó ban: ban mình.
+        hoạt động, ban tổ chức mọi sự kiện đang chạy (Đã duyệt đến Đã kết thúc). Trưởng ban, Phó ban: ban mình.
         Trưởng BTC: ban tổ chức sự kiện mình (Trưởng BTC, trưởng tiểu ban, nhân sự còn hiệu lực). Người không có chức vụ
         nhận danh sách rỗng. Lỗi: 403 `NOT_A_MEMBER`; 404 `CLUB_NOT_FOUND`.
       parameters:
@@ -1015,7 +1015,7 @@ paths:
       operationId: listInvitations
       summary: Lời mời gia nhập của CLB (FR-MEM-01)
       description: |
-        Người có quyền quản lý thành viên theo ma trận (mặc định ban chủ nhiệm). Mới nhất trước; lọc theo trạng thái suy ra.
+        Người có quyền quản lý thành viên theo bảng phân quyền (mặc định ban chủ nhiệm). Mới nhất trước; lọc theo trạng thái suy ra.
         Lỗi: 400 `VALIDATION` (trạng thái lọc sai); 403 `NOT_A_MEMBER`, `FORBIDDEN`; 404 `CLUB_NOT_FOUND`.
       parameters:
         - $ref: '#/components/parameters/ClubId'
@@ -1207,7 +1207,7 @@ paths:
       operationId: updateMemberInfo
       summary: Sửa thông tin thành viên trong CLB (FR-MEM-05)
       description: |
-        Người có quyền quản lý thành viên theo ma trận quyền (mặc định ban chủ nhiệm). Gửi đủ bốn trường; chuỗi rỗng là xóa.
+        Người có quyền quản lý thành viên theo bảng phân quyền (mặc định ban chủ nhiệm). Gửi đủ bốn trường; chuỗi rỗng là xóa.
         `studentId` bị bỏ qua khi CLB không thu thập MSSV. Mỗi trường đổi ghi một dòng `infoHistory`; không đổi gì thì
         `version` giữ nguyên.
 
@@ -1414,7 +1414,7 @@ paths:
       operationId: listLeaveRequests
       summary: Yêu cầu tạm nghỉ (FR-MEM-07)
       description: |
-        Người có quyền quản lý thành viên theo ma trận quyền (mặc định ban chủ nhiệm). `status=PENDING` (mặc định, cũ trước)
+        Người có quyền quản lý thành viên theo bảng phân quyền (mặc định ban chủ nhiệm). `status=PENDING` (mặc định, cũ trước)
         hoặc `DECIDED` (đã xử lý, mới nhất trước). Lỗi 403 `NOT_A_MEMBER`, `FORBIDDEN`.
       parameters:
         - $ref: '#/components/parameters/ClubId'
@@ -1478,7 +1478,7 @@ paths:
       operationId: transferDepartment
       summary: Chuyển ban chính (FR-MEM-10)
       description: |
-        Người có quyền quản lý thành viên theo ma trận quyền (mặc định ban chủ nhiệm). Chuyển 1–50 người sang một ban đang
+        Người có quyền quản lý thành viên theo bảng phân quyền (mặc định ban chủ nhiệm). Chuyển 1–50 người sang một ban đang
         hoạt động, tất cả hoặc không ai. Ban cũ kết thúc ngày hôm qua, ban mới bắt đầu hôm nay (BR-MEM-06); công việc ở ban
         cũ giữ nguyên. Người được chuyển nhận thông báo `MEMBERSHIP`.
 
@@ -2384,7 +2384,7 @@ paths:
       operationId: updateTask
       summary: Đổi người chính, người phối hợp hoặc hạn (FR-TASK-05)
       description: |
-        Chỉ người giao. Đổi người cần thêm quyền giao việc ở phạm vi của việc theo ma trận và phạm vi còn hoạt động; đổi hạn thì không.
+        Chỉ người giao. Đổi người cần thêm quyền giao việc ở phạm vi của việc theo bảng phân quyền và phạm vi còn hoạt động; đổi hạn thì không.
         Trạng thái việc giữ nguyên. Mỗi trường đổi ghi một `TaskChange` (giá trị cũ, mới, lý do) và báo người liên quan.
         Người chính, người phối hợp mới phải là thành viên đang hoạt động của phạm vi (BR-TASK-01, BR-MEM-05); người phối hợp cũ được giữ.
         Đổi hạn không xóa lịch sử quá hạn đã ghi (BR-TASK-03). Thứ tự kiểm: quyền → version → trạng thái → giá trị.
@@ -2605,9 +2605,10 @@ paths:
         - `REJECT`: ban chủ nhiệm, bắt buộc lý do, sự kiện về Dự thảo.
         - `OPEN_REGISTRATION`: Trưởng BTC hoặc ban chủ nhiệm.
         - `CANCEL`: ban chủ nhiệm, bắt buộc lý do; chỉ trước khi sự kiện diễn ra. Chức vụ sự kiện hết hiệu lực; quỹ sự kiện còn mở để quyết toán.
-        - `CLOSE`: ban chủ nhiệm hoặc Trưởng BTC, khi sự kiện Đã quyết toán và quỹ sự kiện Đã quyết toán (BR-EVT-05). Mọi chức vụ
-          trong sự kiện hết hiệu lực, hồ sơ sự kiện chỉ đọc. Đã kết thúc → Đã quyết toán là máy chủ tự chuyển khi quyết toán quỹ
-          (`POST /clubs/{clubId}/funds/{fundId}/transitions`).
+        - `CLOSE`: ban chủ nhiệm hoặc Trưởng BTC, khi sự kiện Đã kết thúc và quỹ sự kiện Đã quyết toán (BR-EVT-05; quyết toán
+          quỹ qua `POST /clubs/{clubId}/funds/{fundId}/transitions` không đổi trạng thái sự kiện). Mọi chức vụ trong sự kiện
+          hết hiệu lực, hồ sơ sự kiện chỉ đọc. Quỹ chưa quyết toán (hoặc không có quỹ; sự kiện từ Đã duyệt luôn có quỹ):
+          422 `FUND_NOT_SETTLED`.
 
         Lỗi:
         - 400 `VALIDATION` (lý do từ 5 ký tự).
@@ -3109,7 +3110,7 @@ paths:
       description: |
         Chỉ người phụ trách buổi (người tạo, ban chủ nhiệm, Trưởng ban, Phó ban của ban đó; còn Thử việc hoặc Chính thức).
         Mã chỉ cấp từ `opensAt` tới khi chốt (BR-ATT-02); đổi mới mỗi chu kỳ `refreshSeconds` (mặc định 30 giây, SRS 9.2), gọi lại trong cùng chu kỳ trả đúng mã cũ.
-        Phản hồi kèm `Cache-Control: no-store`. Quét mã (FR-ATT-06) chỉ có trên ứng dụng di động.
+        Phản hồi kèm `Cache-Control: no-store`. Người tham gia quét mã bằng `POST …/attendance/check-ins` (FR-ATT-06).
 
         Lỗi:
         - 403 `FORBIDDEN` (kèm lý do), `NOT_A_MEMBER`.
@@ -3127,6 +3128,48 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+  /clubs/{clubId}/sessions/{sessionId}/attendance/check-ins:
+    post:
+      tags: [ATT]
+      operationId: checkInSessionAttendance
+      summary: Tự điểm danh bằng mã QR đang chiếu (FR-ATT-06)
+      description: |
+        Người tham gia quét mã QR của buổi trên ứng dụng Android hoặc mục Quét mã điểm danh trên web. Kiểm tra theo thứ tự:
+        1. Đăng nhập (401).
+        2. `code` khớp mã của chu kỳ hiện tại hoặc chu kỳ liền trước của đúng buổi; sai, hết hạn, không có
+           buổi hoặc không đúng CLB đều trả 422 `INVALID_CODE` (không lộ buổi có tồn tại hay không).
+        3. Người quét là thành viên CLB (Thử việc, Chính thức, Tạm nghỉ); không thì 403 `NOT_A_MEMBER`.
+        4. Bảng đã chốt: 422 `ATTENDANCE_CLOSED`. Chưa tới giờ mở: 422 `ATTENDANCE_NOT_OPEN`.
+
+        Quét sau giờ bắt đầu của buổi ghi `LATE`, còn lại `PRESENT`;
+        cách ghi `QR`. Người không thuộc đối tượng được ghi là người phát sinh (FR-ATT-07).
+        Mỗi người một bản ghi (BR-ATT-01): đã có bản ghi thì trả 200 với bản ghi cũ và `alreadyRecorded: true`, không ghi đè, kể cả
+        khi bản ghi cũ là `EXCUSED`, `ABSENT` do người phụ trách ghi (giao diện báo người quét nhờ người phụ trách sửa).
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - $ref: '#/components/parameters/SessionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AttendanceCheckInRequest' }
+      responses:
+        '200':
+          description: Đã điểm danh từ trước; trả bản ghi cũ.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AttendanceCheckIn' }
+        '201':
+          description: Đã ghi Có mặt hoặc Đi muộn.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AttendanceCheckIn' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
         '422': { $ref: '#/components/responses/UnprocessableEntity' }
   /clubs/{clubId}/sessions/{sessionId}/attendance/transitions:
     post:
@@ -3284,7 +3327,7 @@ paths:
         Chỉ ban chủ nhiệm và nhân sự BTC đang hoạt động (Trưởng BTC, trưởng tiểu ban, nhân sự tiểu ban). Mỗi ngày của sự kiện có mã riêng;
         bỏ trống `day` thì máy chủ chọn ngày như khi đọc danh sách.
         Mã chỉ cấp từ `opensAt` của ngày đó tới khi chốt (BR-ATT-02); đổi mới mỗi chu kỳ `refreshSeconds` (mặc định 30 giây, SRS 9.2), gọi lại trong cùng chu kỳ trả đúng mã cũ.
-        Phản hồi kèm `Cache-Control: no-store`. Quét mã (FR-ATT-06) chỉ có trên ứng dụng di động.
+        Phản hồi kèm `Cache-Control: no-store`. Người tham gia quét mã bằng `POST …/attendance/check-ins` (FR-ATT-06).
 
         Lỗi:
         - 400 `VALIDATION` (ngày không thuộc sự kiện).
@@ -3307,6 +3350,48 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+  /clubs/{clubId}/events/{eventId}/attendance/check-ins:
+    post:
+      tags: [ATT]
+      operationId: checkInEventAttendance
+      summary: Tự điểm danh bằng mã QR đang chiếu (FR-ATT-06)
+      description: |
+        Người tham gia quét mã QR của sự kiện trên ứng dụng Android hoặc mục Quét mã điểm danh trên web. Kiểm tra theo thứ tự:
+        1. Đăng nhập (401).
+        2. `code` khớp mã của chu kỳ hiện tại hoặc chu kỳ liền trước của đúng sự kiện và ngày; sai, hết hạn, không có
+           sự kiện hoặc sự kiện chưa duyệt, đã hủy đều trả 422 `INVALID_CODE` (không lộ sự kiện có tồn tại hay không).
+        3. Người quét là thành viên CLB (Thử việc, Chính thức, Tạm nghỉ); không thì 403 `NOT_A_MEMBER`.
+        4. Bảng đã chốt hoặc sự kiện đã đóng: 422 `ATTENDANCE_CLOSED`. Chưa tới giờ mở: 422 `ATTENDANCE_NOT_OPEN`.
+
+        Quét sau giờ bắt đầu của ngày đó (ngày sau của sự kiện nhiều ngày dùng cùng giờ bắt đầu) ghi `LATE`, còn lại `PRESENT`;
+        cách ghi `QR`. Người không thuộc đối tượng được ghi là người phát sinh (FR-ATT-07).
+        Mỗi người một bản ghi (BR-ATT-01): đã có bản ghi thì trả 200 với bản ghi cũ và `alreadyRecorded: true`, không ghi đè, kể cả
+        khi bản ghi cũ là `EXCUSED`, `ABSENT` do người phụ trách ghi (giao diện báo người quét nhờ người phụ trách sửa).
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - $ref: '#/components/parameters/EventId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AttendanceCheckInRequest' }
+      responses:
+        '200':
+          description: Đã điểm danh từ trước; trả bản ghi cũ.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AttendanceCheckIn' }
+        '201':
+          description: Đã ghi Có mặt hoặc Đi muộn.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AttendanceCheckIn' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
         '422': { $ref: '#/components/responses/UnprocessableEntity' }
   /clubs/{clubId}/events/{eventId}/attendance/transitions:
     post:
@@ -3408,9 +3493,9 @@ paths:
       description: |
         `SETTLE`: chỉ Thủ quỹ. Quỹ phải là quỹ sự kiện đang mở, sự kiện ở Đã kết thúc hoặc Đã hủy, không còn khoản chi hay
         điều chỉnh ở `PROPOSED`, `APPROVED` (422 `FUND_HAS_PENDING` kèm số khoản). Số dư lớn hơn 0 thì ghi một giao dịch
-        `TRANSFER` (hạng mục `FUND_TRANSFER`) sang Quỹ chung; quỹ sang `SETTLED`. Sự kiện Đã kết thúc tự sang Đã quyết toán
-        (SRS 4.2); sự kiện Đã hủy giữ nguyên. Quỹ của sự kiện đồng tổ chức thuộc CLB chủ trì (BR-FIN-07); khoản chia cho CLB
-        đồng tổ chức và điều kiện "không còn tạm ứng mở" làm khi có FR-EVT-07, FR-FIN-07 (P1).
+        `TRANSFER` (hạng mục `FUND_TRANSFER`) sang Quỹ chung; quỹ sang `SETTLED`. Sự kiện giữ nguyên trạng thái; sự kiện
+        Đã kết thúc từ đây đóng được (`CLOSE`). Quỹ của sự kiện đồng tổ chức thuộc CLB chủ trì (BR-FIN-07); khoản chia cho
+        CLB đồng tổ chức và điều kiện "không còn tạm ứng mở" làm khi có FR-EVT-07, FR-FIN-07 (P1).
 
         Lỗi:
         - 400 `VALIDATION`.
@@ -3569,7 +3654,7 @@ paths:
     post:
       tags: [FIN]
       operationId: transitionTransaction
-      summary: Rút, duyệt, từ chối, ghi sổ khoản chi và điều chỉnh giảm quỹ (FR-FIN-02..05)
+      summary: Rút, duyệt, từ chối, ghi sổ, hủy khoản chi và điều chỉnh giảm quỹ (FR-FIN-02..05)
       description: |
         ST-EXP. Kiểm tra theo thứ tự: quyền (403), `version` (409), trạng thái (422), dữ liệu (400).
         Điều chỉnh giảm quỹ đi cùng luật rút, duyệt, từ chối; duyệt xong thì tự ghi sổ (không có bước `POST`), kiểm số dư
@@ -3577,12 +3662,14 @@ paths:
         `allowedActions` có `ADJUST` khi người gọi là Thủ quỹ và giao dịch đã ghi sổ, không phải chuyển quỹ, quỹ đang mở.
         - `WITHDRAW`: chỉ người đề xuất, khi còn `PROPOSED`.
         - `APPROVE`, `REJECT`: thành viên ban chủ nhiệm khác người đề xuất, kể cả Chủ nhiệm (BR-ACL-01, 403 `SELF_APPROVAL`);
-          khi còn `PROPOSED`. `REJECT` bắt buộc lý do từ 5 ký tự. Duyệt khoản trên ngưỡng mà thiếu chứng từ: 422 `RECEIPT_REQUIRED`.
+          khi còn `PROPOSED`. `REJECT` bắt buộc lý do 5–500 ký tự. Duyệt khoản trên ngưỡng mà thiếu chứng từ: 422 `RECEIPT_REQUIRED`.
         - `POST`: Thủ quỹ, khoản chi `APPROVED`. Vượt số dư hiện có của quỹ: 422 `INSUFFICIENT_FUNDS`, `detail` nêu số dư
           còn lại (BR-FIN-08). `occurredOn` là ngày ghi sổ.
+        - `CANCEL`: người đề xuất hoặc ban chủ nhiệm, khoản chi `APPROVED` (chưa ghi sổ); bắt buộc lý do 5–500 ký tự.
+          Khoản sang `CANCELLED`, không còn chặn quyết toán quỹ sự kiện (`FUND_HAS_PENDING`).
 
         Thông báo (FR-NOT-02): khoản chi được duyệt thì báo người đề xuất và Thủ quỹ (khoản chờ ghi sổ); từ chối báo người đề xuất
-        kèm lý do; ghi sổ báo người đề xuất. Điều chỉnh giảm quỹ: khi tạo thì báo ban chủ nhiệm trừ người tạo; duyệt (đã ghi sổ)
+        kèm lý do; ghi sổ báo người đề xuất; hủy báo người đề xuất, người duyệt và Thủ quỹ kèm lý do, trừ người hủy. Điều chỉnh giảm quỹ: khi tạo thì báo ban chủ nhiệm trừ người tạo; duyệt (đã ghi sổ)
         hoặc từ chối chỉ báo Thủ quỹ đã tạo, không có thông báo chờ ghi sổ.
         Duyệt điều chỉnh, ghi sổ khoản chi ở quỹ đã quyết toán: 422 `FUND_SETTLED`.
 
@@ -4255,7 +4342,7 @@ components:
         đang bàn giao; FR-ORG-02, FR-TERM-03).
         `REQUEST_PRESIDENCY_TRANSFER`: thành viên Chính thức, mọi người giữ chức ban chủ nhiệm không đăng nhập quá 30 ngày và CLB
         chưa có yêu cầu chuyển quyền chờ xử lý (FR-ACC-08).
-        `VIEW_PERMISSIONS`: thuộc ban chủ nhiệm, xem được ma trận quyền (FR-ORG-05).
+        `VIEW_PERMISSIONS`: thuộc ban chủ nhiệm, xem được bảng phân quyền (FR-ORG-05).
       enum: [CREATE_EVENT, PROPOSE_EVENT, ASSIGN_TASK, MANAGE_MEMBERS, MANAGE_ORG, ASSIGN_PRESIDENCY, EDIT_CLUB, SEND_ANNOUNCEMENT, CREATE_TERM, ASSIGN_POSITION, REQUEST_PRESIDENCY_TRANSFER, VIEW_PERMISSIONS]
     TermSummary:
       type: object
@@ -5927,8 +6014,8 @@ components:
     # Sự kiện
     EventStatus:
       type: string
-      description: ST-EVT.
-      enum: [DRAFT, PENDING_APPROVAL, APPROVED, REGISTRATION_OPEN, ONGOING, ENDED, SETTLED, CLOSED, CANCELLED]
+      description: ST-EVT theo báo cáo 17/11; quyết toán là trạng thái của quỹ (`FundStatus`), không phải của sự kiện.
+      enum: [DRAFT, PENDING_APPROVAL, APPROVED, REGISTRATION_OPEN, ONGOING, ENDED, CLOSED, CANCELLED]
     EventTransitionAction:
       type: string
       enum: [SUBMIT, APPROVE, REJECT, OPEN_REGISTRATION, CANCEL, CLOSE]
@@ -6017,7 +6104,7 @@ components:
       allOf:
         - $ref: '#/components/schemas/EventSummary'
         - type: object
-          required: [description, onlineUrl, proposer, approver, rejectionReason, cancellationReason, statusBeforeCancel, allowedActions, version, createdAt, fundId, lastScheduleChange]
+          required: [description, onlineUrl, proposer, approver, rejectionReason, cancellationReason, statusBeforeCancel, allowedActions, version, createdAt, fundId, fundStatus, lastScheduleChange]
           properties:
             description: { type: string }
             onlineUrl: { $ref: '#/components/schemas/NullableString' }
@@ -6041,6 +6128,13 @@ components:
             fundId:
               $ref: '#/components/schemas/NullableString'
               description: Quỹ sự kiện, có từ khi sự kiện sang Đã duyệt.
+            fundStatus:
+              description: |
+                Trạng thái quỹ sự kiện; `null` khi chưa có quỹ hoặc người gọi không xem được quỹ (SRS 3.5). Giao diện dùng để
+                nhắc quyết toán quỹ trước khi đóng sự kiện (BR-EVT-05).
+              oneOf:
+                - $ref: '#/components/schemas/FundStatus'
+                - type: 'null'
             lastScheduleChange:
               description: Lần dời thời gian gần nhất (FR-EVT-14); `null` khi chưa dời lần nào.
               oneOf:
@@ -6369,6 +6463,39 @@ components:
         refreshSeconds:
           type: integer
           description: Độ dài chu kỳ đổi mã của CLB (SRS 9.2).
+    AttendanceCheckInRequest:
+      type: object
+      required: [code, day]
+      properties:
+        code:
+          type: string
+          description: Giá trị `code` đọc từ mã QR.
+        day:
+          $ref: '#/components/schemas/NullableDate'
+          description: Giá trị `day` đọc từ mã QR; buổi sinh hoạt để `null`.
+    AttendanceCheckIn:
+      type: object
+      required: [activity, clubName, day, status, recordedAt, alreadyRecorded]
+      properties:
+        activity:
+          type: object
+          required: [type, id, name]
+          properties:
+            type:
+              type: string
+              enum: [SESSION, EVENT]
+            id: { type: string }
+            name: { type: string }
+        clubName: { type: string }
+        day: { $ref: '#/components/schemas/NullableDate' }
+        status:
+          description: '`PRESENT` hoặc `LATE` khi vừa ghi; quét lại thì là trạng thái của bản ghi cũ.'
+          allOf:
+            - $ref: '#/components/schemas/AttendanceStatus'
+        recordedAt: { type: string, format: date-time }
+        alreadyRecorded:
+          type: boolean
+          description: '`true` khi người này đã có bản ghi từ trước (BR-ATT-01).'
     MarkAttendanceRequest:
       type: object
       required: [day, status, version]
@@ -6411,15 +6538,17 @@ components:
       enum: [INCOME, EXPENSE, ADJUSTMENT, TRANSFER]
     TransactionStatus:
       type: string
-      description: ST-EXP. Khoản thu, chuyển quỹ và điều chỉnh tăng quỹ được ghi thẳng vào `POSTED`.
-      enum: [PROPOSED, APPROVED, POSTED, REJECTED, WITHDRAWN]
+      description: |
+        ST-EXP theo báo cáo 17/11 (có Đã duyệt → Đã hủy cho khoản chi). Khoản thu, chuyển quỹ và điều chỉnh tăng quỹ được
+        ghi thẳng vào `POSTED`.
+      enum: [PROPOSED, APPROVED, POSTED, REJECTED, WITHDRAWN, CANCELLED]
     TransactionFlow:
       type: string
       description: Tiền vào hay ra khỏi quỹ đang xem.
       enum: [IN, OUT]
     TransactionAction:
       type: string
-      enum: [WITHDRAW, APPROVE, REJECT, POST, ADJUST]
+      enum: [WITHDRAW, APPROVE, REJECT, POST, CANCEL, ADJUST]
     FinanceCategory:
       type: string
       description: |
@@ -6517,7 +6646,7 @@ components:
       allOf:
         - $ref: '#/components/schemas/TransactionSummary'
         - type: object
-          required: [approver, poster, attachments, original, adjustments, counterpartFundName, rejectionReason, decidedAt, postedAt, allowedActions, version]
+          required: [approver, poster, attachments, original, adjustments, counterpartFundName, rejectionReason, decidedAt, postedAt, cancelledBy, cancelledAt, cancellationReason, allowedActions, version]
           properties:
             approver:
               oneOf:
@@ -6543,6 +6672,13 @@ components:
             rejectionReason: { $ref: '#/components/schemas/NullableString' }
             decidedAt: { $ref: '#/components/schemas/NullableDateTime' }
             postedAt: { $ref: '#/components/schemas/NullableDateTime' }
+            cancelledBy:
+              description: Người hủy khoản chi đã duyệt (`CANCEL`).
+              oneOf:
+                - $ref: '#/components/schemas/PersonRef'
+                - type: 'null'
+            cancelledAt: { $ref: '#/components/schemas/NullableDateTime' }
+            cancellationReason: { $ref: '#/components/schemas/NullableString' }
             allowedActions:
               type: array
               items: { $ref: '#/components/schemas/TransactionAction' }
@@ -6597,9 +6733,9 @@ components:
       properties:
         action:
           type: string
-          enum: [WITHDRAW, APPROVE, REJECT, POST]
+          enum: [WITHDRAW, APPROVE, REJECT, POST, CANCEL]
         version: { type: integer }
         reason:
           type: string
           maxLength: 500
-          description: Bắt buộc từ 5 đến 500 ký tự khi `REJECT`.
+          description: Bắt buộc từ 5 đến 500 ký tự khi `REJECT` hoặc `CANCEL`.

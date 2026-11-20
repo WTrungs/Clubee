@@ -16,7 +16,7 @@ const EMAIL_MAX = 254
 const notMember = () => problem(403, 'Bạn không phải thành viên của CLB này.', 'NOT_A_MEMBER')
 const clubOf = (clubId: string) => db.clubs.find((club) => club.id === clubId)
 
-/** Người gọi là thành viên CLB và có quyền quản lý thành viên theo ma trận (FR-MEM-01). */
+/** Người gọi là thành viên CLB và có quyền quản lý thành viên theo bảng phân quyền (FR-MEM-01). */
 function managedClub(userId: string, clubId: string, what: string) {
   const club = clubOf(clubId)
   if (!club) return { ok: false as const, response: problem(404, 'Không tìm thấy CLB.', 'CLUB_NOT_FOUND') }

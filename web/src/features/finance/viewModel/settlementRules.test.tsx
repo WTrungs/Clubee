@@ -42,7 +42,7 @@ async function clubWrapper(clubId: string, path = `/clubs/${clubId}/finance`) {
 }
 
 describe('settling an event fund (FR-FIN-11)', () => {
-  it('moves what is left to the general fund with a transfer and marks the ended event as settled', async () => {
+  it('moves what is left to the general fund with a transfer and leaves the ended event as it is', async () => {
     signInAs('u-mai')
     expect((await financeRepository.fund('c-guitar', exchange)).allowedActions).toContain('SETTLE')
     const eventVersion = eventOf('e-exchange')?.version ?? 0
@@ -50,7 +50,8 @@ describe('settling an event fund (FR-FIN-11)', () => {
     // Hết các thao tác ghi; ban chủ nhiệm vẫn xem được lịch sử khoản chi của quỹ.
     expect(settled).toMatchObject({ status: 'SETTLED', balance: 0, settledBy: { id: 'u-mai' }, allowedActions: ['VIEW_REQUESTS'] })
     expect(fundBalance(guitar)).toBe(6_220_000)
-    expect(eventOf('e-exchange')).toMatchObject({ status: 'SETTLED', version: eventVersion + 1 })
+    // Quyết toán là trạng thái của quỹ; sự kiện vẫn Đã kết thúc.
+    expect(eventOf('e-exchange')).toMatchObject({ status: 'ENDED', version: eventVersion })
 
     const [transfer] = (await financeRepository.transactions('c-guitar', { fundId: guitar, type: ['TRANSFER'] })).content
     expect(transfer).toMatchObject({ flow: 'IN', amount: 750_000, category: 'FUND_TRANSFER', occurredOn: vnDate(0) })
@@ -108,14 +109,39 @@ describe('settling an event fund (FR-FIN-11)', () => {
 })
 
 describe('closing an event (FR-EVT-16, BR-EVT-05)', () => {
-  it('needs the event to be settled first', async () => {
+  it('needs the event fund to be settled first', async () => {
     signInAs('u-anh')
     const ended = await eventRepository.get('c-guitar', 'e-exchange')
     expect(ended.allowedActions).not.toContain('CLOSE')
-    expect(await fail(eventRepository.transition('c-guitar', 'e-exchange', { action: 'CLOSE', version: ended.version }))).toMatchObject({ status: 422, code: 'INVALID_TRANSITION' })
+    expect(await fail(eventRepository.transition('c-guitar', 'e-exchange', { action: 'CLOSE', version: ended.version }))).toMatchObject({ status: 422, code: 'FUND_NOT_SETTLED' })
+    expect(eventOf('e-exchange')).toMatchObject({ status: 'ENDED', version: ended.version })
   })
 
-  it('lets the board or the event lead close a settled event, which ends every event position', async () => {
+  it('reports the fund status only to fund viewers, so committee staff who cannot close still see it settled', async () => {
+    endEvent('e-winter')
+    signInAs('u-long')
+    expect(await eventRepository.get('c-guitar', 'e-winter')).toMatchObject({ fundStatus: 'OPEN', allowedActions: expect.arrayContaining(['VIEW_FUND']) })
+    // Seed còn khoản chờ duyệt nên đặt thẳng trạng thái quỹ; luồng quyết toán đã có test riêng ở trên.
+    const fund = db.funds.find((candidate) => candidate.id === eventFundId('e-winter'))
+    if (!fund) throw new Error('Thiếu quỹ e-winter trong seed')
+    fund.status = 'SETTLED'
+    const staffView = await eventRepository.get('c-guitar', 'e-winter')
+    expect(staffView.fundStatus).toBe('SETTLED')
+    expect(staffView.allowedActions).not.toContain('CLOSE')
+    signInAs('u-hieu')
+    expect((await eventRepository.get('c-guitar', 'e-winter')).fundStatus).toBeNull()
+  })
+
+  it('only closes an ended event, even when its fund is settled', async () => {
+    signInAs('u-mai')
+    await settle(eventFundId('e-acoustic-sep'))
+    signInAs('u-anh')
+    const cancelled = await eventRepository.get('c-guitar', 'e-acoustic-sep')
+    expect(cancelled.allowedActions).not.toContain('CLOSE')
+    expect(await fail(eventRepository.transition('c-guitar', 'e-acoustic-sep', { action: 'CLOSE', version: cancelled.version }))).toMatchObject({ status: 422, code: 'INVALID_TRANSITION' })
+  })
+
+  it('lets the board or the event lead close an ended event once its fund is settled, which ends every event position', async () => {
     signInAs('u-mai')
     await settle(exchange)
     signInAs('u-hieu')
@@ -141,13 +167,13 @@ describe('closing an event (FR-EVT-16, BR-EVT-05)', () => {
     expect(db.subcommittees).toHaveLength(before)
   })
 
-  it('lets an event lead who is not on the board close their own settled event', async () => {
+  it('lets an event lead who is not on the board close their own event once its fund is settled', async () => {
     endEvent('e-livestream')
     signInAs('u-mai')
     await settle(eventFundId('e-livestream'))
     signInAs('u-kiet')
     const settled = await eventRepository.get('c-guitar', 'e-livestream')
-    expect(settled).toMatchObject({ status: 'SETTLED', allowedActions: expect.arrayContaining(['CLOSE']) })
+    expect(settled).toMatchObject({ status: 'ENDED', allowedActions: expect.arrayContaining(['CLOSE']) })
     expect((await eventRepository.transition('c-guitar', 'e-livestream', { action: 'CLOSE', version: settled.version })).status).toBe('CLOSED')
     expect(hasPosition('u-kiet', 'EVENT_LEAD', 'e-livestream')).toBe(false)
   })

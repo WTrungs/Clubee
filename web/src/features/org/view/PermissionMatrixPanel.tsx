@@ -64,7 +64,7 @@ function MatrixTable({ matrix, vm }: { matrix: PermissionMatrix; vm: PermissionM
   return (
     <div className="space-y-3">
       <div className="overflow-x-auto rounded-2xl border bg-card shadow-sm">
-        <table aria-label="Ma trận quyền theo chức vụ" className="w-full min-w-[960px] text-sm">
+        <table aria-label="Bảng phân quyền theo chức vụ" className="w-full min-w-[960px] text-sm">
           <thead className="border-b bg-muted/50 text-xs font-semibold text-muted-foreground">
             <tr>
               <th scope="col" className="sticky left-0 z-10 bg-muted px-4 py-3 text-left">
@@ -199,7 +199,7 @@ function ChangeHistory({ vm }: { vm: PermissionMatrixViewModel }) {
         </div>
       )}
       {vm.historyError && <ErrorState error={vm.historyError} />}
-      {!vm.historyLoading && !vm.historyError && vm.history.length === 0 && <p className="text-sm text-muted-foreground">Chưa có thay đổi nào; ma trận đang theo mặc định.</p>}
+      {!vm.historyLoading && !vm.historyError && vm.history.length === 0 && <p className="text-sm text-muted-foreground">Chưa có thay đổi nào; bảng phân quyền đang theo mặc định.</p>}
       {vm.history.length > 0 && (
         <ul className="divide-y rounded-2xl border bg-card">
           {vm.history.map((change) => (
@@ -218,7 +218,7 @@ function ChangeHistory({ vm }: { vm: PermissionMatrixViewModel }) {
   )
 }
 
-/** FR-ORG-05: ma trận quyền; từ 1024 px là bảng 7 cột chức vụ, hẹp hơn thì chọn từng chức vụ. */
+/** FR-ORG-05: bảng phân quyền; từ 1024 px là bảng 7 cột chức vụ, hẹp hơn thì chọn từng chức vụ. */
 export function PermissionMatrixPanel({ active }: { active: boolean }) {
   const vm = usePermissionMatrixViewModel(active)
   const wide = useMediaQuery('(min-width: 1024px)')
@@ -233,7 +233,7 @@ export function PermissionMatrixPanel({ active }: { active: boolean }) {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="space-y-1 text-sm text-muted-foreground">
           <p>Thay đổi có hiệu lực ngay sau khi lưu. Quyền xem thông tin thành viên không nằm ở đây.</p>
-          {!vm.canEdit && <p className="font-semibold text-foreground">Bạn chỉ xem được; người có quyền chỉnh ma trận mới sửa được.</p>}
+          {!vm.canEdit && <p className="font-semibold text-foreground">Bạn chỉ xem được; người có quyền chỉnh bảng phân quyền mới sửa được.</p>}
           {matrix.updatedAt && (
             <p>
               Sửa lần cuối {formatDateTime(matrix.updatedAt)}
@@ -255,7 +255,7 @@ export function PermissionMatrixPanel({ active }: { active: boolean }) {
           </div>
         )}
       </div>
-      <ConflictBanner show={vm.conflict} onReload={vm.reloadAfterConflict} message="Ma trận quyền vừa được người khác sửa. Tải lại để xem bản mới nhất; thay đổi chưa lưu sẽ bị bỏ." />
+      <ConflictBanner show={vm.conflict} onReload={vm.reloadAfterConflict} message="Bảng phân quyền vừa được người khác sửa. Tải lại để xem bản mới nhất; thay đổi chưa lưu sẽ bị bỏ." />
       <FormAlert message={vm.error?.message ?? null} details={vm.error?.details} />
 
       {wide ? <MatrixTable matrix={matrix} vm={vm} /> : <RoleList matrix={matrix} vm={vm} />}

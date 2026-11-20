@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { eventTransitions, formatEventTime, lifecycleSteps, needsDialog, reasonRequired, seatInfo, selectableLead } from './eventDisplay'
+import { closeHint, eventTransitions, formatEventTime, lifecycleSteps, needsDialog, reasonRequired, seatInfo, selectableLead } from './eventDisplay'
 
 describe('formatEventTime', () => {
   it('shows one date for a same-day event and both dates otherwise (UTC+7)', () => {
@@ -11,7 +11,7 @@ describe('formatEventTime', () => {
 describe('lifecycleSteps', () => {
   it('marks earlier steps done and the current one current', () => {
     const steps = lifecycleSteps('REGISTRATION_OPEN')
-    expect(steps.map((step) => step.state)).toEqual(['done', 'done', 'done', 'current', 'upcoming', 'upcoming', 'upcoming', 'upcoming'])
+    expect(steps.map((step) => step.state)).toEqual(['done', 'done', 'done', 'current', 'upcoming', 'upcoming', 'upcoming'])
   })
 
   it('stops a cancelled event at the last step it reached', () => {
@@ -20,9 +20,20 @@ describe('lifecycleSteps', () => {
     expect(steps.some((step) => step.state === 'current')).toBe(false)
   })
 
-  it('reaches the settled and closed steps at the end of the event (FR-FIN-11, FR-EVT-16)', () => {
-    expect(lifecycleSteps('SETTLED').map((step) => step.state).slice(-3)).toEqual(['done', 'current', 'upcoming'])
+  it('goes straight from ended to closed, with no settled step (FR-EVT-16, báo cáo 17/11)', () => {
+    expect(lifecycleSteps('ENDED').map((step) => step.status).slice(-2)).toEqual(['ENDED', 'CLOSED'])
+    expect(lifecycleSteps('ENDED').map((step) => step.state).slice(-2)).toEqual(['current', 'upcoming'])
     expect(lifecycleSteps('CLOSED').map((step) => step.state).slice(-2)).toEqual(['done', 'current'])
+  })
+})
+
+describe('closeHint', () => {
+  it('tells fund viewers of an ended event that the fund must be settled before closing (BR-EVT-05)', () => {
+    expect(closeHint({ status: 'ENDED', fundStatus: 'OPEN' })).toBe('Cần quyết toán quỹ sự kiện trước khi đóng sự kiện.')
+    // Người xem quỹ mà không đóng được sự kiện (nhân sự BTC) cũng không còn thấy gợi ý khi quỹ đã quyết toán.
+    expect(closeHint({ status: 'ENDED', fundStatus: 'SETTLED' })).toBeNull()
+    expect(closeHint({ status: 'ENDED', fundStatus: null })).toBeNull()
+    expect(closeHint({ status: 'ONGOING', fundStatus: 'OPEN' })).toBeNull()
   })
 })
 

@@ -8,7 +8,7 @@ import { useCurrentClub } from '@/features/club/viewModel/clubContext'
 import { financeQueryKeys } from '@/features/finance/viewModel/financeQueryKeys'
 import { eventRepository } from '../model/eventRepository'
 import type { EventTransitionAction } from '../model/eventTypes'
-import { eventActionSuccess, eventTransitions, lifecycleSteps, needsDialog, seatInfo } from './eventDisplay'
+import { closeHint, eventActionSuccess, eventTransitions, lifecycleSteps, needsDialog, seatInfo } from './eventDisplay'
 import { eventQueryKeys } from './eventQueryKeys'
 
 export type EventTab = 'overview' | 'staff' | 'registrations' | 'attendance' | 'fund'
@@ -111,6 +111,7 @@ export function useEventDetailViewModel() {
     error: detail.error,
     refetch: () => void detail.refetch(),
     steps: event ? lifecycleSteps(event.status, event.statusBeforeCancel) : [],
+    closeHint: event ? closeHint(event) : null,
     seats: event ? seatInfo(event) : null,
     transitions: eventTransitions(allowed),
     canManageStaff: allowed.includes('MANAGE_SUBCOMMITTEES'),

@@ -53,7 +53,7 @@ export function useFundPanelViewModel(fundId: string) {
   const [settleOpen, setSettleOpen] = useState(false)
   const [conflict, setConflict] = useState(false)
 
-  // Quyết toán đổi cả quỹ lẫn trạng thái sự kiện (Đã kết thúc sang Đã quyết toán), nên làm mới cả hai.
+  // Quyết toán mở nút đóng sự kiện (BR-EVT-05), nên làm mới cả quỹ lẫn chi tiết sự kiện.
   const refreshFundAndEvent = () =>
     Promise.all([queryClient.invalidateQueries({ queryKey: financeQueryKeys.all }), queryClient.invalidateQueries({ queryKey: eventQueryKeys.all })])
 

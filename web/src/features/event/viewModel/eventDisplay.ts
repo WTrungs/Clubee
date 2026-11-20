@@ -1,6 +1,6 @@
 import { formatDateTime, formatTimeRange } from '@/shared/format/formatDate'
 import type { Tone } from '@/shared/ui/tone'
-import type { EventAction, EventStatus, EventSummary, EventTransitionAction, MyRegistration, RegistrationStatus, ScheduleChange } from '../model/eventTypes'
+import type { EventAction, EventDetail, EventStatus, EventSummary, EventTransitionAction, MyRegistration, RegistrationStatus, ScheduleChange } from '../model/eventTypes'
 
 export const eventStatusDisplay: Record<EventStatus, { label: string; tone: Tone }> = {
   DRAFT: { label: 'Dự thảo', tone: 'neutral' },
@@ -9,7 +9,6 @@ export const eventStatusDisplay: Record<EventStatus, { label: string; tone: Tone
   REGISTRATION_OPEN: { label: 'Mở đăng ký', tone: 'success' },
   ONGOING: { label: 'Đang diễn ra', tone: 'progress' },
   ENDED: { label: 'Đã kết thúc', tone: 'neutral' },
-  SETTLED: { label: 'Đã quyết toán', tone: 'neutral' },
   CLOSED: { label: 'Đã đóng', tone: 'neutral' },
   CANCELLED: { label: 'Đã hủy', tone: 'danger' },
 }
@@ -64,7 +63,12 @@ export function cancelRegistrationText(status: RegistrationStatus, cancelDeadlin
 }
 
 /** Đường đi chính của ST-EVT, dùng cho thanh tiến trình. Đã hủy là điểm cuối riêng. */
-export const EVENT_LIFECYCLE: EventStatus[] = ['DRAFT', 'PENDING_APPROVAL', 'APPROVED', 'REGISTRATION_OPEN', 'ONGOING', 'ENDED', 'SETTLED', 'CLOSED']
+export const EVENT_LIFECYCLE: EventStatus[] = ['DRAFT', 'PENDING_APPROVAL', 'APPROVED', 'REGISTRATION_OPEN', 'ONGOING', 'ENDED', 'CLOSED']
+
+/** Sự kiện Đã kết thúc chỉ đóng được khi quỹ đã quyết toán (BR-EVT-05); máy chủ chỉ trả trạng thái quỹ cho người xem được quỹ. */
+export function closeHint(event: Pick<EventDetail, 'status' | 'fundStatus'>): string | null {
+  return event.status === 'ENDED' && event.fundStatus === 'OPEN' ? 'Cần quyết toán quỹ sự kiện trước khi đóng sự kiện.' : null
+}
 
 export interface LifecycleStep {
   status: EventStatus
@@ -131,7 +135,7 @@ export const EVENT_FILTERS: Array<{ key: string; label: string; statuses: EventS
   { key: 'upcoming', label: 'Sắp diễn ra', statuses: ['APPROVED', 'REGISTRATION_OPEN', 'ONGOING'] },
   { key: 'pending', label: 'Chờ duyệt', statuses: ['PENDING_APPROVAL'] },
   { key: 'draft', label: 'Dự thảo', statuses: ['DRAFT'] },
-  { key: 'past', label: 'Đã qua', statuses: ['ENDED', 'SETTLED', 'CLOSED'] },
+  { key: 'past', label: 'Đã qua', statuses: ['ENDED', 'CLOSED'] },
   { key: 'cancelled', label: 'Đã hủy', statuses: ['CANCELLED'] },
 ]
 

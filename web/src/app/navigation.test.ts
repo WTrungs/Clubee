@@ -9,7 +9,7 @@ describe('buildNavigation', () => {
   })
 
   it('gives a member the personal items, plus the club items when a club is open', () => {
-    expect(labels(buildNavigation(undefined, undefined))).toEqual([['Cá nhân', ['CLB của tôi', 'Tìm CLB', 'Công việc của tôi']]])
+    expect(labels(buildNavigation(undefined, undefined))).toEqual([['Cá nhân', ['CLB của tôi', 'Tìm CLB', 'Công việc của tôi', 'Quét mã điểm danh']]])
     const inClub = buildNavigation('c-guitar', 'CLB Guitar Sinh viên', 'USER')
     expect(inClub[1]?.title).toBe('CLB Guitar Sinh viên')
     expect(inClub[1]?.items[0]).toMatchObject({ to: '/clubs/c-guitar', label: 'Tổng quan' })

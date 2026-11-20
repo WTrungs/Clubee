@@ -1,7 +1,7 @@
 import type { PersonRef } from '@/api/commonTypes'
 import type { PositionRole } from './orgTypes'
 
-/** Quyền thao tác mà ma trận quyền bật, tắt theo từng chức vụ (SRS 3.3). Quyền xem thông tin theo SRS 3.5 không nằm ở đây. */
+/** Quyền thao tác mà bảng phân quyền bật, tắt theo từng chức vụ (SRS 3.3). Quyền xem thông tin theo SRS 3.5 không nằm ở đây. */
 export const PERMISSION_KEYS = [
   'CONFIGURE_CLUB',
   'MANAGE_TERMS',

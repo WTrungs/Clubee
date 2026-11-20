@@ -7,11 +7,11 @@ import { canAccessClub } from '../mockMembers'
 import { applyMatrixChanges, cellOf, matrixChangeLogs, matrixOf, matrixVersionOf, ownRolesOf, resettableChanges } from '../mockPermissionMatrix'
 import { isBoardMember, positionTitles } from '../mockPermissions'
 
-/** Mỗi lần lưu tối đa toàn bộ ô của ma trận. */
+/** Mỗi lần lưu tối đa toàn bộ ô của bảng phân quyền. */
 const CHANGES_MAX = PERMISSION_KEYS.length * MATRIX_ROLES.length
 
 const notMember = () => problem(403, 'Bạn không phải thành viên của CLB này.', 'NOT_A_MEMBER')
-const boardOnly = () => problem(403, 'Chỉ ban chủ nhiệm xem được ma trận quyền.', 'FORBIDDEN')
+const boardOnly = () => problem(403, 'Chỉ ban chủ nhiệm xem được bảng phân quyền.', 'FORBIDDEN')
 
 const isChange = (value: unknown): value is PermissionChange => {
   if (typeof value !== 'object' || value === null) return false
@@ -19,7 +19,7 @@ const isChange = (value: unknown): value is PermissionChange => {
   return MATRIX_ROLES.includes(change.role as PositionRole) && PERMISSION_KEYS.includes(change.permission as PermissionKey) && typeof change.enabled === 'boolean'
 }
 
-/** FR-ORG-05: xem, sửa theo lô, khôi phục mặc định và lịch sử thay đổi của ma trận quyền. */
+/** FR-ORG-05: xem, sửa theo lô, khôi phục mặc định và lịch sử thay đổi của bảng phân quyền. */
 export const permissionHandlers = [
   http.get(`${API}/clubs/:clubId/permission-matrix`, async ({ params }) => {
     await networkDelay()
@@ -37,7 +37,7 @@ export const permissionHandlers = [
     if (!user.ok) return user.response
     const clubId = String(params.clubId)
     if (!canAccessClub(user.value.id, clubId)) return notMember()
-    if (!can(user.value.id, clubId, 'EDIT_PERMISSIONS')) return forbidden(clubId, 'EDIT_PERMISSIONS', 'chỉnh ma trận quyền')
+    if (!can(user.value.id, clubId, 'EDIT_PERMISSIONS')) return forbidden(clubId, 'EDIT_PERMISSIONS', 'chỉnh bảng phân quyền')
     const body = (await request.json()) as Partial<UpdatePermissionMatrixRequest>
     const raw: unknown[] = Array.isArray(body.changes) ? body.changes : []
     if (raw.length === 0) return problem(400, 'Chưa có thay đổi nào để lưu.', 'VALIDATION', [{ field: 'changes', message: `Gửi từ 1 đến ${CHANGES_MAX} ô.` }])
@@ -56,7 +56,7 @@ export const permissionHandlers = [
     if (ownRoles.length > 0) {
       return problem(403, `Không tự sửa quyền của chức vụ bạn đang giữ (${ownRoles.map((role) => positionTitles[role]).join(', ')}).`, 'OWN_ROLE')
     }
-    if (body.version !== matrixVersionOf(clubId)) return problem(409, 'Ma trận quyền vừa được người khác sửa. Tải lại để xem bản mới nhất.', 'VERSION_CONFLICT')
+    if (body.version !== matrixVersionOf(clubId)) return problem(409, 'Bảng phân quyền vừa được người khác sửa. Tải lại để xem bản mới nhất.', 'VERSION_CONFLICT')
     const locked = changes.flatMap((change, index) => {
       const cell = cellOf(clubId, user.value.id, change.role, change.permission)
       return cell.state === 'LOCKED' || cell.state === 'NOT_APPLICABLE' ? [{ field: `changes[${index}]`, message: cell.lockReason ?? 'Ô này không sửa được.' }] : []
@@ -72,9 +72,9 @@ export const permissionHandlers = [
     if (!user.ok) return user.response
     const clubId = String(params.clubId)
     if (!canAccessClub(user.value.id, clubId)) return notMember()
-    if (!can(user.value.id, clubId, 'EDIT_PERMISSIONS')) return forbidden(clubId, 'EDIT_PERMISSIONS', 'chỉnh ma trận quyền')
+    if (!can(user.value.id, clubId, 'EDIT_PERMISSIONS')) return forbidden(clubId, 'EDIT_PERMISSIONS', 'chỉnh bảng phân quyền')
     const body = (await request.json()) as { version?: unknown }
-    if (body.version !== matrixVersionOf(clubId)) return problem(409, 'Ma trận quyền vừa được người khác sửa. Tải lại để xem bản mới nhất.', 'VERSION_CONFLICT')
+    if (body.version !== matrixVersionOf(clubId)) return problem(409, 'Bảng phân quyền vừa được người khác sửa. Tải lại để xem bản mới nhất.', 'VERSION_CONFLICT')
     // Hàng của chức vụ người gọi đang giữ không đổi; ô còn lệch nằm ở `changedFromDefault`.
     applyMatrixChanges(clubId, user.value.id, resettableChanges(clubId, user.value.id), true)
     return HttpResponse.json(matrixOf(clubId, user.value.id))

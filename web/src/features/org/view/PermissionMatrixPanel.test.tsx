@@ -37,14 +37,14 @@ async function wrapperFor(userId: string) {
   )
 }
 
-const lockedReason = 'Chủ nhiệm luôn giữ quyền này để CLB không mất người chỉnh ma trận.'
+const lockedReason = 'Chủ nhiệm luôn giữ quyền này để CLB không mất người chỉnh bảng phân quyền.'
 const override = (role: 'TREASURER' | 'VICE_PRESIDENT', permission: 'CONFIGURE_CLUB' | 'EDIT_PERMISSIONS', enabled: boolean) =>
   db.permissionOverrides.push({ clubId: 'c-guitar', role, permission, enabled, updatedBy: 'u-anh', updatedAt: '2026-11-16T10:00:00+07:00' })
 
 describe('PermissionMatrixPanel (FR-ORG-05, BR-ACL-03, 04)', () => {
   it('explains locked cells in a visible legend tied to each switch', async () => {
     render(<PermissionMatrixPanel active />, { wrapper: await wrapperFor('u-anh') })
-    const locked = await screen.findByRole('switch', { name: 'Chỉnh ma trận quyền cho Chủ nhiệm' })
+    const locked = await screen.findByRole('switch', { name: 'Chỉnh bảng phân quyền cho Chủ nhiệm' })
     expect(locked).toHaveAccessibleDescription(lockedReason)
     expect(within(screen.getByRole('list', { name: 'Chú giải' })).getByText(lockedReason)).toBeVisible()
     expect(screen.getByRole('switch', { name: 'Quản lý thành viên cho Chủ nhiệm' })).toHaveAccessibleDescription('Bạn đang giữ chức vụ này nên không tự sửa quyền của nó.')
@@ -68,8 +68,8 @@ describe('PermissionMatrixPanel (FR-ORG-05, BR-ACL-03, 04)', () => {
     render(<PermissionMatrixPanel active />, { wrapper: await wrapperFor('u-anh') })
     const own = await screen.findByRole('switch', { name: 'Quản lý thành viên cho Chủ nhiệm' })
     expect(own).toBeDisabled()
-    expect(screen.getByRole('switch', { name: 'Chỉnh ma trận quyền cho Chủ nhiệm' })).toBeDisabled()
-    expect(screen.getAllByText('Chủ nhiệm luôn giữ quyền này để CLB không mất người chỉnh ma trận.').length).toBeGreaterThan(0)
+    expect(screen.getByRole('switch', { name: 'Chỉnh bảng phân quyền cho Chủ nhiệm' })).toBeDisabled()
+    expect(screen.getAllByText('Chủ nhiệm luôn giữ quyền này để CLB không mất người chỉnh bảng phân quyền.').length).toBeGreaterThan(0)
 
     await user.click(screen.getByRole('switch', { name: 'Quản lý thành viên cho Thủ quỹ' }))
     expect(screen.getByText('1 thay đổi chưa lưu')).toBeInTheDocument()
@@ -83,7 +83,7 @@ describe('PermissionMatrixPanel (FR-ORG-05, BR-ACL-03, 04)', () => {
 
   it('shows switches as read-only to the treasurer', async () => {
     render(<PermissionMatrixPanel active />, { wrapper: await wrapperFor('u-mai') })
-    expect(await screen.findByText('Bạn chỉ xem được; người có quyền chỉnh ma trận mới sửa được.')).toBeInTheDocument()
+    expect(await screen.findByText('Bạn chỉ xem được; người có quyền chỉnh bảng phân quyền mới sửa được.')).toBeInTheDocument()
     expect(screen.getByRole('switch', { name: 'Giao việc cho Trưởng ban' })).toBeDisabled()
     expect(screen.queryByRole('button', { name: 'Khôi phục mặc định' })).not.toBeInTheDocument()
   })
@@ -113,10 +113,10 @@ describe('usePermissionMatrixViewModel (NFR-REL-03)', () => {
     if (!cell) throw new Error('Thiếu ô')
     act(() => result.current.toggle(cell, false))
     act(() => result.current.openSave())
-    // Chủ nhiệm vừa tắt quyền chỉnh ma trận của Phó chủ nhiệm trong lúc Phó chủ nhiệm đang sửa.
+    // Chủ nhiệm vừa tắt quyền chỉnh bảng phân quyền của Phó chủ nhiệm trong lúc Phó chủ nhiệm đang sửa.
     override('VICE_PRESIDENT', 'EDIT_PERMISSIONS', false)
     act(() => result.current.confirmSave())
-    await waitFor(() => expect(result.current.error?.message).toBe('Chỉ Chủ nhiệm được chỉnh ma trận quyền.'))
+    await waitFor(() => expect(result.current.error?.message).toBe('Chỉ Chủ nhiệm được chỉnh bảng phân quyền.'))
     expect(result.current.conflict).toBe(false)
     expect(result.current.dialog).toBeNull()
     expect(result.current.changes).toHaveLength(1)

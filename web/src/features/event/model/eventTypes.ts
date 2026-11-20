@@ -1,6 +1,7 @@
 import type { PersonRef } from '@/api/commonTypes'
+import type { FundStatus } from '@/features/finance/model/financeTypes'
 
-/** ST-EVT (SRS 4.2). */
+/** ST-EVT theo báo cáo 17/11: quyết toán là trạng thái của quỹ, không phải của sự kiện. */
 export type EventStatus =
   | 'DRAFT'
   | 'PENDING_APPROVAL'
@@ -8,7 +9,6 @@ export type EventStatus =
   | 'REGISTRATION_OPEN'
   | 'ONGOING'
   | 'ENDED'
-  | 'SETTLED'
   | 'CLOSED'
   | 'CANCELLED'
 
@@ -74,6 +74,8 @@ export interface EventDetail extends EventSummary {
   createdAt: string
   /** Quỹ sự kiện, có từ khi sự kiện sang Đã duyệt. */
   fundId: string | null
+  /** Trạng thái quỹ sự kiện; null khi chưa có quỹ hoặc người xem không được xem quỹ (SRS 3.5). */
+  fundStatus: FundStatus | null
   /** Lần dời thời gian gần nhất (FR-EVT-14); null khi chưa dời lần nào. */
   lastScheduleChange: ScheduleChange | null
 }

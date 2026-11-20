@@ -17,7 +17,7 @@ export type ClubAction =
   | 'ASSIGN_POSITION'
   /** FR-ACC-08: thành viên Chính thức yêu cầu Admin chuyển quyền khi ban chủ nhiệm không hoạt động. */
   | 'REQUEST_PRESIDENCY_TRANSFER'
-  /** FR-ORG-05: ban chủ nhiệm xem ma trận quyền; sửa được hay không nằm ở `allowedActions` của ma trận. */
+  /** FR-ORG-05: ban chủ nhiệm xem bảng phân quyền; sửa được hay không nằm ở `allowedActions` của bảng phân quyền. */
   | 'VIEW_PERMISSIONS'
 
 /** Nhiệm kỳ đang phụ trách CLB: Đang chạy hoặc Đang bàn giao. */

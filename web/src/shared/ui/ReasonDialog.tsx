@@ -13,6 +13,8 @@ interface ReasonDialogProps {
   label?: string
   placeholder?: string
   confirmLabel: string
+  /** Nhãn nút đóng; đổi khi nút xác nhận cũng có chữ "Hủy" để khỏi bấm nhầm. */
+  dismissLabel?: string
   confirmVariant?: 'primary' | 'destructive'
   /** Chuyển trạng thái bắt buộc lý do thì form bắt buộc nhập (SRS 4.2). */
   minLength?: number
@@ -29,6 +31,7 @@ export function ReasonDialog({
   label = 'Lý do',
   placeholder,
   confirmLabel,
+  dismissLabel = 'Hủy bỏ',
   confirmVariant = 'primary',
   minLength = REASON_MIN,
   maxLength = REASON_MAX,
@@ -67,7 +70,7 @@ export function ReasonDialog({
         footer={
           <>
             <Button variant="ghost" onClick={() => handleOpenChange(false)} disabled={pending}>
-              Hủy bỏ
+              {dismissLabel}
             </Button>
             <Button type="submit" form={formId} variant={confirmVariant} loading={pending}>
               {confirmLabel}

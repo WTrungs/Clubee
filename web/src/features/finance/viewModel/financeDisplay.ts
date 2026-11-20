@@ -41,6 +41,7 @@ export const transactionStatusDisplay: Record<TransactionStatus, { label: string
   POSTED: { label: 'Đã ghi sổ', tone: 'success' },
   REJECTED: { label: 'Bị từ chối', tone: 'danger' },
   WITHDRAWN: { label: 'Đã rút', tone: 'neutral' },
+  CANCELLED: { label: 'Đã hủy', tone: 'neutral' },
 }
 
 export const fundStatusDisplay: Record<FundStatus, { label: string; tone: Tone }> = {
@@ -55,6 +56,7 @@ export const transactionActionLabel: Record<TransactionTransitionAction, string>
   APPROVE: 'Duyệt',
   REJECT: 'Từ chối',
   POST: 'Ghi sổ',
+  CANCEL: 'Hủy khoản chi',
 }
 
 /** Câu báo sau khi máy chủ đã lưu; điều chỉnh giảm quỹ được ghi sổ ngay khi duyệt. */
@@ -69,18 +71,20 @@ export function transactionActionSuccess(action: TransactionTransitionAction, ty
       return adjustment ? 'Đã từ chối điều chỉnh.' : 'Đã từ chối khoản chi.'
     case 'POST':
       return 'Đã ghi sổ khoản chi.'
+    case 'CANCEL':
+      return 'Đã hủy khoản chi.'
   }
 }
 
 /** Thứ tự nút trong chi tiết giao dịch: thao tác chính trước. */
-export const TRANSACTION_TRANSITIONS: TransactionTransitionAction[] = ['APPROVE', 'POST', 'REJECT', 'WITHDRAW']
+export const TRANSACTION_TRANSITIONS: TransactionTransitionAction[] = ['APPROVE', 'POST', 'REJECT', 'WITHDRAW', 'CANCEL']
 
 /** Lọc danh sách khoản chi: cần xử lý (chờ duyệt, chờ ghi sổ) hoặc đã xử lý xong. */
 export type RequestFilter = 'PENDING' | 'CLOSED'
 
 export const requestFilterDisplay: Record<RequestFilter, { label: string; statuses: TransactionStatus[] }> = {
   PENDING: { label: 'Cần xử lý', statuses: ['PROPOSED', 'APPROVED'] },
-  CLOSED: { label: 'Đã xử lý', statuses: ['POSTED', 'REJECTED', 'WITHDRAWN'] },
+  CLOSED: { label: 'Đã xử lý', statuses: ['POSTED', 'REJECTED', 'WITHDRAWN', 'CANCELLED'] },
 }
 
 /** Số tiền kèm dấu theo chiều tiền, ví dụ "+1.500.000 đ" hoặc "−450.000 đ"; màu chỉ đi kèm, không thay cho dấu. */

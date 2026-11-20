@@ -1,4 +1,4 @@
-import { BookCheck, Check, FileText, RefreshCw, Scale, Undo2, X } from 'lucide-react'
+import { Ban, BookCheck, Check, FileText, RefreshCw, Scale, Undo2, X } from 'lucide-react'
 import { useEffect, useState, type ReactNode } from 'react'
 import { formatDate, formatDateTime } from '@/shared/format/formatDate'
 import { formatMoney } from '@/shared/format/formatMoney'
@@ -44,6 +44,7 @@ const actionIcon: Record<TransactionTransitionAction, ReactNode> = {
   POST: <BookCheck aria-hidden />,
   REJECT: <X aria-hidden />,
   WITHDRAW: <Undo2 aria-hidden />,
+  CANCEL: <Ban aria-hidden />,
 }
 
 /** Số dư trước và sau khi ghi sổ một khoản làm giảm quỹ (BR-FIN-08). */
@@ -87,6 +88,18 @@ function ActionDialogs({ data, actions }: { data: TransactionDetail; actions: Tr
         description={adjustment ? 'Thủ quỹ tạo điều chỉnh sẽ nhận thông báo kèm lý do.' : 'Người đề xuất sẽ nhận thông báo kèm lý do.'}
         label="Lý do từ chối"
         confirmLabel="Từ chối"
+        confirmVariant="destructive"
+        pending={actions.pending}
+        onConfirm={(reason) => actions.confirm(reason)}
+      />
+      <ReasonDialog
+        open={actions.dialog === 'CANCEL'}
+        onOpenChange={close}
+        title="Hủy khoản chi"
+        description="Khoản chi đã duyệt sẽ không được chi nữa và không khôi phục được. Người đề xuất, người duyệt và Thủ quỹ nhận thông báo kèm lý do."
+        label="Lý do hủy"
+        confirmLabel="Hủy khoản chi"
+        dismissLabel="Giữ khoản chi"
         confirmVariant="destructive"
         pending={actions.pending}
         onConfirm={(reason) => actions.confirm(reason)}
@@ -187,7 +200,7 @@ function DetailBody({ clubId, transactionId, fundId, onOpenTransaction, onPendin
                 loading={actions.pendingAction === action && actions.dialog === null}
                 disabled={actions.pending}
                 onClick={() => actions.request(action)}
-                className={action === 'REJECT' ? 'text-destructive' : undefined}
+                className={action === 'REJECT' || action === 'CANCEL' ? 'text-destructive' : undefined}
               >
                 {actionIcon[action]}
                 {transactionActionLabel[action]}
@@ -224,7 +237,7 @@ function DetailBody({ clubId, transactionId, fundId, onOpenTransaction, onPendin
 
             <dl className="grid grid-cols-1 gap-4 rounded-2xl border bg-muted/40 p-4 sm:grid-cols-2">
               <DetailRow label="Hạng mục">{financeCategoryLabel[data.category]}</DetailRow>
-              <DetailRow label={dateLabel(data)}>{data.occurredOn ? formatDate(data.occurredOn) : 'Chưa ghi sổ'}</DetailRow>
+              <DetailRow label={dateLabel(data)}>{data.occurredOn ? formatDate(data.occurredOn) : data.status === 'CANCELLED' ? 'Không chi (đã hủy)' : 'Chưa ghi sổ'}</DetailRow>
               {data.counterpartFundName &&
                 (data.flow === 'IN' ? <DetailRow label="Chuyển từ">{data.fundName}</DetailRow> : <DetailRow label="Chuyển sang">{data.counterpartFundName}</DetailRow>)}
               <DetailRow label={creatorLabel(data)}>
@@ -235,6 +248,12 @@ function DetailBody({ clubId, transactionId, fundId, onOpenTransaction, onPendin
                 <DetailRow label={data.status === 'REJECTED' ? 'Người từ chối' : 'Người duyệt'}>
                   {data.approver.fullName}
                   {data.decidedAt && <span className="block text-xs font-normal text-muted-foreground">{formatDateTime(data.decidedAt)}</span>}
+                </DetailRow>
+              )}
+              {data.cancelledBy && (
+                <DetailRow label="Người hủy">
+                  {data.cancelledBy.fullName}
+                  {data.cancelledAt && <span className="block text-xs font-normal text-muted-foreground">{formatDateTime(data.cancelledAt)}</span>}
                 </DetailRow>
               )}
               {data.poster && data.type !== 'INCOME' && (
@@ -269,6 +288,13 @@ function DetailBody({ clubId, transactionId, fundId, onOpenTransaction, onPendin
               <div className="rounded-2xl border border-destructive/30 bg-status-danger-soft p-4 text-sm">
                 <p className="font-semibold text-status-danger">Lý do từ chối</p>
                 <p className="mt-1 break-words whitespace-pre-line">{data.rejectionReason}</p>
+              </div>
+            )}
+
+            {data.cancellationReason && (
+              <div className="rounded-2xl border bg-muted/40 p-4 text-sm">
+                <p className="font-semibold">Lý do hủy</p>
+                <p className="mt-1 break-words whitespace-pre-line">{data.cancellationReason}</p>
               </div>
             )}
 

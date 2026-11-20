@@ -64,6 +64,8 @@ export interface AttendanceActivity {
   canMark: (userId: string) => boolean
   canClose: (userId: string) => boolean
   opensAt: (day: string | null) => string
+  /** Giờ bắt đầu của buổi hoặc của ngày; quét sau giờ này ghi Đi muộn (FR-ATT-06). */
+  startsAt: (day: string | null) => string
   expected: (day: string | null) => string[]
   forbidden: { view: string; mark: string; qr: string; close: string }
 }
@@ -85,6 +87,7 @@ export function sessionActivity(session: DbSession): AttendanceActivity {
     canMark: manages,
     canClose: manages,
     opensAt: () => minutesBefore(session.startAt, leadMinutesOf(session.clubId)),
+    startsAt: () => session.startAt,
     // Chỉ tính người đã gia nhập trước hoặc trong ngày diễn ra buổi.
     expected: () =>
       db.memberships
@@ -128,6 +131,8 @@ export function eventActivity(event: DbEvent): AttendanceActivity {
     canMark: staff,
     canClose: (userId) => board(userId) || isEventLead(userId, event),
     opensAt: (day) => (day === null || day === days[0] ? minutesBefore(event.startAt, leadMinutesOf(event.clubId)) : `${day}T00:00:00+07:00`),
+    // Các ngày sau của sự kiện nhiều ngày bắt đầu cùng giờ với ngày đầu.
+    startsAt: (day) => (day === null || day === days[0] ? event.startAt : `${day}T${toVnIso(Date.parse(event.startAt)).slice(11)}`),
     // Người Chờ xác nhận lại vẫn giữ chỗ tới hạn, và hạn có thể trùng giờ bắt đầu, sau lúc mở điểm danh.
     expected: () => db.registrations.filter((registration) => registration.eventId === event.id && holdsSeat(registration)).map((registration) => registration.userId),
     forbidden: {
@@ -241,6 +246,13 @@ export function currentCode(activity: AttendanceActivity, day: string | null, no
   const params = new URLSearchParams({ type: activity.type, club: activity.clubId, id: activity.id, code: stored.code })
   if (day) params.set('day', day)
   return { day, payload: `clubee://attendance?${params.toString()}`, expiresAt: toVnIso((cycle + 1) * cycleMs), refreshSeconds }
+}
+
+/** FR-ATT-06: mã quét được nhận khi là mã của chu kỳ hiện tại hoặc chu kỳ liền trước (mạng chậm lúc mã vừa đổi). */
+export function isCurrentCode(activity: AttendanceActivity, day: string | null, code: string, now = Date.now()): boolean {
+  const cycle = Math.floor(now / (rotateSecondsOf(activity.clubId) * 1000))
+  const sameSheet = matches(activity, day)
+  return code !== '' && db.attendanceCodes.some((item) => sameSheet(item) && item.code === code && item.cycle >= cycle - 1 && item.cycle <= cycle)
 }
 
 function matchesFilter(entry: SheetEntry, filter: string | null): boolean {

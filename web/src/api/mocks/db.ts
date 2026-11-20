@@ -56,7 +56,7 @@ export interface DbBacklogItem {
   version: number
 }
 
-/** Ô ma trận quyền CLB đã sửa khác mặc định (FR-ORG-05); ô trở về mặc định thì bỏ bản ghi. */
+/** Ô bảng phân quyền CLB đã sửa khác mặc định (FR-ORG-05); ô trở về mặc định thì bỏ bản ghi. */
 export interface DbPermissionOverride {
   clubId: string
   role: PositionRole

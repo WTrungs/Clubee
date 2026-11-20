@@ -10,7 +10,7 @@ export const DEPARTMENT_ROLES: PositionRole[] = ['DEPARTMENT_HEAD', 'DEPARTMENT_
 /** Chức vụ thường trực theo nhiệm kỳ (BR-ORG-01, BR-MEM-05). */
 export const STANDING_ROLES: PositionRole[] = [...BOARD_ROLES, ...DEPARTMENT_ROLES]
 /** Chức vụ trong sự kiện có hiệu lực từ Đã duyệt đến trước Đã đóng, Đã hủy (SRS 4.2, BR-ORG-03). */
-export const EVENT_STAFF_ACTIVE: EventStatus[] = ['APPROVED', 'REGISTRATION_OPEN', 'ONGOING', 'ENDED', 'SETTLED']
+export const EVENT_STAFF_ACTIVE: EventStatus[] = ['APPROVED', 'REGISTRATION_OPEN', 'ONGOING', 'ENDED']
 
 export const positionTitles: Record<PositionRole, string> = {
   PRESIDENT: 'Chủ nhiệm',
