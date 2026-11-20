@@ -28,6 +28,7 @@ function request(changes: Partial<UpdateClubSettingsRequest> = {}): UpdateClubSe
     rescheduleConfirmHours: club.rescheduleConfirmHours,
     attendanceLeadMinutes: club.attendanceLeadMinutes,
     attendanceQrRotateSeconds: club.attendanceQrRotateSeconds,
+    attendanceEditHours: club.attendanceEditHours,
     taskReminderDays: club.taskReminderDays,
     expenseReceiptThreshold: club.expenseReceiptThreshold,
     advanceSettleDays: club.advanceSettleDays,
@@ -60,6 +61,7 @@ describe('club settings (FR-CLB-03)', () => {
       rescheduleConfirmHours: 48,
       attendanceLeadMinutes: 15,
       attendanceQrRotateSeconds: 30,
+      attendanceEditHours: 48,
       taskReminderDays: 1,
       expenseReceiptThreshold: 200_000,
       advanceSettleDays: 14,
@@ -107,7 +109,7 @@ describe('club settings (FR-CLB-03)', () => {
     const error = await fail(
       clubRepository.updateSettings(
         'c-guitar',
-        request({ inviteLinkDays: 0, attendanceLeadMinutes: 121, attendanceQrRotateSeconds: 9, expenseReceiptThreshold: 1.5 }),
+        request({ inviteLinkDays: 0, attendanceLeadMinutes: 121, attendanceQrRotateSeconds: 9, attendanceEditHours: 0, expenseReceiptThreshold: 1.5 }),
       ),
     )
     expect(error?.status).toBe(400)
@@ -115,13 +117,14 @@ describe('club settings (FR-CLB-03)', () => {
       { field: 'inviteLinkDays', message: 'Hạn liên kết mời từ 1 đến 30 ngày.' },
       { field: 'attendanceLeadMinutes', message: 'Mở điểm danh trước giờ từ 0 đến 120 phút.' },
       { field: 'attendanceQrRotateSeconds', message: 'Chu kỳ đổi mã từ 10 đến 300 giây.' },
+      { field: 'attendanceEditHours', message: 'Hạn sửa điểm danh từ 1 đến 720 giờ sau khi chốt.' },
       { field: 'expenseReceiptThreshold', message: 'Ngưỡng chứng từ từ 0 đ đến 100.000.000 đ.' },
     ])
     const tooBig = await fail(clubRepository.updateSettings('c-guitar', request({ expenseReceiptThreshold: 100_000_001, probationStep: 'yes' as unknown as boolean })))
     expect(tooBig?.fieldErrors.map((fieldError) => fieldError.field)).toEqual(['probationStep', 'expenseReceiptThreshold'])
     // Hai đầu khoảng đều hợp lệ.
-    const edges = await clubRepository.updateSettings('c-guitar', request({ inviteLinkDays: 30, attendanceLeadMinutes: 0, attendanceQrRotateSeconds: 300, expenseReceiptThreshold: 0 }))
-    expect(edges).toMatchObject({ inviteLinkDays: 30, attendanceLeadMinutes: 0, attendanceQrRotateSeconds: 300, expenseReceiptThreshold: 0 })
+    const edges = await clubRepository.updateSettings('c-guitar', request({ inviteLinkDays: 30, attendanceLeadMinutes: 0, attendanceQrRotateSeconds: 300, attendanceEditHours: 720, expenseReceiptThreshold: 0 }))
+    expect(edges).toMatchObject({ inviteLinkDays: 30, attendanceLeadMinutes: 0, attendanceQrRotateSeconds: 300, attendanceEditHours: 720, expenseReceiptThreshold: 0 })
   })
 
   it('checks the event, task and advance settings at both ends of their ranges', async () => {

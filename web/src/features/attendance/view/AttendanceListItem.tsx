@@ -1,10 +1,11 @@
 import { motion } from 'motion/react'
-import { QrCode } from 'lucide-react'
+import { Pencil, QrCode } from 'lucide-react'
 import { formatDateTime, formatTime, toVnDateKey } from '@/shared/format/formatDate'
 import { cn } from '@/shared/lib/cn'
 import { itemVariants } from '@/shared/motion/presets'
 import { Avatar } from '@/shared/ui/Avatar'
 import { Badge } from '@/shared/ui/Badge'
+import { Button } from '@/shared/ui/Button'
 import { Spinner } from '@/shared/ui/Spinner'
 import { toneVariants } from '@/shared/ui/tone'
 import type { AttendanceRow, AttendanceStatus } from '../model/attendanceTypes'
@@ -16,13 +17,17 @@ interface AttendanceListItemProps {
   pending: boolean
   now: number
   onMark: (status: AttendanceStatus) => void
+  /** Sửa sau khi chốt (FR-ATT-08). */
+  canEdit?: boolean
+  onEdit?: () => void
+  onShowHistory?: () => void
 }
 
 /** Bản ghi của hôm nay chỉ cần giờ; bản ghi ngày khác (ví dụ nhập lại sau buổi) ghi cả ngày. */
 const recordedLabel = (recordedAt: string, now: number) =>
   toVnDateKey(recordedAt) === toVnDateKey(new Date(now)) ? formatTime(recordedAt) : formatDateTime(recordedAt)
 
-export function AttendanceListItem({ row, canMark, pending, now, onMark }: AttendanceListItemProps) {
+export function AttendanceListItem({ row, canMark, pending, now, onMark, canEdit = false, onEdit, onShowHistory }: AttendanceListItemProps) {
   const record = row.record
   const name = row.person.fullName
   return (
@@ -33,6 +38,11 @@ export function AttendanceListItem({ row, canMark, pending, now, onMark }: Atten
           <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <span className="truncate font-semibold">{name}</span>
             {row.extra && <Badge tone="progress">Phát sinh</Badge>}
+            {record && record.changes.length > 0 && (
+              <button type="button" onClick={onShowHistory} aria-label={`Xem lịch sử sửa của ${name}`} className="rounded-full focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
+                <Badge tone="info">Đã sửa</Badge>
+              </button>
+            )}
             {row.absenceRequest && (
               <Badge tone={row.absenceRequest.status === 'APPROVED' ? 'info' : 'warning'}>
                 {row.absenceRequest.status === 'APPROVED' ? 'Có đơn đã duyệt' : 'Có đơn chờ duyệt'}
@@ -77,6 +87,18 @@ export function AttendanceListItem({ row, canMark, pending, now, onMark }: Atten
               </button>
             )
           })}
+        </div>
+      ) : canEdit ? (
+        <div className="flex shrink-0 items-center gap-2 self-start sm:self-center">
+          {record && (
+            <Badge tone={attendanceStatusDisplay[record.status].tone} dot>
+              {attendanceStatusDisplay[record.status].label}
+            </Badge>
+          )}
+          <Button variant="outline" size="sm" onClick={onEdit} aria-label={`Sửa điểm danh của ${name}`}>
+            <Pencil aria-hidden />
+            Sửa
+          </Button>
         </div>
       ) : record ? (
         <Badge tone={attendanceStatusDisplay[record.status].tone} dot className="self-start sm:self-center">

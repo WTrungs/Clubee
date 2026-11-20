@@ -24,6 +24,7 @@ const SERVER_FIELDS = [
   'rescheduleConfirmHours',
   'attendanceLeadMinutes',
   'attendanceQrRotateSeconds',
+  'attendanceEditHours',
   'taskReminderDays',
   'expenseReceiptThreshold',
   'advanceSettleDays',

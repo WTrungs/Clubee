@@ -96,7 +96,8 @@ describe('closing attendance (FR-ATT-08, closing part)', () => {
 
     expect(after.closedAt).not.toBeNull()
     expect(after.closedBy?.id).toBe('u-anh')
-    expect(after.allowedActions).toEqual([])
+    // Đã chốt: chỉ còn sửa có lý do (FR-ATT-08).
+    expect(after.allowedActions).toEqual(['EDIT'])
     expect(after.counts).toMatchObject({ unmarked: 0, absent: before.counts.absent + unmarked, present: before.counts.present, excused: 1 })
     expect(recordsOf('s-weekly-now', 'u-ha')[0]?.status).toBe('EXCUSED')
     expect(recordsOf('s-weekly-now', 'u-yen')).toEqual([])
@@ -105,7 +106,7 @@ describe('closing attendance (FR-ATT-08, closing part)', () => {
     const again = await fail(attendanceRepository.close(weekly, { action: 'CLOSE', day: null, version: after.version }))
     expect(again).toMatchObject({ status: 422, code: 'ATTENDANCE_CLOSED' })
     const edit = await fail(attendanceRepository.mark(weekly, 'u-bao', { day: null, status: 'LATE', version: 1 }))
-    expect(edit).toMatchObject({ status: 422, code: 'ATTENDANCE_CLOSED' })
+    expect(edit).toMatchObject({ status: 400, fieldErrors: [{ field: 'reason' }] })
   })
 
   it('refuses to close when the list changed since it was read, so the absent count stays right', async () => {

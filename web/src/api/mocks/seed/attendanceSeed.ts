@@ -71,7 +71,17 @@ export interface DbAttendance {
   extra: boolean
   recordedBy: string
   recordedAt: string
+  /** Các lần sửa sau khi chốt (FR-ATT-08, BR-ATT-04). */
+  changes: DbAttendanceChange[]
   version: number
+}
+
+export interface DbAttendanceChange {
+  by: string
+  at: string
+  from: AttendanceStatus | null
+  to: AttendanceStatus
+  reason: string
 }
 
 /** Trạng thái chốt của một buổi hoặc một ngày sự kiện; tạo khi có lần ghi đầu tiên. */
@@ -210,7 +220,7 @@ export function createAttendanceSeed(): DbAttendance[] {
     recordedBy: string,
     recordedAt: string,
     { method = 'MANUAL', extra = false }: { method?: AttendanceMethod; extra?: boolean } = {},
-  ): DbAttendance => ({ id, activityType, activityId, day, userId, status, method, extra, recordedBy, recordedAt, version: 1 })
+  ): DbAttendance => ({ id, activityType, activityId, day, userId, status, method, extra, recordedBy, recordedAt, changes: [], version: 1 })
   const now: [AttendanceActivityType, string, null] = ['SESSION', 's-weekly-now', null]
   const photo: [AttendanceActivityType, string, null] = ['SESSION', 's-media-photo', null]
   const fingerstyle: [AttendanceActivityType, string, null] = ['SESSION', 's-fingerstyle', null]

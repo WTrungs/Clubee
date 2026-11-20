@@ -7,14 +7,17 @@ import type {
   MarkAttendanceRequest,
 } from '@/features/attendance/model/attendanceTypes'
 import { formatDateTime } from '@/shared/format/formatDate'
+import { REASON_MAX, REASON_MIN } from '@/shared/lib/reasonRules'
 import { db } from '../db'
 import {
   ATTENDANCE_FILTERS,
   ATTENDANCE_STATUSES,
   buildSheet,
   closeAttendance,
+  closedEditBlocker,
   currentCode,
   defaultDay,
+  editClosedAttendance,
   eventActivity,
   eventAttendanceAvailable,
   isAttendanceOpen,
@@ -71,6 +74,20 @@ function writeGuard(activity: AttendanceActivity, day: string | null): Response 
   return null
 }
 
+/** FR-ATT-08, BR-ATT-04: sửa sau khi chốt; quyền theo hạn sửa → version → trạng thái không đổi → lý do. */
+function editClosed(activity: AttendanceActivity, day: string | null, targetId: string, body: Partial<MarkAttendanceRequest>, actorId: string): Response {
+  const blocker = closedEditBlocker(activity, actorId, day)
+  if (blocker) return problem(403, blocker, 'FORBIDDEN')
+  const current = recordsOf(activity, day).find((record) => record.userId === targetId)
+  if ((current?.version ?? 0) !== body.version) return problem(409, 'Bản ghi vừa được người khác sửa. Tải lại để xem trạng thái mới nhất.', 'VERSION_CONFLICT')
+  if (current?.status === body.status) return problem(422, 'Trạng thái mới trùng trạng thái đang ghi.', 'ATTENDANCE_UNCHANGED')
+  const reason = typeof body.reason === 'string' ? body.reason.trim() : ''
+  if (reason.length < REASON_MIN || reason.length > REASON_MAX) {
+    return problem(400, 'Sửa điểm danh đã chốt cần lý do.', 'VALIDATION', [{ field: 'reason', message: `Nhập lý do từ ${REASON_MIN} đến ${REASON_MAX} ký tự.` }])
+  }
+  return HttpResponse.json(editClosedAttendance(activity, day, targetId, body.status as AttendanceStatus, reason, actorId))
+}
+
 function attendanceRoutes(path: string, resolve: (params: Params, userId: string) => Resolved) {
   return [
     http.get(`${API}${path}/attendance`, async ({ request, params }) => {
@@ -109,6 +126,7 @@ function attendanceRoutes(path: string, resolve: (params: Params, userId: string
       const targetId = String(params.userId)
       const expected = sheetEntries(activity, day.day).some((entry) => entry.userId === targetId)
       if (!expected && !canAccessClub(targetId, activity.clubId)) return problem(404, 'Người này không thuộc CLB.', 'MEMBER_NOT_FOUND')
+      if (sheetStateOf(activity, day.day).closedAt) return editClosed(activity, day.day, targetId, body, user.value.id)
       const blocked = writeGuard(activity, day.day)
       if (blocked) return blocked
       const current = recordsOf(activity, day.day).find((record) => record.userId === targetId)

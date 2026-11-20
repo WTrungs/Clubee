@@ -26,6 +26,8 @@ export interface DbClub {
   attendanceLeadMinutes: number
   /** Chu kỳ đổi mã QR điểm danh, tính bằng giây (FR-ATT-05). */
   attendanceQrRotateSeconds: number
+  /** Người chốt sửa được điểm danh trong số giờ này sau khi chốt; quá hạn chỉ ban chủ nhiệm (FR-ATT-08, BR-ATT-04). */
+  attendanceEditHours: number
   /** Số ngày liên kết mời gia nhập còn hiệu lực (FR-MEM-01); lời mời đã tạo giữ hạn cũ. */
   inviteLinkDays: number
   /** Người đã nhận chỗ hủy được tới trước giờ bắt đầu số giờ này (FR-EVT-13). */
@@ -48,6 +50,7 @@ export interface DbClub {
 }
 
 export const DEFAULT_INVITE_LINK_DAYS = 7
+export const DEFAULT_ATTENDANCE_EDIT_HOURS = 48
 
 /** Tham số chưa từng sửa: theo mặc định SRS 9.2. */
 export const defaultClubSettings = () => ({
@@ -55,6 +58,7 @@ export const defaultClubSettings = () => ({
   expenseReceiptThreshold: DEFAULT_RECEIPT_THRESHOLD,
   attendanceLeadMinutes: DEFAULT_ATTENDANCE_LEAD_MINUTES,
   attendanceQrRotateSeconds: DEFAULT_QR_ROTATE_SECONDS,
+  attendanceEditHours: DEFAULT_ATTENDANCE_EDIT_HOURS,
   inviteLinkDays: DEFAULT_INVITE_LINK_DAYS,
   registrationCancelHours: 24,
   rescheduleConfirmHours: 48,

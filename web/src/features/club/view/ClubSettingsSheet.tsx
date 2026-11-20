@@ -132,6 +132,14 @@ function ClubSettingsForm({ settings, onClose, onPendingChange }: { settings: Cl
             <FormField label="Chu kỳ đổi mã QR" required error={errors.attendanceQrRotateSeconds?.message} hint="Mã ngắn hạn khó chia sẻ hơn.">
               <UnitInput unit="giây" {...register('attendanceQrRotateSeconds')} />
             </FormField>
+            <FormField
+              label="Hạn sửa sau khi chốt"
+              required
+              error={errors.attendanceEditHours?.message}
+              hint="Trong hạn, người chốt sửa được; quá hạn chỉ ban chủ nhiệm sửa."
+            >
+              <UnitInput unit="giờ" {...register('attendanceEditHours')} />
+            </FormField>
           </div>
         </Group>
         <Group icon={ListTodo} title="Công việc" description="Nhắc người làm trước hạn.">

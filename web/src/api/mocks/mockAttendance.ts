@@ -11,7 +11,7 @@ import type {
   AttendanceStatus,
 } from '@/features/attendance/model/attendanceTypes'
 import type { SessionScopeOption } from '@/features/attendance/model/sessionTypes'
-import { toVnDateKey } from '@/shared/format/formatDate'
+import { formatDateTime, toVnDateKey } from '@/shared/format/formatDate'
 import { matchesKeyword } from '@/shared/lib/searchText'
 import { db, type DbAttendance, type DbAttendanceSheet, type DbSession } from './db'
 import { newId, paginate } from './mockHttp'
@@ -22,8 +22,11 @@ import { isEventLead, isEventStaff } from './mockStaffEvents'
 import { absenceNoteOf, approvedAbsentees } from './mockAbsence'
 import { holdsSeat } from './mockRegistrations'
 import { activeSessionRegistrations } from './mockSessionRegistrations'
+import { audit } from './mockAudit'
+import { eventTarget, notify, sessionTarget } from './mockNotifications'
 import { nowIso, shiftDate, toVnIso } from './mockTime'
 import { DEFAULT_ATTENDANCE_LEAD_MINUTES, DEFAULT_QR_ROTATE_SECONDS } from './seed/attendanceSeed'
+import { DEFAULT_ATTENDANCE_EDIT_HOURS } from './seed/clubSeed'
 import type { DbEvent } from './seed/eventSeed'
 
 export const ATTENDANCE_STATUSES: AttendanceStatus[] = ['PRESENT', 'LATE', 'EXCUSED', 'ABSENT']
@@ -75,6 +78,8 @@ export interface AttendanceActivity {
   /** Người có đơn xin phép đã duyệt: lúc chốt ghi Vắng có phép thay vì Vắng không phép (FR-ATT-04). */
   excused: () => string[]
   absenceOf: (userId: string) => AttendanceAbsenceNote | null
+  /** Ban chủ nhiệm CLB chủ trì: sửa được điểm danh đã chốt cả khi quá hạn (FR-ATT-08). */
+  board: (userId: string) => boolean
   forbidden: { view: string; mark: string; qr: string; close: string }
 }
 
@@ -110,6 +115,7 @@ export function sessionActivity(session: DbSession): AttendanceActivity {
         .map((membership) => membership.userId)
     },
     excused: () => approvedAbsentees(session.id),
+    board: (userId) => isBoardMember(userId, session.clubId) && isActiveMember(userId, session.clubId),
     absenceOf: (userId) => absenceNoteOf(userId, session.id),
     forbidden: {
       view: 'Chỉ người phụ trách buổi và ban chủ nhiệm xem được điểm danh.',
@@ -155,6 +161,7 @@ export function eventActivity(event: DbEvent): AttendanceActivity {
     // Xin phép vắng chỉ áp dụng cho buổi sinh hoạt; với sự kiện, người không đi được thì hủy đăng ký.
     excused: () => [],
     absenceOf: () => null,
+    board: (userId) => board(userId) && isActiveMember(userId, event.clubId),
     forbidden: {
       view: 'Chỉ ban chủ nhiệm và nhân sự BTC đang hoạt động xem được điểm danh sự kiện.',
       mark: 'Chỉ ban chủ nhiệm và nhân sự BTC đang hoạt động được điểm danh sự kiện.',
@@ -233,6 +240,7 @@ export function toAttendanceRow(activity: AttendanceActivity, entry: SheetEntry)
           method: entry.record.method,
           recordedAt: entry.record.recordedAt,
           recordedBy: personRef(entry.record.recordedBy),
+          changes: entry.record.changes.map((change) => ({ ...change, by: personRef(change.by) })),
           version: entry.record.version,
         }
       : null,
@@ -240,9 +248,28 @@ export function toAttendanceRow(activity: AttendanceActivity, entry: SheetEntry)
   }
 }
 
-/** Mở mã QR cùng điều kiện với điểm danh tay: có quyền, khung đã mở, chưa chốt (BR-ATT-02). */
+const editHoursOf = (clubId: string) => db.clubs.find((club) => club.id === clubId)?.attendanceEditHours ?? DEFAULT_ATTENDANCE_EDIT_HOURS
+
+/** Hạn người chốt còn sửa được sau khi chốt (FR-ATT-08, tham số `attendanceEditHours`); chưa chốt thì `null`. */
+export function editableUntil(activity: AttendanceActivity, day: string | null): string | null {
+  const closedAt = sheetStateOf(activity, day).closedAt
+  return closedAt ? toVnIso(Date.parse(closedAt) + editHoursOf(activity.clubId) * 60 * MINUTE_MS) : null
+}
+
+/** BR-ATT-04: trong hạn thì người chốt được (người phụ trách buổi; Trưởng BTC hoặc ban chủ nhiệm với sự kiện); quá hạn chỉ ban chủ nhiệm. Trả lý do khi không được. */
+export function closedEditBlocker(activity: AttendanceActivity, userId: string, day: string | null, now = Date.now()): string | null {
+  if (activity.board(userId)) return null
+  const until = editableUntil(activity, day)
+  if (!activity.canClose(userId)) return 'Chỉ người chốt điểm danh và ban chủ nhiệm được sửa điểm danh đã chốt.'
+  if (until && Date.parse(until) <= now) return `Đã quá hạn sửa (${formatDateTime(until)}); chỉ ban chủ nhiệm sửa được điểm danh này.`
+  return null
+}
+
+/** Mở mã QR cùng điều kiện với điểm danh tay: có quyền, khung đã mở, chưa chốt (BR-ATT-02). Đã chốt thì chỉ còn `EDIT` khi được sửa. */
 export function attendanceActionsFor(activity: AttendanceActivity, userId: string, day: string | null): AttendanceAction[] {
-  if (activity.readOnlyReason || sheetStateOf(activity, day).closedAt || !isAttendanceOpen(activity, day)) return []
+  if (activity.readOnlyReason) return []
+  if (sheetStateOf(activity, day).closedAt) return closedEditBlocker(activity, userId, day) ? [] : ['EDIT']
+  if (!isAttendanceOpen(activity, day)) return []
   return [...(activity.canMark(userId) ? (['MARK', 'SHOW_QR'] as const) : []), ...(activity.canClose(userId) ? (['CLOSE'] as const) : [])]
 }
 
@@ -302,6 +329,7 @@ export function buildSheet(activity: AttendanceActivity, userId: string, day: st
     closedAt: state.closedAt,
     closedBy: state.closedBy ? personRef(state.closedBy) : null,
     readOnlyReason: activity.readOnlyReason,
+    editableUntil: editableUntil(activity, day),
     counts: countsOf(entries, new Set(activity.excused())),
     allowedActions: attendanceActionsFor(activity, userId, day),
     version: state.version,
@@ -335,6 +363,7 @@ export function writeAttendance(
       extra: !activity.expected(day).includes(userId),
       recordedBy: actorId,
       recordedAt: at,
+      changes: [],
       version: 1,
     })
   }
@@ -361,9 +390,71 @@ export function closeAttendance(activity: AttendanceActivity, day: string | null
       extra: false,
       recordedBy: actorId,
       recordedAt: at,
+      changes: [],
       version: 1,
     })
   }
   Object.assign(sheet, { closedAt: at, closedBy: actorId, version: sheet.version + 1 })
   return unmarked.length
+}
+
+const statusLabel: Record<AttendanceStatus, string> = { PRESENT: 'Có mặt', LATE: 'Đi muộn', EXCUSED: 'Vắng có phép', ABSENT: 'Vắng không phép' }
+
+/** FR-ATT-08: sửa một người sau khi chốt (kể cả người chưa có bản ghi), lưu lịch sử, ghi nhật ký `ATTENDANCE_EDIT` và báo người đó. */
+export function editClosedAttendance(
+  activity: AttendanceActivity,
+  day: string | null,
+  userId: string,
+  status: AttendanceStatus,
+  reason: string,
+  actorId: string,
+): AttendanceRow {
+  const sheet = ensureSheet(activity, day)
+  const existing = recordsOf(activity, day).find((record) => record.userId === userId)
+  const at = nowIso()
+  const from = existing?.status ?? null
+  const change = { by: actorId, at, from, to: status, reason }
+  let record: DbAttendance
+  if (existing) {
+    Object.assign(existing, { status, method: 'MANUAL', recordedBy: actorId, recordedAt: at, changes: [...existing.changes, change], version: existing.version + 1 })
+    record = existing
+  } else {
+    record = {
+      id: newId('a'),
+      activityType: activity.type,
+      activityId: activity.id,
+      day,
+      userId,
+      status,
+      method: 'MANUAL',
+      extra: !activity.expected(day).includes(userId),
+      recordedBy: actorId,
+      recordedAt: at,
+      changes: [change],
+      version: 1,
+    }
+    db.attendance.push(record)
+  }
+  sheet.version += 1
+  audit({
+    actorId,
+    clubId: activity.clubId,
+    action: 'ATTENDANCE_EDIT',
+    objectType: 'ATTENDANCE',
+    objectId: record.id,
+    objectLabel: `Điểm danh ${activity.name}${day ? ` ngày ${day}` : ''}: ${personRef(userId).fullName}`,
+    before: from ? { status: from } : null,
+    after: { status },
+    reason,
+  })
+  notify([userId], {
+    clubId: activity.clubId,
+    category: activity.type === 'SESSION' ? 'SESSION' : 'EVENT',
+    title: `Điểm danh của bạn được sửa: ${activity.name}`,
+    body: `${from ? `${statusLabel[from]} → ` : ''}${statusLabel[status]}. Lý do: ${reason}`,
+    target: activity.type === 'SESSION' ? sessionTarget(activity.clubId, activity.id) : eventTarget(activity.clubId, activity.id),
+    actorId,
+  })
+  const entry = sheetEntries(activity, day).find((candidate) => candidate.userId === userId)
+  return toAttendanceRow(activity, entry ?? { userId, extra: record.extra, record })
 }

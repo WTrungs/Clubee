@@ -3669,13 +3669,17 @@ paths:
         Chỉ người phụ trách buổi (người tạo, ban chủ nhiệm, Trưởng ban, Phó ban của ban đó; còn Thử việc hoặc Chính thức). Ghi mới hoặc đổi trạng thái; mỗi người tối đa một bản ghi cho mỗi buổi (BR-ATT-01).
         Người không thuộc đối tượng (thành viên CLB, kể cả Tạm nghỉ) được ghi kèm cờ `extra` (người phát sinh).
         Gửi `version` của bản ghi đang thấy, chưa có bản ghi thì gửi 0; lệch thì 409.
+        Sau khi chốt (FR-ATT-08, BR-ATT-04): bắt buộc `reason` 5–500 ký tự. Trong `attendanceEditHours` giờ (tham số CLB) kể từ lúc chốt,
+        người được chốt sửa được; quá hạn chỉ ban chủ nhiệm, người khác nhận 403 kèm hạn. Ghi được cả người chưa có bản ghi
+        (nhập lại từ danh sách giấy). Mỗi lần sửa lưu vào `record.changes`, ghi nhật ký `ATTENDANCE_EDIT` và báo người được sửa.
+        Thứ tự lỗi khi đã chốt: 403 (hạn sửa) → 409 → 422 `ATTENDANCE_UNCHANGED` → 400 `VALIDATION` (`reason`).
 
         Lỗi:
-        - 400 `VALIDATION` (trạng thái, ngày).
+        - 400 `VALIDATION` (trạng thái, ngày, lý do khi đã chốt).
         - 403 `FORBIDDEN` (kèm lý do), `CSRF`.
         - 404 `SESSION_NOT_FOUND`, `MEMBER_NOT_FOUND`.
         - 409 `VERSION_CONFLICT`.
-        - 422 `SESSION_CANCELLED`, `ATTENDANCE_NOT_OPEN` (kèm giờ mở), `ATTENDANCE_CLOSED`.
+        - 422 `SESSION_CANCELLED`, `ATTENDANCE_NOT_OPEN` (kèm giờ mở), `ATTENDANCE_UNCHANGED`.
       security:
         - sessionCookie: []
           csrfHeader: []
@@ -3802,7 +3806,7 @@ paths:
       description: |
         Chỉ người phụ trách buổi. Người thuộc đối tượng mà chưa có bản ghi được ghi Vắng không phép (có đơn xin phép đã duyệt thì Vắng có phép, FR-ATT-04); sau khi chốt danh sách chỉ xem được
         và mã QR hết hiệu lực (BR-ATT-02). Gửi `version` của danh sách đang thấy; lệch thì 409 để số người bị ghi Vắng luôn đúng.
-        Sửa sau chốt (phần còn lại của FR-ATT-08) chưa có.
+        Sửa sau khi chốt: `PUT …/attendance/records/{userId}` kèm `reason` (FR-ATT-08).
 
         Lỗi:
         - 400 `VALIDATION`.
@@ -3882,13 +3886,17 @@ paths:
         Chỉ ban chủ nhiệm và nhân sự BTC đang hoạt động (Trưởng BTC, trưởng tiểu ban, nhân sự tiểu ban). Ghi mới hoặc đổi trạng thái; mỗi người tối đa một bản ghi cho mỗi ngày (BR-ATT-01).
         Người không thuộc đối tượng (thành viên CLB, kể cả Tạm nghỉ) được ghi kèm cờ `extra` (người phát sinh).
         Gửi `version` của bản ghi đang thấy, chưa có bản ghi thì gửi 0; lệch thì 409.
+        Sau khi chốt (FR-ATT-08, BR-ATT-04): bắt buộc `reason` 5–500 ký tự. Trong `attendanceEditHours` giờ (tham số CLB) kể từ lúc chốt,
+        Trưởng BTC và ban chủ nhiệm sửa được; quá hạn chỉ ban chủ nhiệm, người khác nhận 403 kèm hạn. Ghi được cả người chưa có bản ghi
+        (nhập lại từ danh sách giấy). Mỗi lần sửa lưu vào `record.changes`, ghi nhật ký `ATTENDANCE_EDIT` và báo người được sửa.
+        Thứ tự lỗi khi đã chốt: 403 (hạn sửa) → 409 → 422 `ATTENDANCE_UNCHANGED` → 400 `VALIDATION` (`reason`).
 
         Lỗi:
-        - 400 `VALIDATION` (trạng thái, ngày).
+        - 400 `VALIDATION` (trạng thái, ngày, lý do khi đã chốt).
         - 403 `FORBIDDEN` (kèm lý do), `CSRF`.
         - 404 `EVENT_NOT_FOUND`, `MEMBER_NOT_FOUND`.
         - 409 `VERSION_CONFLICT`.
-        - 422 `ATTENDANCE_NOT_OPEN` (kèm giờ mở), `ATTENDANCE_CLOSED`, `ATTENDANCE_UNAVAILABLE`, `EVENT_READ_ONLY`.
+        - 422 `ATTENDANCE_NOT_OPEN` (kèm giờ mở), `ATTENDANCE_UNCHANGED`, `ATTENDANCE_UNAVAILABLE`, `EVENT_READ_ONLY`.
       security:
         - sessionCookie: []
           csrfHeader: []
@@ -4024,7 +4032,7 @@ paths:
       description: |
         Chỉ Trưởng BTC và ban chủ nhiệm. Người thuộc đối tượng mà chưa có bản ghi được ghi Vắng không phép; sau khi chốt danh sách chỉ xem được
         và mã QR hết hiệu lực (BR-ATT-02). Gửi `version` của danh sách đang thấy; lệch thì 409 để số người bị ghi Vắng luôn đúng.
-        Sửa sau chốt (phần còn lại của FR-ATT-08) chưa có.
+        Sửa sau khi chốt: `PUT …/attendance/records/{userId}` kèm `reason` (FR-ATT-08).
 
         Lỗi:
         - 400 `VALIDATION`.
@@ -5650,6 +5658,7 @@ components:
         - rescheduleConfirmHours
         - attendanceLeadMinutes
         - attendanceQrRotateSeconds
+        - attendanceEditHours
         - taskReminderDays
         - expenseReceiptThreshold
         - advanceSettleDays
@@ -5663,6 +5672,7 @@ components:
         rescheduleConfirmHours: { type: integer, minimum: 1, maximum: 168, description: Số giờ để xác nhận lại khi sự kiện dời thời gian (FR-EVT-14). }
         attendanceLeadMinutes: { type: integer, minimum: 0, maximum: 120, description: Số phút mở điểm danh trước giờ bắt đầu (BR-ATT-02). }
         attendanceQrRotateSeconds: { type: integer, minimum: 10, maximum: 300, description: Chu kỳ đổi mã QR, tính bằng giây. }
+        attendanceEditHours: { type: integer, minimum: 1, maximum: 720, description: 'Số giờ sau khi chốt mà người chốt còn sửa được điểm danh; quá hạn chỉ ban chủ nhiệm (FR-ATT-08, BR-ATT-04).' }
         taskReminderDays: { type: integer, minimum: 0, maximum: 14, description: 'Nhắc việc trước hạn N ngày tính theo ngày lịch giờ Việt Nam: nhắc khi hạn rơi vào từ hôm nay đến hết N ngày tới (1 là từ đầu ngày trước hạn); 0 là không nhắc (FR-TASK-06, SRS 9.2).' }
         expenseReceiptThreshold: { type: integer, minimum: 0, maximum: 100000000, description: Khoản chi trên ngưỡng này phải có chứng từ (BR-FIN-03), VND. }
         advanceSettleDays: { type: integer, minimum: 1, maximum: 90, description: Hạn quyết toán tạm ứng gợi ý, tính từ ngày đề xuất (FR-FIN-07). }
@@ -7881,7 +7891,7 @@ components:
       enum: [PRESENT, LATE, EXCUSED, ABSENT, UNMARKED, EXTRA]
     AttendanceRecord:
       type: object
-      required: [status, method, recordedAt, recordedBy, version]
+      required: [status, method, recordedAt, recordedBy, changes, version]
       properties:
         status: { $ref: '#/components/schemas/AttendanceStatus' }
         method:
@@ -7889,6 +7899,22 @@ components:
           enum: [MANUAL, QR]
         recordedAt: { type: string, format: date-time }
         recordedBy: { $ref: '#/components/schemas/PersonRef' }
+        changes:
+          type: array
+          description: Các lần sửa sau khi chốt, cũ trước (FR-ATT-08).
+          items:
+            type: object
+            required: [by, at, from, to, reason]
+            properties:
+              by: { $ref: '#/components/schemas/PersonRef' }
+              at: { type: string, format: date-time }
+              from:
+                description: '`null` khi người này chưa có bản ghi.'
+                oneOf:
+                  - $ref: '#/components/schemas/AttendanceStatus'
+                  - type: 'null'
+              to: { $ref: '#/components/schemas/AttendanceStatus' }
+              reason: { type: string }
         version: { type: integer }
     AttendanceRow:
       type: object
@@ -7930,7 +7956,7 @@ components:
         extra: { type: integer }
     AttendanceSheet:
       type: object
-      required: [activity, day, days, opensAt, closedAt, closedBy, readOnlyReason, counts, allowedActions, version, rows]
+      required: [activity, day, days, opensAt, closedAt, closedBy, readOnlyReason, editableUntil, counts, allowedActions, version, rows]
       properties:
         activity:
           type: object
@@ -7956,13 +7982,16 @@ components:
             - $ref: '#/components/schemas/PersonRef'
             - type: 'null'
         readOnlyReason: { $ref: '#/components/schemas/NullableString' }
+        editableUntil:
+          $ref: '#/components/schemas/NullableDateTime'
+          description: Sau khi chốt, người chốt sửa được tới mốc này; quá hạn chỉ ban chủ nhiệm (FR-ATT-08). Chưa chốt thì `null`.
         counts: { $ref: '#/components/schemas/AttendanceCounts' }
         allowedActions:
           type: array
-          description: '`MARK` điểm danh tay, `SHOW_QR` mở mã QR, `CLOSE` chốt.'
+          description: '`MARK` điểm danh tay, `SHOW_QR` mở mã QR, `CLOSE` chốt; sau khi chốt chỉ còn `EDIT` (sửa có lý do) khi người gọi được sửa.'
           items:
             type: string
-            enum: [MARK, SHOW_QR, CLOSE]
+            enum: [MARK, SHOW_QR, CLOSE, EDIT]
         version:
           type: integer
           description: Tăng mỗi khi có bản ghi đổi; chốt gửi kèm.
@@ -8029,6 +8058,10 @@ components:
       properties:
         day: { $ref: '#/components/schemas/NullableDate' }
         status: { $ref: '#/components/schemas/AttendanceStatus' }
+        reason:
+          type: string
+          maxLength: 500
+          description: Bắt buộc 5–500 ký tự khi sửa sau khi chốt (FR-ATT-08).
         version:
           type: integer
           description: Phiên bản bản ghi đang thấy, 0 khi chưa có.

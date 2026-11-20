@@ -97,6 +97,8 @@ export interface ClubSettingsValues {
   attendanceLeadMinutes: number
   /** Chu kỳ đổi mã QR, tính bằng giây. */
   attendanceQrRotateSeconds: number
+  /** Người chốt sửa được điểm danh trong số giờ này sau khi chốt; quá hạn chỉ ban chủ nhiệm (FR-ATT-08). */
+  attendanceEditHours: number
   /** Khoản chi trên ngưỡng này phải có chứng từ (BR-FIN-03). */
   expenseReceiptThreshold: number
   /** Người đã nhận chỗ hủy được tới trước giờ bắt đầu số giờ này. */
