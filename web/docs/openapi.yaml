@@ -486,8 +486,10 @@ paths:
       operationId: getNotification
       summary: Chi tiết thông báo (FR-NOT-03, BR-SEC-02)
       description: |
-        Kiểm tra quyền tại thời điểm mở (BR-SEC-02). Thông báo do người gửi soạn (`MANUAL`) của một CLB chỉ mở được khi người
-        nhận còn là thành viên CLB đó, nếu không trả 403 `NOT_A_MEMBER` kèm lý do. Thông báo loại `FINANCE` nêu số tiền,
+        Kiểm tra quyền tại thời điểm mở (BR-SEC-02). Thông báo do người gửi soạn (`MANUAL`) chỉ mở được khi người nhận còn
+        thuộc nhóm nhận lúc gửi: toàn CLB thì còn là thành viên; ban thì ban chính vẫn là ban đó; BTC sự kiện thì còn trong BTC
+        (gồm CTV, nhân sự CLB đồng tổ chức khi sự kiện còn hoạt động). Không còn là thành viên trả 403 `NOT_A_MEMBER`, còn là
+        thành viên nhưng đã rời nhóm (hoặc người ngoài CLB đã rời BTC) trả 403 `NOT_IN_AUDIENCE`, kèm lý do. Thông báo loại `FINANCE` nêu số tiền,
         quỹ, người đề xuất nên chỉ mở được khi người nhận còn xem được giao dịch `target.id`, nếu không trả 403 `FORBIDDEN`.
         Thông báo hệ thống khác nói về chính người nhận; màn hình đích (`target`) tự kiểm tra quyền khi mở.
         Không phải người nhận thì 404 `NOTIFICATION_NOT_FOUND`.
@@ -592,7 +594,9 @@ paths:
       summary: Thông tin CLB hiện hành
       description: |
         Thông tin CLB (gồm liên hệ công khai; nội quy chỉ thành viên xem), nhiệm kỳ đang phụ trách (`currentTerm`: Đang chạy hoặc Đang bàn giao) và
-        `allowedActions` cấp CLB.
+        `allowedActions` cấp CLB. Khách của sự kiện (người ngoài CLB đang làm CTV hoặc nhân sự CLB đồng tổ chức của một sự kiện
+        còn hoạt động) nhận `viewerRole: EVENT_GUEST` và chỉ thông tin công khai: `rules` rỗng, `memberCount` 0,
+        `currentTerm` null, `myPositionTitles`, `allowedActions` rỗng, `generalFundId` rỗng (SRS 3.5, FR-EVT-07).
         Lỗi: 404 `CLUB_NOT_FOUND`; 403 `MEMBERSHIP_PENDING` (yêu cầu gia nhập đang chờ duyệt), `NOT_A_MEMBER`.
       parameters:
         - $ref: '#/components/parameters/ClubId'
@@ -2322,7 +2326,8 @@ paths:
       summary: Tạo và giao việc (FR-TASK-01)
       description: |
         Phạm vi phải nằm trong `task-scopes` của người gọi (BR-TASK-01). Tên từ 3 ký tự; người chính thuộc phạm vi;
-        người phối hợp thuộc phạm vi và khác người chính; hạn sau hiện tại.
+        người phối hợp thuộc phạm vi và khác người chính; hạn sau hiện tại. Khách của sự kiện (nhân sự CLB đồng tổ chức làm
+        trưởng tiểu ban) gọi được, phạm vi chỉ là tiểu ban mình phụ trách (FR-EVT-08).
         Lỗi: 400 `VALIDATION`; 403 `NOT_A_MEMBER`, `SCOPE_FORBIDDEN`.
       security:
         - sessionCookie: []
@@ -2348,7 +2353,7 @@ paths:
       tags: [TASK]
       operationId: listAssignableScopes
       summary: Phạm vi được giao việc (BR-TASK-01)
-      description: Ban, tiểu ban người gọi được giao việc, kèm người nhận hợp lệ. Lỗi 403 `NOT_A_MEMBER`.
+      description: Ban, tiểu ban người gọi được giao việc, kèm người nhận hợp lệ; khách của sự kiện cũng gọi được (FR-EVT-08). Lỗi 403 `NOT_A_MEMBER`.
       parameters:
         - $ref: '#/components/parameters/ClubId'
       responses:
@@ -2503,7 +2508,8 @@ paths:
       summary: Danh sách sự kiện
       description: |
         Sự kiện người gọi được xem. Dự thảo chỉ người đề xuất xem, và ban chủ nhiệm khi đề xuất đã bị từ chối;
-        Chờ duyệt thì người đề xuất và ban chủ nhiệm. Lỗi 403 `NOT_A_MEMBER`.
+        Chờ duyệt thì người đề xuất và ban chủ nhiệm. Khách của sự kiện (`viewerRole: EVENT_GUEST`) chỉ thấy các sự kiện
+        mình đang làm BTC. Lỗi 403 `NOT_A_MEMBER`.
       parameters:
         - $ref: '#/components/parameters/ClubId'
         - name: status
@@ -2581,7 +2587,10 @@ paths:
       tags: [EVT]
       operationId: getEvent
       summary: Chi tiết sự kiện
-      description: Sự kiện người gọi không được xem trả 404 `EVENT_NOT_FOUND`, không lộ là có tồn tại.
+      description: |
+        Sự kiện người gọi không được xem trả 404 `EVENT_NOT_FOUND`, không lộ là có tồn tại. Người ngoài CLB chủ trì xem được
+        khi là CTV, nhân sự hoặc ban chủ nhiệm CLB đồng tổ chức của sự kiện còn hoạt động; với ban chủ nhiệm CLB đồng tổ
+        chức, `viewingAsCoHost` nêu CLB của họ (FR-EVT-09).
       parameters:
         - $ref: '#/components/parameters/ClubId'
         - $ref: '#/components/parameters/EventId'
@@ -2607,7 +2616,8 @@ paths:
         - `CANCEL`: ban chủ nhiệm, bắt buộc lý do; chỉ trước khi sự kiện diễn ra. Chức vụ sự kiện hết hiệu lực; quỹ sự kiện còn mở để quyết toán.
         - `CLOSE`: ban chủ nhiệm hoặc Trưởng BTC, khi sự kiện Đã kết thúc và quỹ sự kiện Đã quyết toán (BR-EVT-05; quyết toán
           quỹ qua `POST /clubs/{clubId}/funds/{fundId}/transitions` không đổi trạng thái sự kiện). Mọi chức vụ trong sự kiện
-          hết hiệu lực, hồ sơ sự kiện chỉ đọc. Quỹ chưa quyết toán (hoặc không có quỹ; sự kiện từ Đã duyệt luôn có quỹ):
+          hết hiệu lực, hồ sơ sự kiện chỉ đọc. Kiểm theo thứ tự: Đã kết thúc, quyền, còn tạm ứng mở ở quỹ sự kiện (422
+          `EVENT_HAS_OPEN_ADVANCES` nêu số khoản), quỹ chưa quyết toán (hoặc không có quỹ; sự kiện từ Đã duyệt luôn có quỹ):
           422 `FUND_NOT_SETTLED`.
 
         Lỗi:
@@ -2615,7 +2625,7 @@ paths:
         - 403 `FORBIDDEN`.
         - 404 `EVENT_NOT_FOUND`.
         - 409 `VERSION_CONFLICT`.
-        - 422 `INVALID_TRANSITION`, `LEAD_NOT_ELIGIBLE`, `FUND_NOT_SETTLED`.
+        - 422 `INVALID_TRANSITION`, `LEAD_NOT_ELIGIBLE`, `EVENT_HAS_OPEN_ADVANCES`, `FUND_NOT_SETTLED`.
       security:
         - sessionCookie: []
           csrfHeader: []
@@ -2682,6 +2692,27 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
         '422': { $ref: '#/components/responses/UnprocessableEntity' }
+  /clubs/{clubId}/events/{eventId}/progress:
+    get:
+      tags: [EVT]
+      operationId: getEventProgress
+      summary: Tiến độ sự kiện theo tiểu ban (FR-EVT-09)
+      description: |
+        Người có `VIEW_PROGRESS`: ban chủ nhiệm, Trưởng BTC, nhân sự BTC, ban chủ nhiệm CLB đồng tổ chức. Chỉ số việc theo
+        trạng thái (bỏ việc Đã hủy) và số quá hạn (BR-TASK-03), không có nội dung việc.
+        Lỗi: 403 `FORBIDDEN`; 404 `EVENT_NOT_FOUND`.
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - $ref: '#/components/parameters/EventId'
+      responses:
+        '200':
+          description: Tiến độ.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EventProgress' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
   /clubs/{clubId}/events/{eventId}/subcommittees:
     get:
       tags: [EVT]
@@ -2736,14 +2767,21 @@ paths:
     get:
       tags: [EVT]
       operationId: listStaffCandidates
-      summary: Thành viên có thể mời vào BTC (FR-EVT-05)
+      summary: Thành viên có thể mời vào BTC (FR-EVT-05, FR-EVT-08)
       description: |
         Người có quyền mời ở ít nhất một tiểu ban. Chỉ trả tên và ban (SRS 3.5).
-        Lỗi: 403 `FORBIDDEN`; 404 `EVENT_NOT_FOUND`.
+        Có `coHostId`: thành viên Thử việc, Chính thức của CLB đồng tổ chức đó (đang Chấp nhận), bỏ người có tư cách ở CLB chủ
+        trì; ban là ban ở CLB của họ. Cần `MANAGE_EVENT_STAFF` ở phạm vi sự kiện.
+        Lỗi: 403 `FORBIDDEN`; 404 `EVENT_NOT_FOUND`; 422 `CO_HOST_NOT_ACTIVE`.
       parameters:
         - $ref: '#/components/parameters/ClubId'
         - $ref: '#/components/parameters/EventId'
         - $ref: '#/components/parameters/Q'
+        - name: coHostId
+          in: query
+          required: false
+          description: Id lời mời đồng tổ chức đang Chấp nhận; bỏ trống là thành viên CLB chủ trì.
+          schema: { type: string }
       responses:
         '200':
           description: Ứng viên.
@@ -2755,14 +2793,17 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
   /clubs/{clubId}/events/{eventId}/subcommittees/{subcommitteeId}/members:
     post:
       tags: [EVT]
       operationId: addSubcommitteeMember
-      summary: Mời thành viên vào tiểu ban (FR-EVT-05)
+      summary: Mời thành viên vào tiểu ban (FR-EVT-05, FR-EVT-08)
       description: |
         Trưởng BTC, trưởng tiểu ban đó hoặc ban chủ nhiệm. Chỉ mời thành viên Thử việc hoặc Chính thức của CLB chủ trì.
-        Lỗi: 400 `VALIDATION`; 403 `FORBIDDEN`; 404 `NOT_FOUND`; 409 `ALREADY_STAFF`.
+        Có `coHostId`: thêm thành viên của CLB đồng tổ chức đang Chấp nhận (ghi `kind: CO_HOST`); cần `MANAGE_EVENT_STAFF` ở
+        phạm vi sự kiện, người phải là ứng viên của `staff-candidates?coHostId=`.
+        Lỗi: 400 `VALIDATION`; 403 `FORBIDDEN`; 404 `NOT_FOUND`; 409 `ALREADY_STAFF`; 422 `CO_HOST_NOT_ACTIVE`.
       security:
         - sessionCookie: []
           csrfHeader: []
@@ -2786,6 +2827,234 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+  /clubs/{clubId}/events/{eventId}/subcommittees/{subcommitteeId}/collaborators:
+    post:
+      tags: [EVT]
+      operationId: addCollaborator
+      summary: Thêm cộng tác viên vào tiểu ban (FR-EVT-07)
+      description: |
+        Cần `MANAGE_EVENT_STAFF` ở phạm vi sự kiện (Trưởng BTC, ban chủ nhiệm); trưởng tiểu ban không thêm được. Người được
+        thêm vào ngay, không có bước chấp nhận, và nhận thông báo. Email phải khớp một tài khoản người dùng đang Hoạt động và
+        người đó không có tư cách nào chưa Đã rời ở CLB chủ trì (Chờ duyệt, Thử việc, Chính thức, Tạm nghỉ đều trả
+        `IS_MEMBER`); người đã rời CLB (kể cả Trưởng BTC cũ) thêm được. CTV không làm trưởng tiểu ban (BR-ORG-01).
+        Lỗi: 400 `VALIDATION`; 403 `FORBIDDEN`; 404 `NOT_FOUND`; 409 `ALREADY_STAFF`; 422 `EVENT_READ_ONLY`,
+        `ACCOUNT_NOT_FOUND`, `IS_MEMBER`.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - $ref: '#/components/parameters/EventId'
+        - $ref: '#/components/parameters/SubcommitteeId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AddCollaboratorRequest' }
+      responses:
+        '200':
+          description: Tiểu ban sau khi thêm.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Subcommittee' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+  /clubs/{clubId}/events/{eventId}/subcommittees/{subcommitteeId}/lead:
+    put:
+      tags: [EVT]
+      operationId: setSubcommitteeLead
+      summary: Chọn hoặc đổi trưởng tiểu ban (FR-EVT-08)
+      description: |
+        Cần `MANAGE_EVENT_STAFF` ở phạm vi sự kiện (trưởng tiểu ban không tự đổi). Người được chọn là nhân sự hiện có của tiểu
+        ban: thành viên Thử việc, Chính thức của CLB chủ trì hoặc nhân sự CLB đồng tổ chức; CTV không làm trưởng (BR-ORG-01);
+        không đang là trưởng tiểu ban khác (BR-ORG-04). Đang có trưởng thì `reason` bắt buộc; trưởng cũ kết thúc chức kèm lý
+        do, vẫn ở lại tiểu ban, và nhận thông báo. Chức còn mở của trưởng đang Tạm nghỉ (không còn hiệu lực, thẻ hiện chưa có
+        trưởng) cũng kết thúc, với lý do mặc định, để người đó quay lại không thành trưởng thứ hai (BR-ORG-04). Nhân sự CLB
+        đồng tổ chức phải còn Thử việc, Chính thức ở CLB gốc.
+        Thứ tự kiểm: 403, 422 `EVENT_READ_ONLY`, 400 `userId` không phải nhân sự, 422 `LEAD_NOT_ELIGIBLE`, `LEAD_TAKEN`, rồi
+        400 (đang là trưởng, thiếu lý do).
+        Lỗi: 400 `VALIDATION`; 403 `FORBIDDEN`; 404 `NOT_FOUND`; 422 `EVENT_READ_ONLY`, `LEAD_NOT_ELIGIBLE`, `LEAD_TAKEN`.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - $ref: '#/components/parameters/EventId'
+        - $ref: '#/components/parameters/SubcommitteeId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SetSubcommitteeLeadRequest' }
+      responses:
+        '200':
+          description: Tiểu ban sau khi đổi trưởng.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Subcommittee' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+  /clubs/{clubId}/events/{eventId}/co-hosts:
+    get:
+      tags: [EVT]
+      operationId: listCoHosts
+      summary: CLB đồng tổ chức của sự kiện (FR-EVT-08)
+      description: |
+        Người xem được cơ cấu BTC (`VIEW_STAFF`). Mọi lời mời, mới trước, kèm số nhân sự của từng CLB đang trong BTC.
+        Lỗi: 403 `FORBIDDEN`; 404 `EVENT_NOT_FOUND`.
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - $ref: '#/components/parameters/EventId'
+      responses:
+        '200':
+          description: Lời mời đồng tổ chức.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/CoHost' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [EVT]
+      operationId: inviteCoHost
+      summary: Mời CLB đồng tổ chức (FR-EVT-08, ST-COH)
+      description: |
+        Cần `MANAGE_EVENT_STAFF` ở phạm vi sự kiện (Trưởng BTC, ban chủ nhiệm); sự kiện còn hoạt động (Đã duyệt tới Đã kết
+        thúc). CLB được mời phải tồn tại và khác CLB chủ trì. Mỗi CLB chỉ có một lời mời Đã gửi hoặc Chấp nhận; lời mời đã
+        từ chối hoặc đã gỡ thì mời lại bằng lời mời mới. Người có `APPROVE_EVENT` ở CLB được mời nhận thông báo, đích
+        `EVENT_SHARED`.
+        Lỗi: 400 `VALIDATION` (`clubId`, `message` quá 500 ký tự); 403 `FORBIDDEN`; 404 `EVENT_NOT_FOUND`; 409
+        `CO_HOST_EXISTS`; 422 `EVENT_READ_ONLY`.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - $ref: '#/components/parameters/EventId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/InviteCoHostRequest' }
+      responses:
+        '201':
+          description: Lời mời vừa gửi.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CoHost' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+  /clubs/{clubId}/events/{eventId}/co-hosts/{coHostId}/removal:
+    post:
+      tags: [EVT]
+      operationId: removeCoHost
+      summary: Gỡ CLB đồng tổ chức (FR-EVT-08, ST-COH)
+      description: |
+        Quyền như khi mời. Chỉ gỡ CLB đang Chấp nhận, lý do 5–500 ký tự. Mọi nhân sự của CLB đó ở sự kiện thôi ngay, chức
+        trưởng tiểu ban của họ kết thúc kèm lý do; việc và dữ liệu họ tạo giữ nguyên (BR-DATA-01). Ban chủ nhiệm CLB kia và
+        người bị gỡ nhận thông báo.
+        Thứ tự kiểm: 403, 409, 422, 400.
+        Lỗi: 400 `VALIDATION`; 403 `FORBIDDEN`; 404 `CO_HOST_NOT_FOUND`; 409 `VERSION_CONFLICT`; 422 `EVENT_READ_ONLY`,
+        `CO_HOST_NOT_ACTIVE`.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - $ref: '#/components/parameters/EventId'
+        - name: coHostId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RemoveCoHostRequest' }
+      responses:
+        '200':
+          description: Lời mời sau khi gỡ.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CoHost' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+  /clubs/{clubId}/co-host-invitations:
+    get:
+      tags: [EVT]
+      operationId: listCoHostInvitations
+      summary: Lời mời đồng tổ chức gửi tới CLB (FR-EVT-08)
+      description: |
+        Ban chủ nhiệm CLB được mời (tab Sự kiện chung). Mọi lời mời, mới trước; `allowedActions` có `ACCEPT`, `DECLINE` khi
+        lời mời Đã gửi, sự kiện còn hoạt động và người xem có `APPROVE_EVENT`.
+        Lỗi: 403 `NOT_A_MEMBER`, `FORBIDDEN`.
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+      responses:
+        '200':
+          description: Lời mời.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/SharedEvent' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /clubs/{clubId}/co-host-invitations/{invitationId}/decision:
+    post:
+      tags: [EVT]
+      operationId: decideCoHostInvitation
+      summary: Chấp nhận hoặc từ chối lời mời đồng tổ chức (FR-EVT-08, ST-COH)
+      description: |
+        Cần `APPROVE_EVENT` ở CLB được mời. Chỉ khi lời mời Đã gửi; lời mời đã từ chối không chấp nhận lại được. Từ chối cần
+        ghi chú 5–500 ký tự. Người mời và Trưởng BTC nhận thông báo.
+        Thứ tự kiểm: 404 (không thuộc ban chủ nhiệm CLB này), 403, 409, 422, 400.
+        Lỗi: 400 `VALIDATION`; 403 `FORBIDDEN`; 404 `CO_HOST_NOT_FOUND`; 409 `VERSION_CONFLICT`; 422 `CO_HOST_NOT_PENDING`,
+        `EVENT_READ_ONLY`.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - name: invitationId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CoHostDecisionRequest' }
+      responses:
+        '200':
+          description: Lời mời sau khi trả lời.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SharedEvent' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
   /clubs/{clubId}/events/{eventId}/registrations:
     get:
       tags: [EVT]
@@ -3470,7 +3739,8 @@ paths:
         `allowedActions`: `RECORD_INCOME` (Thủ quỹ, quỹ đang mở); `PROPOSE_EXPENSE` (ban chủ nhiệm ở mọi quỹ, Trưởng ban,
         Phó ban ở Quỹ chung, Trưởng BTC ở quỹ sự kiện của mình; quỹ đang mở); `VIEW_REQUESTS` (người đề xuất được, ban chủ nhiệm,
         Trưởng BTC với quỹ sự kiện của mình: hiện danh sách khoản chi); `SETTLE` (Thủ quỹ, quỹ sự kiện đang mở, sự kiện Đã kết thúc
-        hoặc Đã hủy, không còn khoản treo).
+        hoặc Đã hủy, không còn khoản treo). `PROPOSE_ADVANCE` như `PROPOSE_EXPENSE` (FR-FIN-07); `VIEW_ADVANCES` (ban chủ nhiệm,
+        người đề xuất được, Trưởng BTC với quỹ sự kiện của mình, người đã có tạm ứng ở quỹ: hiện tab Tạm ứng).
 
         Lỗi: 403 `NOT_A_MEMBER`, `FORBIDDEN` (quỹ sự kiện mà không thuộc BTC hay ban chủ nhiệm); 404 `FUND_NOT_FOUND`.
       parameters:
@@ -3485,6 +3755,574 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+  /clubs/{clubId}/advances:
+    get:
+      tags: [FIN]
+      operationId: listAdvances
+      summary: Danh sách tạm ứng (FR-FIN-07)
+      description: |
+        Chỉ trả tạm ứng người gọi xem được: ban chủ nhiệm xem hết; Trưởng BTC xem tạm ứng ở quỹ sự kiện của mình; người ứng xem
+        của mình (SRS 3.5). Có `fundId` thì cần `VIEW_ADVANCES` ở quỹ đó. `overdue=true`: Đã ứng hoặc Quyết toán một phần mà qua
+        hạn quyết toán (BR-FIN-05). Mới trước.
+        Lỗi: 403 `NOT_A_MEMBER`, `FORBIDDEN`; 404 `FUND_NOT_FOUND`.
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - { name: fundId, in: query, required: false, schema: { type: string } }
+        - name: status
+          in: query
+          required: false
+          style: form
+          explode: true
+          schema: { type: array, items: { $ref: '#/components/schemas/AdvanceStatus' } }
+        - { name: mine, in: query, required: false, schema: { type: boolean } }
+        - { name: overdue, in: query, required: false, schema: { type: boolean } }
+        - $ref: '#/components/parameters/Q'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200':
+          description: Một trang tạm ứng.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AdvancePage' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [FIN]
+      operationId: proposeAdvance
+      summary: Đề xuất tạm ứng (FR-FIN-07)
+      description: |
+        Người đề xuất chi được ở quỹ đó (như `createTransaction` loại `EXPENSE`). Quỹ đang mở. Số tiền nguyên dương tối đa
+        1.000.000.000 (BR-FIN-04); mục đích 5–500 ký tự; hạng mục chi; hạn quyết toán từ hôm nay tới 90 ngày (giao diện điền
+        sẵn hôm nay cộng `advanceSettleDays`). Người đang có tạm ứng quá hạn ở CLB bị chặn (BR-FIN-05), câu báo nêu khoản đó.
+        Người duyệt được ở quỹ nhận thông báo, đích `ADVANCE`.
+        Thứ tự kiểm: 400 `fundId`, 403, 422 `FUND_SETTLED`, 422 `ADVANCE_OVERDUE`, 400 các ô khác.
+        Lỗi: 400 `VALIDATION`; 403 `NOT_A_MEMBER`, `FORBIDDEN`; 422 `FUND_SETTLED`, `ADVANCE_OVERDUE`.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProposeAdvanceRequest' }
+      responses:
+        '201':
+          description: Tạm ứng vừa đề xuất.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AdvanceDetail' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+  /clubs/{clubId}/advances/{advanceId}:
+    get:
+      tags: [FIN]
+      operationId: getAdvance
+      summary: Chi tiết tạm ứng (FR-FIN-07)
+      description: |
+        Quyền xem như `listAdvances`; mở từ thông báo cũng kiểm lại (BR-SEC-02).
+        Lỗi: 403 `NOT_A_MEMBER`, `FORBIDDEN`; 404 `ADVANCE_NOT_FOUND`.
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - { name: advanceId, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Chi tiết tạm ứng.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AdvanceDetail' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /clubs/{clubId}/advances/{advanceId}/transitions:
+    post:
+      tags: [FIN]
+      operationId: transitionAdvance
+      summary: Duyệt, từ chối, ghi Đã ứng (FR-FIN-07, ST-ADV)
+      description: |
+        - `APPROVE`, `REJECT`: người duyệt chi được ở quỹ (`APPROVE_EXPENSE`; Trưởng BTC không có, BR-ACL-05); người ứng không tự
+          duyệt (403 `SELF_APPROVAL`); chỉ khi Đề xuất; từ chối cần lý do 5–500 ký tự. Duyệt thì báo người ứng và người giữ sổ;
+          từ chối thì báo người ứng kèm lý do.
+        - `APPROVE` khi quỹ đã quyết toán: 422 `FUND_SETTLED`.
+        - `DISBURSE`: `RECORD_LEDGER`; chỉ khi Đã duyệt; quỹ đang mở; số tiền không vượt số dư (422 `INSUFFICIENT_BALANCE` nêu
+          số dư còn lại, BR-FIN-08); `disbursedOn` không sau hôm nay, bỏ trống là hôm nay. Sinh khoản chi Đã ghi sổ gắn với tạm
+          ứng, người duyệt của khoản chi là người duyệt tạm ứng, người ghi sổ là người ghi Đã ứng. Báo người ứng kèm hạn.
+        - Việc theo giờ: nhắc người ứng khi còn 2 ngày tới hạn quyết toán; quá hạn thì báo một lần cho người ứng và người giữ sổ.
+        Thứ tự kiểm: 403, 409, 422, 400.
+        Lỗi: 400 `VALIDATION`; 403 `NOT_A_MEMBER`, `FORBIDDEN`, `SELF_APPROVAL`; 404 `ADVANCE_NOT_FOUND`; 409 `VERSION_CONFLICT`;
+        422 `INVALID_TRANSITION`, `FUND_SETTLED`, `INSUFFICIENT_BALANCE`.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - { name: advanceId, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AdvanceTransitionRequest' }
+      responses:
+        '200':
+          description: Tạm ứng sau thao tác.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AdvanceDetail' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+  /clubs/{clubId}/advances/{advanceId}/settlement-lines:
+    post:
+      tags: [FIN]
+      operationId: submitAdvanceSettlementLine
+      summary: Nộp chứng từ quyết toán tạm ứng (FR-FIN-08)
+      description: |
+        Chỉ người ứng; tạm ứng ở `DISBURSED` hoặc `PARTIALLY_SETTLED`. Nộp được nhiều lần, mỗi lần một khoản đã chi kèm ít nhất
+        một chứng từ (tải trước qua `POST /clubs/{clubId}/transaction-attachments`; người đang giữ tiền tạm ứng tải được), chứng từ
+        chưa dùng ở giao dịch hay lần nộp khác. Báo người giữ sổ. Thứ tự kiểm: 403, 409, 422, 400.
+        Lỗi: 400 `VALIDATION` (`amount`, `description`, `spentOn`, `attachmentIds`); 403 `NOT_A_MEMBER`, `FORBIDDEN`;
+        404 `ADVANCE_NOT_FOUND`; 409 `VERSION_CONFLICT`; 422 `INVALID_TRANSITION`.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - { name: advanceId, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SubmitSettlementLineRequest' }
+      responses:
+        '201':
+          description: Tạm ứng sau khi nộp.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AdvanceDetail' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+  /clubs/{clubId}/advances/{advanceId}/settlement-lines/{lineId}/decision:
+    post:
+      tags: [FIN]
+      operationId: decideAdvanceSettlementLine
+      summary: Xác nhận hoặc trả lại một lần nộp chứng từ (FR-FIN-08)
+      description: |
+        `RECORD_LEDGER`. Chỉ lần nộp đang `SUBMITTED`. `CONFIRM` cộng vào số đã quyết toán, tạm ứng Đã ứng sang Quyết toán một
+        phần. `RETURN` cần ghi chú 5–500 ký tự; người ứng nộp lại bằng lần nộp mới. Báo người ứng. `version` là phiên bản tạm
+        ứng. Thứ tự kiểm: 403, 409, 422, 400.
+        Lỗi: 400 `VALIDATION`; 403 `NOT_A_MEMBER`, `FORBIDDEN`; 404 `ADVANCE_NOT_FOUND`, `LINE_NOT_FOUND`;
+        409 `VERSION_CONFLICT`; 422 `INVALID_TRANSITION`.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - { name: advanceId, in: path, required: true, schema: { type: string } }
+        - { name: lineId, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SettlementLineDecisionRequest' }
+      responses:
+        '200':
+          description: Tạm ứng sau quyết định.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AdvanceDetail' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+  /clubs/{clubId}/advances/{advanceId}/closure:
+    post:
+      tags: [FIN]
+      operationId: closeAdvance
+      summary: Chốt quyết toán tạm ứng (FR-FIN-08)
+      description: |
+        `RECORD_LEDGER`; tạm ứng ở `DISBURSED` hoặc `PARTIALLY_SETTLED`; không còn lần nộp chờ xác nhận (422
+        `ADVANCE_HAS_PENDING_LINES` kèm số lần); quỹ đang mở. Đối chiếu số đã ứng với tổng đã xác nhận:
+        - thừa: ghi điều chỉnh tăng quỹ Đã ghi sổ "Hoàn tạm ứng", tham chiếu khoản chi ứng, ngày là `refundOn` (từ ngày ứng tới
+          hôm nay, bỏ trống là hôm nay);
+        - thiếu: tạo khoản chi `PROPOSED` đứng tên người ứng, kèm chứng từ các lần đã xác nhận, đi qua duyệt và ghi sổ như khoản
+          chi thường (người ứng không tự duyệt); báo người duyệt;
+        - khớp: không sinh giao dịch.
+        Tạm ứng sang `SETTLED`, báo người ứng. Thứ tự kiểm: 403, 409, 422, 400.
+        Lỗi: 400 `VALIDATION` (`refundOn`); 403 `NOT_A_MEMBER`, `FORBIDDEN`; 404 `ADVANCE_NOT_FOUND`; 409 `VERSION_CONFLICT`;
+        422 `INVALID_TRANSITION`, `ADVANCE_HAS_PENDING_LINES`, `FUND_SETTLED`.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - { name: advanceId, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CloseAdvanceRequest' }
+      responses:
+        '200':
+          description: Tạm ứng đã quyết toán.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AdvanceDetail' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+  /clubs/{clubId}/dues-campaigns:
+    get:
+      tags: [FIN]
+      operationId: listDuesCampaigns
+      summary: Đợt đóng quỹ của CLB (FR-FIN-09)
+      description: |
+        Ban chủ nhiệm (SRS 3.5). Mọi route đóng quỹ đều cần thuộc ban chủ nhiệm, kể cả thao tác cần `RECORD_LEDGER`: người
+        được bảng phân quyền cấp `RECORD_LEDGER` mà không thuộc ban chủ nhiệm vẫn nhận 403. Đợt đang mở trước, rồi đợt mới mở
+        trước. Mỗi đợt kèm tiến độ thu.
+        Lỗi: 400 `VALIDATION` (`status`); 403 `NOT_A_MEMBER`, `FORBIDDEN`; 404 `CLUB_NOT_FOUND`.
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - { name: status, in: query, schema: { $ref: '#/components/schemas/DuesCampaignStatus' } }
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200':
+          description: Một trang đợt đóng quỹ.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DuesCampaignPage' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [FIN]
+      operationId: openDuesCampaign
+      summary: Mở đợt đóng quỹ (FR-FIN-09)
+      description: |
+        `RECORD_LEDGER` (mặc định Thủ quỹ). Tên kỳ 3–100 ký tự; mức nguyên dương tối đa 1.000.000.000; hạn nộp từ hôm nay.
+        Danh sách chụp thành viên Thử việc, Chính thức lúc mở (họ tên, ban, mức phải đóng không đổi theo hồ sơ về sau,
+        BR-DATA-02). `exemptions`: mỗi người một lần, thuộc danh sách; lý do 5–500 ký tự; `REDUCED` có `amount` từ 1 tới dưới
+        mức đóng (400 theo ô `exemptions[i].…`). Báo từng người còn phải đóng, nội dung có kỳ, mức của họ, hạn.
+        Thứ tự kiểm: 403, 400.
+        Lỗi: 400 `VALIDATION`; 403 `NOT_A_MEMBER`, `FORBIDDEN`; 404 `CLUB_NOT_FOUND`.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OpenDuesRequest' }
+      responses:
+        '201':
+          description: Đợt vừa mở.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DuesCampaignDetail' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /clubs/{clubId}/dues-candidates:
+    get:
+      tags: [FIN]
+      operationId: listDuesCandidates
+      summary: Thành viên phải đóng quỹ, để chọn người miễn giảm (FR-FIN-09)
+      description: |
+        Ban chủ nhiệm. Thành viên Thử việc, Chính thức; chỉ tên và ban (SRS 3.5).
+        Lỗi: 403 `NOT_A_MEMBER`, `FORBIDDEN`; 404 `CLUB_NOT_FOUND`.
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - { name: q, in: query, schema: { type: string } }
+      responses:
+        '200':
+          description: Danh sách thành viên.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/AttendanceCandidate' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /clubs/{clubId}/dues-campaigns/{campaignId}:
+    get:
+      tags: [FIN]
+      operationId: getDuesCampaign
+      summary: Chi tiết đợt đóng quỹ (FR-FIN-09)
+      description: |
+        Ban chủ nhiệm. Lỗi: 403 `NOT_A_MEMBER`, `FORBIDDEN`; 404 `CLUB_NOT_FOUND`, `CAMPAIGN_NOT_FOUND`.
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - { name: campaignId, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Chi tiết đợt.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DuesCampaignDetail' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [FIN]
+      operationId: updateDuesCampaign
+      summary: Sửa tên, hạn, mức đóng (FR-FIN-09)
+      description: |
+        `RECORD_LEDGER`. Đợt đã đóng: 422 `CAMPAIGN_CLOSED` (BR-FIN-06). Đổi mức khi đã có người nộp: 422 `HAS_PAYMENTS`;
+        mức mới áp cho người không miễn giảm và phải cao hơn mức sau giảm của người được giảm. Thứ tự kiểm: 403, 409, 422, 400.
+        Lỗi: 400 `VALIDATION`; 403 `NOT_A_MEMBER`, `FORBIDDEN`; 404 `CAMPAIGN_NOT_FOUND`; 409 `VERSION_CONFLICT`;
+        422 `CAMPAIGN_CLOSED`, `HAS_PAYMENTS`.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - { name: campaignId, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateDuesCampaignRequest' }
+      responses:
+        '200':
+          description: Đợt sau khi sửa.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DuesCampaignDetail' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+  /clubs/{clubId}/dues-campaigns/{campaignId}/items:
+    get:
+      tags: [FIN]
+      operationId: listDuesItems
+      summary: Người trong đợt đóng quỹ (FR-FIN-09)
+      description: |
+        Ban chủ nhiệm. Lọc theo tình trạng, tìm theo tên hoặc ban, sắp theo tên; trang mặc định 50.
+        Lỗi: 400 `VALIDATION` (`status`); 403 `NOT_A_MEMBER`, `FORBIDDEN`; 404 `CAMPAIGN_NOT_FOUND`.
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - { name: campaignId, in: path, required: true, schema: { type: string } }
+        - { name: status, in: query, schema: { $ref: '#/components/schemas/DuesItemStatus' } }
+        - { name: q, in: query, schema: { type: string } }
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200':
+          description: Một trang người trong đợt.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DuesItemPage' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /clubs/{clubId}/dues-campaigns/{campaignId}/items/{itemId}/exemption:
+    put:
+      tags: [FIN]
+      operationId: setDuesExemption
+      summary: Miễn giảm cho một người (FR-FIN-09)
+      description: |
+        `RECORD_LEDGER`; đợt đang mở (422 `CAMPAIGN_CLOSED`). `NONE` trả về mức đầy đủ. `EXEMPT`, `REDUCED` cần lý do 5–500 ký
+        tự; mức sau giảm từ 1 tới dưới mức đóng. Mức sau miễn giảm không thấp hơn số người đó đã nộp (422 `BELOW_PAID`).
+        `version` là phiên bản của dòng. Thứ tự kiểm: 403, 409, 422 đợt đã đóng, 400, 422 thấp hơn số đã nộp.
+        Lỗi: 400 `VALIDATION`; 403 `NOT_A_MEMBER`, `FORBIDDEN`; 404 `ITEM_NOT_FOUND`; 409 `VERSION_CONFLICT`;
+        422 `CAMPAIGN_CLOSED`, `BELOW_PAID`.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - { name: campaignId, in: path, required: true, schema: { type: string } }
+        - { name: itemId, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SetExemptionRequest' }
+      responses:
+        '200':
+          description: Dòng sau khi sửa.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DuesItem' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+  /clubs/{clubId}/dues-campaigns/{campaignId}/items/{itemId}/payments:
+    post:
+      tags: [FIN]
+      operationId: recordDuesPayment
+      summary: Xác nhận một người đã nộp quỹ (FR-FIN-10)
+      description: |
+        `RECORD_LEDGER`; đợt đang mở (422 `CAMPAIGN_CLOSED`); người đã nộp đủ hoặc được miễn: 422 `ALREADY_PAID`. Số tiền từ 1
+        tới số còn thiếu; ngày nộp không sau hôm nay. `version` là phiên bản của dòng; lệch thì 409, nên bấm hai lần không sinh
+        hai khoản thu (NFR-REL-01). Mỗi lần sinh một khoản thu Đã ghi sổ ở Quỹ chung, hạng mục `MEMBER_DUES`, nội dung có tên kỳ
+        và họ tên; báo người nộp. Việc theo giờ nhắc người còn thiếu một lần khi còn 3 ngày tới hạn và một lần khi quá hạn
+        (đợt đã đóng, người được miễn hoặc đã nộp đủ thì không nhắc). Thứ tự kiểm: 403, 409, 422, 400.
+        Lỗi: 400 `VALIDATION` (`amount`, `paidOn`); 403 `NOT_A_MEMBER`, `FORBIDDEN`; 404 `ITEM_NOT_FOUND`; 409 `VERSION_CONFLICT`;
+        422 `CAMPAIGN_CLOSED`, `ALREADY_PAID`.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - { name: campaignId, in: path, required: true, schema: { type: string } }
+        - { name: itemId, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RecordDuesPaymentRequest' }
+      responses:
+        '201':
+          description: Dòng sau khi ghi nhận.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DuesItem' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+  /clubs/{clubId}/dues-campaigns/{campaignId}/closure:
+    post:
+      tags: [FIN]
+      operationId: closeDuesCampaign
+      summary: Đóng đợt đóng quỹ (FR-FIN-09)
+      description: |
+        `RECORD_LEDGER`. Sau khi đóng: không nhận thêm khoản nộp, không sửa (BR-FIN-06); người chưa nộp vẫn nằm trong báo cáo.
+        Thứ tự kiểm: 403, 409, 422.
+        Lỗi: 403 `NOT_A_MEMBER`, `FORBIDDEN`; 404 `CAMPAIGN_NOT_FOUND`; 409 `VERSION_CONFLICT`; 422 `CAMPAIGN_CLOSED`.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - { name: campaignId, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [version]
+              properties:
+                version: { type: integer }
+      responses:
+        '200':
+          description: Đợt đã đóng.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DuesCampaignDetail' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+  /clubs/{clubId}/finance-report/periods:
+    get:
+      tags: [FIN]
+      operationId: listFinanceReportPeriods
+      summary: Các kỳ chọn được cho báo cáo thu chi (FR-FIN-12)
+      description: |
+        Ban chủ nhiệm. 12 tháng gần nhất; các học kỳ tính từ mốc `MM-DD` CLB khai (`semester1Start`, `semester2Start`,
+        `summerStart`), mỗi kỳ tới hôm trước mốc kế tiếp, lùi về kỳ chứa ngày thành lập; các nhiệm kỳ của CLB. Mới nhất trước.
+        Lỗi: 403 `NOT_A_MEMBER`, `FORBIDDEN`; 404 `CLUB_NOT_FOUND`.
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+      responses:
+        '200':
+          description: Các kỳ.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReportPeriods' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /clubs/{clubId}/finance-report:
+    get:
+      tags: [FIN]
+      operationId: getFinanceReport
+      summary: Báo cáo thu chi (FR-FIN-12)
+      description: |
+        Ban chủ nhiệm. `period`: `MONTH`, `SEMESTER`, `TERM` kèm `key` lấy từ `/finance-report/periods`; `CUSTOM` kèm `from`, `to`
+        (không đảo, tối đa 5 năm). Chỉ tính giao dịch Đã ghi sổ theo ngày phát sinh (BR-FIN-02); chuyển quỹ không tính vào thu
+        chi; điều chỉnh mang hạng mục của giao dịch gốc. `category` (không gồm `FUND_TRANSFER`), `eventId` (sự kiện của CLB có
+        quỹ) lọc kèm kỳ. `flagged`: khoản chi Đã ghi sổ do cùng một người duyệt và ghi sổ (R-01), kể cả khoản chi sinh khi ghi
+        Đã ứng tạm ứng mà người duyệt tạm ứng cũng là người ghi Đã ứng. `overdueAdvanceCount`, `unpaidDuesCount` tính tại lúc xem.
+        Lỗi: 400 `VALIDATION` (`period`, `key`, `from`, `to`, `category`, `eventId`); 403 `NOT_A_MEMBER`, `FORBIDDEN`;
+        404 `CLUB_NOT_FOUND`.
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - { name: period, in: query, required: true, schema: { type: string, enum: [MONTH, SEMESTER, TERM, CUSTOM] } }
+        - { name: key, in: query, schema: { type: string } }
+        - { name: from, in: query, schema: { type: string, format: date } }
+        - { name: to, in: query, schema: { type: string, format: date } }
+        - { name: category, in: query, schema: { $ref: '#/components/schemas/FinanceCategory' } }
+        - { name: eventId, in: query, schema: { type: string } }
+      responses:
+        '200':
+          description: Báo cáo.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FinanceReport' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /clubs/{clubId}/finance-report/unpaid-dues:
+    get:
+      tags: [FIN]
+      operationId: listUnpaidDues
+      summary: Người chưa nộp quỹ (FR-FIN-12)
+      description: |
+        Ban chủ nhiệm. Người còn thiếu ở các đợt đóng quỹ của CLB, cả đợt đã đóng; họ tên lúc mở đợt, số còn thiếu, cờ quá
+        hạn. Sắp theo hạn rồi tên. `campaignId` không thuộc CLB: 400.
+        Lỗi: 400 `VALIDATION`; 403 `NOT_A_MEMBER`, `FORBIDDEN`; 404 `CLUB_NOT_FOUND`.
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - { name: campaignId, in: query, schema: { type: string } }
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200':
+          description: Một trang người chưa nộp.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UnpaidDuesPage' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
   /clubs/{clubId}/funds/{fundId}/transitions:
     post:
       tags: [FIN]
@@ -3492,17 +4330,22 @@ paths:
       summary: Quyết toán quỹ sự kiện (FR-FIN-11)
       description: |
         `SETTLE`: chỉ Thủ quỹ. Quỹ phải là quỹ sự kiện đang mở, sự kiện ở Đã kết thúc hoặc Đã hủy, không còn khoản chi hay
-        điều chỉnh ở `PROPOSED`, `APPROVED` (422 `FUND_HAS_PENDING` kèm số khoản). Số dư lớn hơn 0 thì ghi một giao dịch
+        điều chỉnh ở `PROPOSED`, `APPROVED` (422 `FUND_HAS_PENDING` kèm số khoản), không còn tạm ứng mở (`PROPOSED`, `APPROVED`,
+        `DISBURSED`, `PARTIALLY_SETTLED`; 422 `FUND_HAS_OPEN_ADVANCES` kèm số khoản, kiểm trước khoản chờ duyệt). Số dư lớn hơn 0 thì ghi một giao dịch
         `TRANSFER` (hạng mục `FUND_TRANSFER`) sang Quỹ chung; quỹ sang `SETTLED`. Sự kiện giữ nguyên trạng thái; sự kiện
-        Đã kết thúc từ đây đóng được (`CLOSE`). Quỹ của sự kiện đồng tổ chức thuộc CLB chủ trì (BR-FIN-07); khoản chia cho
-        CLB đồng tổ chức và điều kiện "không còn tạm ứng mở" làm khi có FR-EVT-07, FR-FIN-07 (P1).
+        Đã kết thúc từ đây đóng được (`CLOSE`). Quỹ của sự kiện đồng tổ chức thuộc CLB chủ trì (BR-FIN-07).
+        `shares` (không bắt buộc): mỗi khoản cho một CLB đang đồng tổ chức (`FundDetail.coHosts`), số nguyên dương, ghi chú
+        tối đa 200 ký tự, không lặp CLB (400 theo ô `shares[i].…`); tổng không vượt số dư (422 `SHARE_EXCEEDS_BALANCE`,
+        BR-FIN-08). Mỗi khoản ghi thành khoản chi Đã ghi sổ hạng mục `CO_HOST_SHARE` trước, rồi phần còn lại mới chuyển về
+        Quỹ chung; ban chủ nhiệm CLB nhận khoản chia được báo. Thứ tự kiểm: 403, 409, 422 điều kiện quỹ, 400 khoản chia,
+        422 vượt số dư.
 
         Lỗi:
         - 400 `VALIDATION`.
         - 403 `NOT_A_MEMBER`, `FORBIDDEN`.
         - 404 `FUND_NOT_FOUND`.
         - 409 `VERSION_CONFLICT`.
-        - 422 `INVALID_TRANSITION`, `FUND_SETTLED`, `FUND_HAS_PENDING`.
+        - 422 `INVALID_TRANSITION`, `FUND_SETTLED`, `FUND_HAS_OPEN_ADVANCES`, `FUND_HAS_PENDING`, `SHARE_EXCEEDS_BALANCE`.
       security:
         - sessionCookie: []
           csrfHeader: []
@@ -4343,7 +5186,10 @@ components:
         `REQUEST_PRESIDENCY_TRANSFER`: thành viên Chính thức, mọi người giữ chức ban chủ nhiệm không đăng nhập quá 30 ngày và CLB
         chưa có yêu cầu chuyển quyền chờ xử lý (FR-ACC-08).
         `VIEW_PERMISSIONS`: thuộc ban chủ nhiệm, xem được bảng phân quyền (FR-ORG-05).
-      enum: [CREATE_EVENT, PROPOSE_EVENT, ASSIGN_TASK, MANAGE_MEMBERS, MANAGE_ORG, ASSIGN_PRESIDENCY, EDIT_CLUB, SEND_ANNOUNCEMENT, CREATE_TERM, ASSIGN_POSITION, REQUEST_PRESIDENCY_TRANSFER, VIEW_PERMISSIONS]
+        `VIEW_SHARED_EVENTS`: thuộc ban chủ nhiệm, xem và trả lời lời mời đồng tổ chức ở tab Sự kiện chung (FR-EVT-08).
+        `VIEW_DUES`: thuộc ban chủ nhiệm, xem tab Đóng quỹ (FR-FIN-09). `OPEN_DUES`: ban chủ nhiệm có `RECORD_LEDGER`, mở đợt đóng quỹ.
+        `VIEW_FINANCE_REPORT`: thuộc ban chủ nhiệm, xem tab Báo cáo thu chi (FR-FIN-12).
+      enum: [CREATE_EVENT, PROPOSE_EVENT, ASSIGN_TASK, MANAGE_MEMBERS, MANAGE_ORG, ASSIGN_PRESIDENCY, EDIT_CLUB, SEND_ANNOUNCEMENT, CREATE_TERM, ASSIGN_POSITION, REQUEST_PRESIDENCY_TRANSFER, VIEW_PERMISSIONS, VIEW_SHARED_EVENTS, VIEW_DUES, OPEN_DUES, VIEW_FINANCE_REPORT]
     TermSummary:
       type: object
       description: Nhiệm kỳ đang phụ trách CLB (Đang chạy hoặc Đang bàn giao).
@@ -4375,6 +5221,7 @@ components:
         - myPositionTitles
         - allowedActions
         - generalFundId
+        - viewerRole
         - version
       properties:
         id: { type: string }
@@ -4407,7 +5254,11 @@ components:
           items: { $ref: '#/components/schemas/ClubAction' }
         generalFundId:
           type: string
-          description: Mỗi CLB có đúng một Quỹ chung (FR-FIN-06).
+          description: Mỗi CLB có đúng một Quỹ chung (FR-FIN-06); khách của sự kiện nhận chuỗi rỗng.
+        viewerRole:
+          type: string
+          enum: [MEMBER, EVENT_GUEST]
+          description: '`EVENT_GUEST`: người ngoài CLB đang làm BTC một sự kiện của CLB; chỉ dùng được mục Sự kiện.'
         version: { type: integer }
     CreateClubRequest:
       type: object
@@ -4812,11 +5663,14 @@ components:
         version: { type: integer }
     ResignBlocker:
       type: object
-      description: Khoản còn tồn khiến chưa tự rời CLB được (BR-MEM-03).
-      required: [kind, refId, title]
+      description: |
+        Khoản còn tồn khiến chưa tự rời CLB được (BR-MEM-03), kể cả chức trưởng tiểu ban và việc ở sự kiện chung mà người này
+        tham gia với tư cách nhân sự CLB đồng tổ chức (FR-EVT-08).
+      required: [kind, refId, clubId, title]
       properties:
-        kind: { type: string, enum: [POSITION, TASK, TASK_REVIEW, APPOINTMENT] }
+        kind: { type: string, enum: [POSITION, TASK, TASK_REVIEW, ADVANCE, APPOINTMENT], description: '`ADVANCE`: tạm ứng còn mở do người này ứng, `refId` là mã tạm ứng.' }
         refId: { type: string }
+        clubId: { type: string, description: 'CLB của khoản; việc, chức vụ ở sự kiện chung thuộc CLB chủ trì.' }
         title: { type: string }
     MyMembership:
       type: object
@@ -5917,13 +6771,14 @@ components:
       type: object
       description: |
         Màn hình liên quan; màn đó tự kiểm tra quyền khi mở (BR-SEC-02). `FINANCE` trỏ tới một giao dịch (`id`), `SESSION` tới
-        một buổi sinh hoạt, `TERM` tới trang Nhiệm kỳ, `HANDOVER` tới một phiên bàn giao (`id`).
+        một buổi sinh hoạt, `TERM` tới trang Nhiệm kỳ, `HANDOVER` tới một phiên bàn giao (`id`), `EVENT_SHARED` tới tab Sự kiện
+        chung của CLB được mời đồng tổ chức, `ADVANCE` tới một tạm ứng (`id`, mở trong sheet ở trang Tài chính).
       required: [type, clubId, id]
       properties:
         type:
           type: string
           description: '`MEMBERS` mở trang Thành viên; `id` là tab cần mở (ví dụ `leave`), `null` là tab mặc định. `INVITATION` mở trang lời mời; `id` là mã lời mời.'
-          enum: [CLUB, STRUCTURE, MEMBERS, TASK, EVENT, SESSION, FINANCE, TERM, HANDOVER, DIRECTORY, INVITATION]
+          enum: [CLUB, STRUCTURE, MEMBERS, TASK, EVENT, EVENT_SHARED, SESSION, FINANCE, ADVANCE, DUES, TERM, HANDOVER, DIRECTORY, INVITATION]
         clubId: { $ref: '#/components/schemas/NullableString' }
         id: { $ref: '#/components/schemas/NullableString' }
     NotificationSummary:
@@ -6024,7 +6879,9 @@ components:
       description: |
         Chuyển trạng thái cộng các quyền khác do máy chủ tính: `MANAGE_SUBCOMMITTEES`, `REGISTER`, `RESCHEDULE` (dời thời gian, FR-EVT-14),
         `VIEW_STAFF`, `VIEW_REGISTRATIONS`, `VIEW_FUND`, `VIEW_ATTENDANCE` (dữ liệu BTC, danh sách tham dự, quỹ sự kiện, điểm danh chỉ BTC và ban chủ nhiệm xem, SRS 3.5).
-      enum: [SUBMIT, APPROVE, REJECT, OPEN_REGISTRATION, CANCEL, CLOSE, MANAGE_SUBCOMMITTEES, REGISTER, RESCHEDULE, VIEW_STAFF, VIEW_REGISTRATIONS, VIEW_FUND, VIEW_ATTENDANCE]
+        `VIEW_PROGRESS`: số việc theo tiểu ban (FR-EVT-09). Ban chủ nhiệm CLB đồng tổ chức (đang Chấp nhận, sự kiện còn hoạt
+        động) chỉ có `VIEW_PROGRESS`, `VIEW_STAFF`, `VIEW_FUND`: không có `VIEW_REGISTRATIONS`, `VIEW_ATTENDANCE` và không thao tác ghi nào.
+      enum: [SUBMIT, APPROVE, REJECT, OPEN_REGISTRATION, CANCEL, CLOSE, MANAGE_SUBCOMMITTEES, REGISTER, RESCHEDULE, VIEW_STAFF, VIEW_PROGRESS, VIEW_REGISTRATIONS, VIEW_FUND, VIEW_ATTENDANCE]
     EventFormat:
       type: string
       enum: [OFFLINE, ONLINE]
@@ -6104,7 +6961,7 @@ components:
       allOf:
         - $ref: '#/components/schemas/EventSummary'
         - type: object
-          required: [description, onlineUrl, proposer, approver, rejectionReason, cancellationReason, statusBeforeCancel, allowedActions, version, createdAt, fundId, fundStatus, lastScheduleChange]
+          required: [description, onlineUrl, proposer, approver, rejectionReason, cancellationReason, statusBeforeCancel, allowedActions, version, createdAt, fundId, fundStatus, openAdvanceCount, lastScheduleChange, viewingAsCoHost]
           properties:
             description: { type: string }
             onlineUrl: { $ref: '#/components/schemas/NullableString' }
@@ -6135,11 +6992,45 @@ components:
               oneOf:
                 - $ref: '#/components/schemas/FundStatus'
                 - type: 'null'
+            openAdvanceCount:
+              type: [integer, 'null']
+              minimum: 0
+              description: Số tạm ứng còn mở ở quỹ sự kiện (chặn đóng sự kiện, BR-EVT-05); `null` như `fundStatus`.
             lastScheduleChange:
               description: Lần dời thời gian gần nhất (FR-EVT-14); `null` khi chưa dời lần nào.
               oneOf:
                 - $ref: '#/components/schemas/ScheduleChange'
                 - type: 'null'
+            viewingAsCoHost:
+              description: CLB đồng tổ chức khi người gọi chỉ là ban chủ nhiệm của CLB đó (FR-EVT-09, chỉ xem); `null` với người khác.
+              oneOf:
+                - $ref: '#/components/schemas/CoHostClubRef'
+                - type: 'null'
+    TaskProgressCounts:
+      type: object
+      description: Số việc theo trạng thái, không tính việc Đã hủy; `overdue` đếm trùng với các trạng thái còn làm.
+      required: [total, assigned, inProgress, pendingReview, done, overdue]
+      properties:
+        total: { type: integer }
+        assigned: { type: integer }
+        inProgress: { type: integer }
+        pendingReview: { type: integer }
+        done: { type: integer }
+        overdue: { type: integer }
+    EventProgress:
+      type: object
+      required: [total, subcommittees]
+      properties:
+        total: { $ref: '#/components/schemas/TaskProgressCounts' }
+        subcommittees:
+          type: array
+          items:
+            type: object
+            required: [id, name, counts]
+            properties:
+              id: { type: string }
+              name: { type: string }
+              counts: { $ref: '#/components/schemas/TaskProgressCounts' }
     EventPage:
       allOf:
         - $ref: '#/components/schemas/PageMeta'
@@ -6157,10 +7048,15 @@ components:
       allOf:
         - $ref: '#/components/schemas/PersonRef'
         - type: object
-          required: [departmentName, kind]
+          required: [departmentName, kind, homeClubName]
           properties:
-            departmentName: { $ref: '#/components/schemas/NullableString' }
+            departmentName:
+              $ref: '#/components/schemas/NullableString'
+              description: Ban ở CLB chủ trì; nhân sự CLB đồng tổ chức thì ban ở CLB của họ.
             kind: { $ref: '#/components/schemas/StaffKind' }
+            homeClubName:
+              $ref: '#/components/schemas/NullableString'
+              description: CLB gốc của nhân sự `CO_HOST`; `null` với thành viên CLB chủ trì và CTV.
     Subcommittee:
       type: object
       required: [id, name, description, quota, lead, members, allowedActions]
@@ -6180,9 +7076,12 @@ components:
           items: { $ref: '#/components/schemas/StaffMember' }
         allowedActions:
           type: array
+          description: |
+            `INVITE_MEMBER` (Trưởng tiểu ban cũng có); `ADD_COLLABORATOR`, `SET_LEAD` cần quyền ở cả sự kiện;
+            `ADD_CO_HOST_STAFF` thêm khi sự kiện có CLB đồng tổ chức đang Chấp nhận.
           items:
             type: string
-            enum: [INVITE_MEMBER]
+            enum: [INVITE_MEMBER, ADD_COLLABORATOR, ADD_CO_HOST_STAFF, SET_LEAD]
     StaffCandidate:
       description: Khi mời chỉ thấy tên và ban (FR-EVT-05).
       allOf:
@@ -6279,6 +7178,110 @@ components:
       required: [userId]
       properties:
         userId: { type: string }
+        coHostId:
+          $ref: '#/components/schemas/NullableString'
+          description: Id lời mời đồng tổ chức đang Chấp nhận khi thêm nhân sự của CLB đó (FR-EVT-08).
+    SetSubcommitteeLeadRequest:
+      type: object
+      required: [userId, reason]
+      properties:
+        userId: { type: string, description: Nhân sự hiện có của tiểu ban. }
+        reason:
+          type: [string, 'null']
+          description: Bắt buộc 5–500 ký tự khi tiểu ban đang có trưởng.
+    CoHostStatus:
+      type: string
+      description: ST-COH. Đã gửi, Chấp nhận, Từ chối, Đã gỡ.
+      enum: [SENT, ACCEPTED, DECLINED, REMOVED]
+    CoHostClubRef:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: string }
+        name: { type: string }
+    CoHost:
+      type: object
+      description: CLB đồng tổ chức nhìn từ CLB chủ trì (FR-EVT-08). Quỹ sự kiện vẫn thuộc CLB chủ trì (BR-FIN-07).
+      required: [id, club, status, message, invitedBy, invitedAt, decidedAt, decisionNote, removedAt, removeReason, staffCount, allowedActions, version]
+      properties:
+        id: { type: string }
+        club: { $ref: '#/components/schemas/CoHostClubRef' }
+        status: { $ref: '#/components/schemas/CoHostStatus' }
+        message: { type: string }
+        invitedBy: { $ref: '#/components/schemas/PersonRef' }
+        invitedAt: { type: string, format: date-time }
+        decidedAt: { $ref: '#/components/schemas/NullableDateTime' }
+        decisionNote: { $ref: '#/components/schemas/NullableString' }
+        removedAt: { $ref: '#/components/schemas/NullableDateTime' }
+        removeReason: { $ref: '#/components/schemas/NullableString' }
+        staffCount: { type: integer, description: Số người của CLB này đang trong BTC. }
+        allowedActions:
+          type: array
+          items: { type: string, enum: [REMOVE] }
+        version: { type: integer }
+    SharedEvent:
+      type: object
+      description: Lời mời đồng tổ chức nhìn từ CLB được mời (tab Sự kiện chung).
+      required: [id, event, status, message, invitedBy, invitedAt, decidedBy, decidedAt, decisionNote, removedAt, removeReason, staffCount, allowedActions, version]
+      properties:
+        id: { type: string }
+        event:
+          type: object
+          required: [id, name, clubId, clubName, startAt, endAt, status]
+          properties:
+            id: { type: string }
+            name: { type: string }
+            clubId: { type: string, description: CLB chủ trì. }
+            clubName: { type: string }
+            startAt: { type: string, format: date-time }
+            endAt: { type: string, format: date-time }
+            status: { $ref: '#/components/schemas/EventStatus' }
+        status: { $ref: '#/components/schemas/CoHostStatus' }
+        message: { type: string }
+        invitedBy: { $ref: '#/components/schemas/PersonRef' }
+        invitedAt: { type: string, format: date-time }
+        decidedBy:
+          oneOf:
+            - $ref: '#/components/schemas/PersonRef'
+            - type: 'null'
+        decidedAt: { $ref: '#/components/schemas/NullableDateTime' }
+        decisionNote: { $ref: '#/components/schemas/NullableString' }
+        removedAt: { $ref: '#/components/schemas/NullableDateTime' }
+        removeReason: { $ref: '#/components/schemas/NullableString' }
+        staffCount: { type: integer, description: Số thành viên CLB này đang trong BTC sự kiện. }
+        allowedActions:
+          type: array
+          items: { type: string, enum: [ACCEPT, DECLINE] }
+        version: { type: integer }
+    InviteCoHostRequest:
+      type: object
+      required: [clubId, message]
+      properties:
+        clubId: { type: string }
+        message: { type: string, maxLength: 500 }
+    CoHostDecisionRequest:
+      type: object
+      required: [decision, note, version]
+      properties:
+        decision: { type: string, enum: [ACCEPT, DECLINE] }
+        note:
+          type: [string, 'null']
+          description: Bắt buộc 5–500 ký tự khi `DECLINE`.
+        version: { type: integer }
+    RemoveCoHostRequest:
+      type: object
+      required: [reason, version]
+      properties:
+        reason: { type: string, minLength: 5, maxLength: 500 }
+        version: { type: integer }
+    AddCollaboratorRequest:
+      type: object
+      required: [email]
+      properties:
+        email:
+          type: string
+          format: email
+          description: Email tài khoản của người ngoài CLB; không có gợi ý theo email để không dò được tài khoản.
     # Sinh hoạt, điểm danh
     SessionScopeType:
       type: string
@@ -6532,7 +7535,385 @@ components:
       enum: [OPEN, SETTLED]
     FundAction:
       type: string
-      enum: [RECORD_INCOME, PROPOSE_EXPENSE, VIEW_REQUESTS, SETTLE]
+      enum: [RECORD_INCOME, PROPOSE_EXPENSE, PROPOSE_ADVANCE, VIEW_REQUESTS, VIEW_ADVANCES, SETTLE]
+    AdvanceStatus:
+      type: string
+      description: |
+        ST-ADV, có thêm `APPROVED` giữa Đề xuất và Đã ứng (quyết định 16/11; ST-ADV trong báo cáo thiếu bước này, đã báo nhóm).
+        `PARTIALLY_SETTLED`, `SETTLED` dùng khi quyết toán tạm ứng (FR-FIN-08).
+      enum: [PROPOSED, APPROVED, DISBURSED, PARTIALLY_SETTLED, SETTLED, REJECTED]
+    AdvanceSummary:
+      type: object
+      required: [id, fundId, fundName, requester, amount, purpose, category, settleBy, status, overdue, createdAt]
+      properties:
+        id: { type: string }
+        fundId: { type: string }
+        fundName: { type: string }
+        requester: { $ref: '#/components/schemas/PersonRef' }
+        amount: { type: integer }
+        purpose: { type: string }
+        category: { $ref: '#/components/schemas/FinanceCategory' }
+        settleBy: { type: string, format: date, description: Hạn quyết toán. }
+        status: { $ref: '#/components/schemas/AdvanceStatus' }
+        overdue: { type: boolean, description: 'Đã ứng hoặc Quyết toán một phần mà qua hạn (BR-FIN-05), tính lúc đọc.' }
+        createdAt: { type: string, format: date-time }
+    AdvanceDetail:
+      allOf:
+        - $ref: '#/components/schemas/AdvanceSummary'
+        - type: object
+          required: [approver, decidedAt, rejectionReason, disbursedBy, disbursedOn, disbursementTxId, lines, confirmedAmount, closure, allowedActions, version]
+          properties:
+            approver:
+              oneOf:
+                - $ref: '#/components/schemas/PersonRef'
+                - type: 'null'
+            decidedAt: { $ref: '#/components/schemas/NullableDateTime' }
+            rejectionReason: { $ref: '#/components/schemas/NullableString' }
+            disbursedBy:
+              oneOf:
+                - $ref: '#/components/schemas/PersonRef'
+                - type: 'null'
+            disbursedOn: { type: [string, 'null'], format: date }
+            disbursementTxId:
+              $ref: '#/components/schemas/NullableString'
+              description: Khoản chi Đã ghi sổ sinh khi ghi Đã ứng.
+            lines:
+              type: array
+              description: Các lần nộp chứng từ, mới nhất trước (FR-FIN-08).
+              items: { $ref: '#/components/schemas/AdvanceLine' }
+            confirmedAmount: { type: integer, description: Tổng các lần nộp đã xác nhận. }
+            closure:
+              oneOf:
+                - $ref: '#/components/schemas/AdvanceClosure'
+                - type: 'null'
+            allowedActions:
+              type: array
+              description: |
+                `SUBMIT_SETTLEMENT` (người ứng nộp chứng từ), `DECIDE_LINES` (người giữ sổ, còn lần nộp chờ), `CLOSE` (người giữ
+                sổ, không còn lần nộp chờ).
+              items: { type: string, enum: [APPROVE, REJECT, DISBURSE, SUBMIT_SETTLEMENT, DECIDE_LINES, CLOSE] }
+            version: { type: integer }
+    AdvanceLine:
+      type: object
+      required: [id, amount, description, spentOn, attachments, status, submittedAt, decidedBy, decidedAt, note]
+      properties:
+        id: { type: string }
+        amount: { type: integer }
+        description: { type: string }
+        spentOn: { type: string, format: date }
+        attachments:
+          type: array
+          items: { $ref: '#/components/schemas/FileRef' }
+        status: { type: string, enum: [SUBMITTED, CONFIRMED, RETURNED] }
+        submittedAt: { type: string, format: date-time }
+        decidedBy:
+          oneOf:
+            - $ref: '#/components/schemas/PersonRef'
+            - type: 'null'
+        decidedAt: { $ref: '#/components/schemas/NullableDateTime' }
+        note: { $ref: '#/components/schemas/NullableString' }
+    AdvanceClosure:
+      type: object
+      required: [kind, amount, transactionId, closedBy, closedAt]
+      properties:
+        kind: { type: string, enum: [REFUND, TOP_UP, EXACT], description: 'Hoàn phần thừa, chi bổ sung phần thiếu, hoặc khớp.' }
+        amount: { type: integer, description: Số tiền hoàn hoặc chi bổ sung; 0 khi khớp. }
+        transactionId:
+          $ref: '#/components/schemas/NullableString'
+          description: Điều chỉnh tăng quỹ (hoàn) hoặc khoản chi Đề xuất (chi bổ sung); `null` khi khớp.
+        closedBy: { $ref: '#/components/schemas/PersonRef' }
+        closedAt: { type: string, format: date-time }
+    SubmitSettlementLineRequest:
+      type: object
+      required: [amount, description, spentOn, attachmentIds, version]
+      properties:
+        amount: { type: integer, minimum: 1, maximum: 1000000000 }
+        description: { type: string, minLength: 3, maxLength: 200 }
+        spentOn: { type: string, format: date, description: Không sau hôm nay. }
+        attachmentIds:
+          type: array
+          minItems: 1
+          maxItems: 5
+          items: { type: string }
+        version: { type: integer }
+    SettlementLineDecisionRequest:
+      type: object
+      required: [action, version]
+      properties:
+        action: { type: string, enum: [CONFIRM, RETURN] }
+        note: { type: string, description: Bắt buộc 5–500 ký tự khi `RETURN`. }
+        version: { type: integer, description: Phiên bản tạm ứng. }
+    CloseAdvanceRequest:
+      type: object
+      required: [version]
+      properties:
+        refundOn: { type: string, format: date, description: 'Ngày nhận lại tiền thừa; từ ngày ứng tới hôm nay, bỏ trống là hôm nay.' }
+        version: { type: integer }
+    AdvancePage:
+      allOf:
+        - $ref: '#/components/schemas/PageMeta'
+        - type: object
+          required: [content]
+          properties:
+            content:
+              type: array
+              items: { $ref: '#/components/schemas/AdvanceSummary' }
+    ProposeAdvanceRequest:
+      type: object
+      required: [fundId, amount, purpose, category, settleBy]
+      properties:
+        fundId: { type: string }
+        amount: { type: integer, minimum: 1, maximum: 1000000000 }
+        purpose: { type: string, minLength: 5, maxLength: 500 }
+        category: { type: string, enum: [EQUIPMENT, VENUE, PRINTING, FOOD, TRAVEL, OTHER_EXPENSE] }
+        settleBy: { type: string, format: date }
+    AdvanceTransitionRequest:
+      type: object
+      required: [action, version]
+      properties:
+        action: { type: string, enum: [APPROVE, REJECT, DISBURSE] }
+        version: { type: integer }
+        reason: { type: string, description: Bắt buộc 5–500 ký tự khi `REJECT`. }
+        disbursedOn: { type: string, format: date, description: 'Khi `DISBURSE`; không sau hôm nay, bỏ trống là hôm nay.' }
+    DuesCampaignStatus:
+      type: string
+      description: Đang mở thì nhận khoản nộp; đã đóng thì không sửa, không nhận thêm (BR-FIN-06).
+      enum: [OPEN, CLOSED]
+    DuesItemStatus:
+      type: string
+      description: Tính từ mức phải đóng sau miễn giảm, số đã nộp và miễn giảm.
+      enum: [UNPAID, PARTIAL, PAID, EXEMPT]
+    DuesExemption:
+      type: object
+      required: [kind, reason, by, at]
+      properties:
+        kind: { type: string, enum: [EXEMPT, REDUCED] }
+        reason: { type: string }
+        by: { $ref: '#/components/schemas/PersonRef' }
+        at: { type: string, format: date-time }
+    DuesCampaignSummary:
+      type: object
+      required: [id, name, amount, dueOn, status, memberCount, settledCount, expectedAmount, collectedAmount, openedAt, closedAt]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        amount: { type: integer, description: Mức đóng mỗi người. }
+        dueOn: { type: string, format: date }
+        status: { $ref: '#/components/schemas/DuesCampaignStatus' }
+        memberCount: { type: integer, description: Số người trong danh sách chụp lúc mở. }
+        settledCount: { type: integer, description: Số người đã nộp đủ hoặc được miễn. }
+        expectedAmount: { type: integer, description: Tổng phải thu sau miễn giảm. }
+        collectedAmount: { type: integer, description: Tổng đã thu. }
+        openedAt: { type: string, format: date-time }
+        closedAt: { $ref: '#/components/schemas/NullableDateTime' }
+    DuesCampaignDetail:
+      allOf:
+        - $ref: '#/components/schemas/DuesCampaignSummary'
+        - type: object
+          required: [openedBy, closedBy, hasPayments, allowedActions, version]
+          properties:
+            openedBy: { $ref: '#/components/schemas/PersonRef' }
+            closedBy:
+              oneOf:
+                - $ref: '#/components/schemas/PersonRef'
+                - type: 'null'
+            hasPayments: { type: boolean }
+            allowedActions:
+              type: array
+              description: '`EDIT_AMOUNT` chỉ khi chưa ai nộp; `RECORD_PAYMENT` dùng ở FR-FIN-10.'
+              items: { type: string, enum: [EDIT, EDIT_AMOUNT, SET_EXEMPTION, RECORD_PAYMENT, CLOSE] }
+            version: { type: integer }
+    DuesCampaignPage:
+      allOf:
+        - $ref: '#/components/schemas/PageMeta'
+        - type: object
+          required: [content]
+          properties:
+            content:
+              type: array
+              items: { $ref: '#/components/schemas/DuesCampaignSummary' }
+    DuesItem:
+      type: object
+      required: [id, member, departmentName, amountDue, paidAmount, status, exemption, payments, version]
+      properties:
+        id: { type: string }
+        member:
+          $ref: '#/components/schemas/PersonRef'
+          description: Họ tên chụp lúc mở đợt (BR-DATA-02).
+        departmentName: { $ref: '#/components/schemas/NullableString' }
+        amountDue: { type: integer, description: 'Mức phải đóng sau miễn giảm; 0 khi được miễn.' }
+        paidAmount: { type: integer }
+        status: { $ref: '#/components/schemas/DuesItemStatus' }
+        exemption:
+          oneOf:
+            - $ref: '#/components/schemas/DuesExemption'
+            - type: 'null'
+        payments:
+          type: array
+          description: Các lần nộp, mới nhất trước (FR-FIN-10).
+          items: { $ref: '#/components/schemas/DuesPayment' }
+        version: { type: integer }
+    DuesPayment:
+      type: object
+      required: [id, amount, paidOn, confirmedBy, confirmedAt, transactionId]
+      properties:
+        id: { type: string }
+        amount: { type: integer }
+        paidOn: { type: string, format: date }
+        confirmedBy: { $ref: '#/components/schemas/PersonRef' }
+        confirmedAt: { type: string, format: date-time }
+        transactionId: { type: string, description: Khoản thu Đã ghi sổ ở Quỹ chung. }
+    RecordDuesPaymentRequest:
+      type: object
+      required: [amount, paidOn, version]
+      properties:
+        amount: { type: integer, minimum: 1, description: Không vượt số còn thiếu. }
+        paidOn: { type: string, format: date, description: Không sau hôm nay. }
+        version: { type: integer, description: Phiên bản của dòng. }
+    DuesItemPage:
+      allOf:
+        - $ref: '#/components/schemas/PageMeta'
+        - type: object
+          required: [content]
+          properties:
+            content:
+              type: array
+              items: { $ref: '#/components/schemas/DuesItem' }
+    OpenDuesRequest:
+      type: object
+      required: [name, amount, dueOn, exemptions]
+      properties:
+        name: { type: string, minLength: 3, maxLength: 100 }
+        amount: { type: integer, minimum: 1, maximum: 1000000000 }
+        dueOn: { type: string, format: date }
+        exemptions:
+          type: array
+          items:
+            type: object
+            required: [userId, kind, reason]
+            properties:
+              userId: { type: string }
+              kind: { type: string, enum: [EXEMPT, REDUCED] }
+              amount: { type: integer, description: 'Mức sau giảm khi `REDUCED`: từ 1 tới dưới mức đóng.' }
+              reason: { type: string, minLength: 5, maxLength: 500 }
+    UpdateDuesCampaignRequest:
+      type: object
+      required: [version]
+      properties:
+        name: { type: string, minLength: 3, maxLength: 100 }
+        dueOn: { type: string, format: date }
+        amount: { type: integer, minimum: 1, maximum: 1000000000, description: Chỉ khi chưa ai nộp. }
+        version: { type: integer }
+    SetExemptionRequest:
+      type: object
+      required: [kind, version]
+      properties:
+        kind: { type: string, enum: [EXEMPT, REDUCED, NONE] }
+        amount: { type: integer, description: Mức sau giảm khi `REDUCED`. }
+        reason: { type: string, description: Bắt buộc 5–500 ký tự khi `EXEMPT`, `REDUCED`. }
+        version: { type: integer, description: Phiên bản của dòng. }
+    ReportPeriodOption:
+      type: object
+      required: [kind, key, label, from, to]
+      properties:
+        kind: { type: string, enum: [MONTH, SEMESTER, TERM] }
+        key: { type: string, description: '`yyyy-mm` (tháng), `yyyy-S1`, `yyyy-S2`, `yyyy-SUMMER` (học kỳ, năm bắt đầu năm học), mã nhiệm kỳ.' }
+        label: { type: string }
+        from: { type: string, format: date }
+        to: { type: string, format: date }
+    ReportPeriods:
+      type: object
+      required: [months, semesters, terms]
+      properties:
+        months: { type: array, items: { $ref: '#/components/schemas/ReportPeriodOption' } }
+        semesters: { type: array, items: { $ref: '#/components/schemas/ReportPeriodOption' } }
+        terms: { type: array, items: { $ref: '#/components/schemas/ReportPeriodOption' } }
+    FinanceReport:
+      type: object
+      required: [from, to, label, category, event, totalIncome, totalExpense, net, byCategory, byFund, byMonth, overdueAdvanceCount, unpaidDuesCount, flagged]
+      properties:
+        from: { type: string, format: date }
+        to: { type: string, format: date }
+        label: { type: string }
+        category:
+          oneOf:
+            - $ref: '#/components/schemas/FinanceCategory'
+            - type: 'null'
+        event:
+          oneOf:
+            - type: object
+              required: [id, name]
+              properties:
+                id: { type: string }
+                name: { type: string }
+            - type: 'null'
+        totalIncome: { type: integer }
+        totalExpense: { type: integer }
+        net: { type: integer }
+        byCategory:
+          type: array
+          items:
+            type: object
+            required: [category, income, expense]
+            properties:
+              category: { $ref: '#/components/schemas/FinanceCategory' }
+              income: { type: integer }
+              expense: { type: integer }
+        byFund:
+          type: array
+          items:
+            type: object
+            required: [fundId, fundName, eventId, income, expense]
+            properties:
+              fundId: { type: string }
+              fundName: { type: string }
+              eventId: { $ref: '#/components/schemas/NullableString' }
+              income: { type: integer }
+              expense: { type: integer }
+        byMonth:
+          type: array
+          items:
+            type: object
+            required: [month, income, expense]
+            properties:
+              month: { type: string, description: yyyy-mm }
+              income: { type: integer }
+              expense: { type: integer }
+        overdueAdvanceCount: { type: integer }
+        unpaidDuesCount: { type: integer }
+        flagged:
+          type: array
+          description: Khoản chi Đã ghi sổ do cùng một người duyệt và ghi sổ (R-01).
+          items:
+            type: object
+            required: [transactionId, description, amount, occurredOn, fundName, person]
+            properties:
+              transactionId: { type: string }
+              description: { type: string }
+              amount: { type: integer }
+              occurredOn: { type: string, format: date }
+              fundName: { type: string }
+              person: { $ref: '#/components/schemas/PersonRef' }
+    UnpaidDuesRow:
+      type: object
+      required: [itemId, campaignId, campaignName, member, owed, dueOn, overdue]
+      properties:
+        itemId: { type: string }
+        campaignId: { type: string }
+        campaignName: { type: string }
+        member: { $ref: '#/components/schemas/PersonRef' }
+        owed: { type: integer }
+        dueOn: { type: string, format: date }
+        overdue: { type: boolean }
+    UnpaidDuesPage:
+      allOf:
+        - $ref: '#/components/schemas/PageMeta'
+        - type: object
+          required: [content]
+          properties:
+            content:
+              type: array
+              items: { $ref: '#/components/schemas/UnpaidDuesRow' }
     TransactionType:
       type: string
       enum: [INCOME, EXPENSE, ADJUSTMENT, TRANSFER]
@@ -6553,8 +7934,9 @@ components:
       type: string
       description: |
         Hạng mục cố định. Thu: `MEMBER_DUES`, `SPONSORSHIP`, `EVENT_REVENUE`, `OTHER_INCOME`.
-        Chi: `EQUIPMENT`, `VENUE`, `PRINTING`, `FOOD`, `TRAVEL`, `OTHER_EXPENSE`. `FUND_TRANSFER` chỉ hệ thống dùng.
-      enum: [MEMBER_DUES, SPONSORSHIP, EVENT_REVENUE, OTHER_INCOME, EQUIPMENT, VENUE, PRINTING, FOOD, TRAVEL, OTHER_EXPENSE, FUND_TRANSFER]
+        Chi: `EQUIPMENT`, `VENUE`, `PRINTING`, `FOOD`, `TRAVEL`, `OTHER_EXPENSE`. `FUND_TRANSFER` (chuyển số dư về Quỹ chung)
+        và `CO_HOST_SHARE` (khoản chia cho CLB đồng tổ chức) chỉ hệ thống dùng khi quyết toán.
+      enum: [MEMBER_DUES, SPONSORSHIP, EVENT_REVENUE, OTHER_INCOME, EQUIPMENT, VENUE, PRINTING, FOOD, TRAVEL, OTHER_EXPENSE, FUND_TRANSFER, CO_HOST_SHARE]
     FundEventRef:
       type: object
       required: [id, name, status]
@@ -6581,7 +7963,7 @@ components:
       allOf:
         - $ref: '#/components/schemas/FundSummary'
         - type: object
-          required: [receiptThreshold, pendingCount, settledAt, settledBy, allowedActions, version]
+          required: [receiptThreshold, pendingCount, settledAt, settledBy, coHosts, advanceSettleDays, openAdvanceCount, allowedActions, version]
           properties:
             receiptThreshold:
               type: integer
@@ -6595,6 +7977,15 @@ components:
               oneOf:
                 - $ref: '#/components/schemas/PersonRef'
                 - type: 'null'
+            coHosts:
+              type: array
+              description: CLB đồng tổ chức đang Chấp nhận của sự kiện, để chia khi quyết toán (FR-FIN-11); rỗng với Quỹ chung.
+              items: { $ref: '#/components/schemas/CoHostClubRef' }
+            advanceSettleDays: { type: integer, description: 'Số ngày gợi ý cho hạn quyết toán tạm ứng (tham số CLB, SRS 9.2).' }
+            openAdvanceCount:
+              type: [integer, 'null']
+              minimum: 0
+              description: Số tạm ứng còn mở (chặn quyết toán quỹ, FR-FIN-11); `null` với người không xem được tạm ứng của quỹ.
             allowedActions:
               type: array
               items: { $ref: '#/components/schemas/FundAction' }
@@ -6646,8 +8037,11 @@ components:
       allOf:
         - $ref: '#/components/schemas/TransactionSummary'
         - type: object
-          required: [approver, poster, attachments, original, adjustments, counterpartFundName, rejectionReason, decidedAt, postedAt, cancelledBy, cancelledAt, cancellationReason, allowedActions, version]
+          required: [approver, poster, attachments, original, adjustments, counterpartFundName, rejectionReason, decidedAt, postedAt, cancelledBy, cancelledAt, cancellationReason, advanceId, allowedActions, version]
           properties:
+            advanceId:
+              $ref: '#/components/schemas/NullableString'
+              description: Tạm ứng sinh ra khoản chi này khi ghi Đã ứng (FR-FIN-07).
             approver:
               oneOf:
                 - $ref: '#/components/schemas/PersonRef'
@@ -6727,6 +8121,17 @@ components:
           type: string
           enum: [SETTLE]
         version: { type: integer }
+        shares:
+          type: array
+          description: Khoản chia cho CLB đồng tổ chức; không gửi hoặc rỗng thì toàn bộ số dư về Quỹ chung.
+          items: { $ref: '#/components/schemas/SettleShare' }
+    SettleShare:
+      type: object
+      required: [clubId, amount, note]
+      properties:
+        clubId: { type: string }
+        amount: { type: integer, minimum: 1 }
+        note: { type: string, maxLength: 200 }
     TransactionTransitionRequest:
       type: object
       required: [action, version]

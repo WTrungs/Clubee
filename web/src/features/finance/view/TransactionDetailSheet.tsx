@@ -168,10 +168,11 @@ interface DetailBodyProps {
   transactionId: string
   fundId: string | null
   onOpenTransaction: (id: string) => void
+  onOpenAdvance?: (id: string) => void
   onPendingChange: (pending: boolean) => void
 }
 
-function DetailBody({ clubId, transactionId, fundId, onOpenTransaction, onPendingChange }: DetailBodyProps) {
+function DetailBody({ clubId, transactionId, fundId, onOpenTransaction, onOpenAdvance, onPendingChange }: DetailBodyProps) {
   const detail = useTransactionDetail(clubId, transactionId, fundId)
   // Lần hỏi lại bị từ chối thì không hiện nội dung cũ (BR-SEC-02).
   const data = detail.isSuccess ? detail.data : undefined
@@ -238,6 +239,13 @@ function DetailBody({ clubId, transactionId, fundId, onOpenTransaction, onPendin
             <dl className="grid grid-cols-1 gap-4 rounded-2xl border bg-muted/40 p-4 sm:grid-cols-2">
               <DetailRow label="Hạng mục">{financeCategoryLabel[data.category]}</DetailRow>
               <DetailRow label={dateLabel(data)}>{data.occurredOn ? formatDate(data.occurredOn) : data.status === 'CANCELLED' ? 'Không chi (đã hủy)' : 'Chưa ghi sổ'}</DetailRow>
+              {data.advanceId && onOpenAdvance && (
+                <DetailRow label="Tạm ứng">
+                  <button type="button" className="font-semibold text-primary underline-offset-2 hover:underline" onClick={() => data.advanceId && onOpenAdvance(data.advanceId)}>
+                    Xem tạm ứng
+                  </button>
+                </DetailRow>
+              )}
               {data.counterpartFundName &&
                 (data.flow === 'IN' ? <DetailRow label="Chuyển từ">{data.fundName}</DetailRow> : <DetailRow label="Chuyển sang">{data.counterpartFundName}</DetailRow>)}
               <DetailRow label={creatorLabel(data)}>
@@ -330,11 +338,13 @@ interface TransactionDetailSheetProps {
   fundId: string | null
   /** Xem giao dịch liên quan ngay trong sheet (giao dịch gốc, các điều chỉnh). */
   onOpenTransaction: (id: string) => void
+  /** Khoản chi sinh từ tạm ứng mở được tạm ứng đó (FR-FIN-07). */
+  onOpenAdvance?: (id: string) => void
   onClose: () => void
 }
 
 /** Chi tiết một giao dịch; mở bằng tham số `tx` trên URL để thông báo dẫn thẳng tới. */
-export function TransactionDetailSheet({ clubId, transactionId, fundId, onOpenTransaction, onClose }: TransactionDetailSheetProps) {
+export function TransactionDetailSheet({ clubId, transactionId, fundId, onOpenTransaction, onOpenAdvance, onClose }: TransactionDetailSheetProps) {
   // Không đóng khi đang chờ máy chủ xử lý thao tác (NFR-REL-01).
   const [pending, setPending] = useState(false)
   return (
@@ -346,6 +356,7 @@ export function TransactionDetailSheet({ clubId, transactionId, fundId, onOpenTr
           transactionId={transactionId}
           fundId={fundId}
           onOpenTransaction={onOpenTransaction}
+          onOpenAdvance={onOpenAdvance}
           onPendingChange={setPending}
         />
       )}

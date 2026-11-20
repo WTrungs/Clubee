@@ -130,11 +130,19 @@ export function MyClubsPage() {
           </h2>
           <motion.ul variants={listVariants} initial="initial" animate="animate" className="grid gap-3 sm:grid-cols-2">
             {vm.staffEvents.map((event) => (
-              <motion.li key={event.eventId} variants={itemVariants} className="rounded-xl border bg-card p-4">
-                <p className="font-semibold">{event.eventName}</p>
-                <p className="text-sm text-muted-foreground">
-                  {event.clubName} · {event.roleTitle}
-                </p>
+              <motion.li key={event.eventId} variants={itemVariants}>
+                <Link
+                  to={`/clubs/${event.clubId}/events/${event.eventId}`}
+                  className="group flex items-center gap-3 rounded-xl border bg-card p-4 transition-[border-color,box-shadow] duration-200 hover:border-primary/40 hover:shadow-md"
+                >
+                  <span className="min-w-0 flex-1">
+                    <span className="block font-semibold">{event.eventName}</span>
+                    <span className="block text-sm text-muted-foreground">
+                      {event.clubName} · {event.roleTitle}
+                    </span>
+                  </span>
+                  <ArrowRight aria-hidden className="size-4 shrink-0 text-primary transition-transform group-hover:translate-x-1" />
+                </Link>
               </motion.li>
             ))}
           </motion.ul>

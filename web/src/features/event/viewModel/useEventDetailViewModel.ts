@@ -11,7 +11,7 @@ import type { EventTransitionAction } from '../model/eventTypes'
 import { closeHint, eventActionSuccess, eventTransitions, lifecycleSteps, needsDialog, seatInfo } from './eventDisplay'
 import { eventQueryKeys } from './eventQueryKeys'
 
-export type EventTab = 'overview' | 'staff' | 'registrations' | 'attendance' | 'fund'
+export type EventTab = 'overview' | 'progress' | 'staff' | 'registrations' | 'attendance' | 'fund'
 
 interface TransitionInput {
   action: EventTransitionAction
@@ -94,6 +94,8 @@ export function useEventDetailViewModel() {
 
   const tabs: Array<{ value: EventTab; label: string }> = [
     { value: 'overview', label: 'Tổng quan' },
+    // FR-EVT-09: BTC, ban chủ nhiệm và ban chủ nhiệm CLB đồng tổ chức xem tiến độ.
+    ...(allowed.includes('VIEW_PROGRESS') ? [{ value: 'progress' as const, label: 'Tiến độ' }] : []),
     ...(allowed.includes('VIEW_STAFF') ? [{ value: 'staff' as const, label: 'Ban tổ chức' }] : []),
     { value: 'registrations', label: 'Đăng ký' },
     ...(allowed.includes('VIEW_ATTENDANCE') ? [{ value: 'attendance' as const, label: 'Điểm danh' }] : []),
@@ -116,6 +118,7 @@ export function useEventDetailViewModel() {
     transitions: eventTransitions(allowed),
     canManageStaff: allowed.includes('MANAGE_SUBCOMMITTEES'),
     canViewStaff: allowed.includes('VIEW_STAFF'),
+    canViewProgress: allowed.includes('VIEW_PROGRESS'),
     canViewRegistrations: allowed.includes('VIEW_REGISTRATIONS'),
     canRegister: allowed.includes('REGISTER'),
     canReschedule: allowed.includes('RESCHEDULE'),

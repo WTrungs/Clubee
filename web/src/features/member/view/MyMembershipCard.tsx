@@ -38,7 +38,7 @@ function LeaveRequestNote({ membership }: { membership: MyMembership }) {
 
 /** FR-MEM-07: thẻ đầu trang Thành viên cho chính người đang xem. */
 export function MyMembershipCard() {
-  const { clubId, club } = useCurrentClub()
+  const { club } = useCurrentClub()
   const vm = useMyMembershipViewModel()
   const membership = vm.membership
 
@@ -124,7 +124,6 @@ export function MyMembershipCard() {
       />
       <ResignDialog
         open={vm.dialog === 'resign'}
-        clubId={clubId}
         clubName={club.name}
         blockers={membership.resignBlockers}
         checking={vm.checking}

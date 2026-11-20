@@ -36,8 +36,9 @@ export function isTaskOverdue(task: Pick<DbTask, 'status' | 'dueAt' | 'scopeType
 export function subcommitteeMembers(subcommitteeId: string, clubId: string): AssignableMember[] {
   return db.eventStaff
     .filter((staff) => staff.subcommitteeId === subcommitteeId && staff.leftAt === null)
-    .filter((staff) => staff.kind !== 'MEMBER' || isActiveMember(staff.userId, clubId))
-    .map((staff) => ({ ...personRef(staff.userId), departmentName: departmentNameOf(staff.userId, clubId) }))
+    // Thành viên CLB chủ trì, nhân sự CLB đồng tổ chức phải còn Thử việc, Chính thức ở CLB của họ; CTV thì không xét.
+    .filter((staff) => staff.kind === 'COLLABORATOR' || isActiveMember(staff.userId, staff.kind === 'CO_HOST' ? (staff.homeClubId ?? '') : clubId))
+    .map((staff) => ({ ...personRef(staff.userId), departmentName: departmentNameOf(staff.userId, staff.homeClubId ?? clubId) }))
     .sort((a, b) => a.fullName.localeCompare(b.fullName, 'vi'))
 }
 

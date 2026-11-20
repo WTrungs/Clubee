@@ -1,5 +1,7 @@
 import type { PermissionKey } from '@/features/org/model/permissionTypes'
 import type { DbAuditLog } from './mockAudit'
+import { createAdvanceSeed, type DbAdvance } from './seed/advanceSeed'
+import { createDuesSeed, type DbDuesCampaign, type DbDuesItem } from './seed/duesSeed'
 import type { DbPermissionMatrixMeta } from './mockPermissionMatrix'
 import type { DbTransferRequest } from './mockTransfers'
 import {
@@ -13,11 +15,13 @@ import {
 } from './seed/attendanceSeed'
 import { createClubSeed, type DbClub } from './seed/clubSeed'
 import {
+  createCoHostSeed,
   createEventSeed,
   createEventStaffSeed,
   createRegistrationSeed,
   createSubcommitteeSeed,
   type DbEvent,
+  type DbEventCoHost,
   type DbEventStaff,
   type DbRegistration,
   type DbSubcommittee,
@@ -33,6 +37,8 @@ import type { DbHandover, DbHandoverItem } from './seed/termSeed'
 /** Dữ liệu tổng hợp, không phải người thật (security.md); bản ghi ở dạng phía máy chủ, handler map sang DTO. */
 export type { DbAttendance, DbAttendanceCode, DbAttendanceSheet, DbSession } from './seed/attendanceSeed'
 export type { DbClub } from './seed/clubSeed'
+export type { DbAdvance } from './seed/advanceSeed'
+export type { DbDuesCampaign, DbDuesItem } from './seed/duesSeed'
 export type { DbFund, DbTransaction } from './seed/financeSeed'
 export type { DbInvitation } from './seed/invitationSeed'
 export type { DbAuditLog } from './mockAudit'
@@ -85,11 +91,15 @@ export interface MockDb {
   events: DbEvent[]
   subcommittees: DbSubcommittee[]
   eventStaff: DbEventStaff[]
+  eventCoHosts: DbEventCoHost[]
   registrations: DbRegistration[]
   notifications: DbNotification[]
   notificationRecipients: DbNotificationRecipient[]
   funds: DbFund[]
   transactions: DbTransaction[]
+  advances: DbAdvance[]
+  duesCampaigns: DbDuesCampaign[]
+  duesItems: DbDuesItem[]
   sessions: DbSession[]
   attendance: DbAttendance[]
   attendanceSheets: DbAttendanceSheet[]
@@ -100,15 +110,18 @@ export interface MockDb {
 
 export function createSeed(): MockDb {
   const notifications = createNotificationSeed()
+  const users = createUserSeed()
+  const departments = createDepartmentSeed()
+  const memberships = createMembershipSeed()
   return {
-    users: createUserSeed(),
+    users,
     clubs: createClubSeed(),
     terms: createTermSeed(),
     // Không seed phiên bàn giao: test và e2e tự tạo, vì nhiều test cũ dựa vào nhiệm kỳ Đang chạy của c-guitar.
     handovers: [],
     handoverItems: [],
-    departments: createDepartmentSeed(),
-    memberships: createMembershipSeed(),
+    departments,
+    memberships,
     leaveRequests: createLeaveRequestSeed(),
     invitations: createInvitationSeed(),
     positions: createPositionSeed(),
@@ -120,11 +133,14 @@ export function createSeed(): MockDb {
     events: createEventSeed(),
     subcommittees: createSubcommitteeSeed(),
     eventStaff: createEventStaffSeed(),
+    eventCoHosts: createCoHostSeed(),
     registrations: createRegistrationSeed(),
     notifications: notifications.notifications,
     notificationRecipients: notifications.recipients,
     funds: createFundSeed(),
     transactions: createTransactionSeed(),
+    advances: createAdvanceSeed(),
+    ...createDuesSeed({ memberships, users, departments }),
     sessions: createSessionSeed(),
     attendance: createAttendanceSeed(),
     attendanceSheets: createAttendanceSheetSeed(),

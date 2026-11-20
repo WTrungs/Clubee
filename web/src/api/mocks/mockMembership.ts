@@ -1,7 +1,9 @@
 import type { LeaveRequest, MyMembership, MyMembershipAction, ResignBlocker } from '@/features/member/model/memberTypes'
 import { db, type DbLeaveRequest, type DbMembership, type DbPosition } from './db'
 import { can } from './mockAccess'
+import { advanceResignBlockers } from './mockAdvances'
 import { problem } from './mockHttp'
+import { coHostResignBlockers, endCoHostStaffOf } from './mockCoHosts'
 import { closeDepartmentStint, personRef } from './mockMembers'
 import { isPositionOpen, positionTitleOf, STANDING_ROLES } from './mockPermissions'
 import { isTaskActive } from './mockScopes'
@@ -66,14 +68,17 @@ export function resignBlockers(membership: DbMembership): ResignBlocker[] {
   const { userId, clubId } = membership
   const positions: ResignBlocker[] = db.positions
     .filter((position) => position.userId === userId && position.clubId === clubId && isPositionOpen(position))
-    .map((position) => ({ kind: 'POSITION', refId: position.id, title: positionLabel(position) }))
+    .map((position) => ({ kind: 'POSITION', refId: position.id, clubId, title: positionLabel(position) }))
   const tasks = db.tasks.filter((task) => task.clubId === clubId && isTaskActive(task))
-  const owned: ResignBlocker[] = tasks.filter((task) => task.ownerId === userId).map((task) => ({ kind: 'TASK', refId: task.id, title: task.title }))
+  const owned: ResignBlocker[] = tasks.filter((task) => task.ownerId === userId).map((task) => ({ kind: 'TASK', refId: task.id, clubId, title: task.title }))
   const reviewing: ResignBlocker[] = tasks
     .filter((task) => task.assignerId === userId && task.ownerId !== userId)
-    .map((task) => ({ kind: 'TASK_REVIEW', refId: task.id, title: task.title }))
-  const appointment: ResignBlocker[] = isHandoverAppointee(membership) ? [{ kind: 'APPOINTMENT', refId: openHandoverOf(clubId)?.id ?? '', title: 'Kết quả bầu của nhiệm kỳ mới' }] : []
-  return [...positions, ...owned, ...reviewing, ...appointment]
+    .map((task) => ({ kind: 'TASK_REVIEW', refId: task.id, clubId, title: task.title }))
+  const appointment: ResignBlocker[] = isHandoverAppointee(membership)
+    ? [{ kind: 'APPOINTMENT', refId: openHandoverOf(clubId)?.id ?? '', clubId, title: 'Kết quả bầu của nhiệm kỳ mới' }]
+    : []
+  // Trưởng tiểu ban, việc ở sự kiện chung của CLB khác mà người này tham gia nhờ CLB này (FR-EVT-08).
+  return [...positions, ...owned, ...reviewing, ...coHostResignBlockers(userId, clubId), ...advanceResignBlockers(userId, clubId), ...appointment]
 }
 
 /** Đóng yêu cầu tạm nghỉ đang chờ khi tư cách đổi ở chỗ khác (ban chủ nhiệm cho tạm nghỉ, đưa ra, hoặc người đó tự rời). */
@@ -83,7 +88,7 @@ export function closePendingLeaveRequest(membershipId: string, status: 'APPROVED
   Object.assign(pending, { status, decidedBy: actorId, decidedAt: nowIso(), decisionNote: note, version: pending.version + 1 })
 }
 
-/** FR-MEM-07: tự xin rời có hiệu lực ngay; rút khỏi BTC các sự kiện của CLB, tên vẫn giữ trong lịch sử (BR-MEM-02). */
+/** FR-MEM-07: tự xin rời có hiệu lực ngay; rút khỏi BTC các sự kiện của CLB và sự kiện chung ở CLB khác, tên vẫn giữ trong lịch sử (BR-MEM-02). */
 export function resignFromClub(membership: DbMembership, reason: string): void {
   const today = vnToday()
   const at = nowIso()
@@ -94,6 +99,7 @@ export function resignFromClub(membership: DbMembership, reason: string): void {
   for (const staff of db.eventStaff) {
     if (staff.userId === membership.userId && clubEvents.has(staff.eventId) && staff.leftAt === null) staff.leftAt = at
   }
+  endCoHostStaffOf(membership.userId, membership.clubId, membership.userId)
   closePendingLeaveRequest(membership.id, 'WITHDRAWN', membership.userId, 'Người gửi đã rời CLB.')
   membership.history.push({ at, actorId: membership.userId, fromStatus, toStatus: 'LEFT', reason })
   membership.version += 1

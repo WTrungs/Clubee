@@ -4,10 +4,33 @@ import { Button } from '@/shared/ui/Button'
 import { PageHeader } from '@/shared/ui/PageHeader'
 import { Tabs, TabsBar, TabsContent } from '@/shared/ui/Tabs'
 import { useFinancePageViewModel } from '../viewModel/useFinancePageViewModel'
+import { useDuesCampaignsViewModel } from '../viewModel/useDuesCampaignsViewModel'
+import { DuesCampaignList } from './DuesCampaignList'
+import { DuesCampaignPanel } from './DuesCampaignPanel'
 import { EventFundList } from './EventFundList'
+import { FinanceReportPanel } from './FinanceReportPanel'
 import { FundPanel } from './FundPanel'
+import { OpenDuesSheet } from './OpenDuesSheet'
 
-/** FR-FIN-06: sổ Quỹ chung cho mọi thành viên (SRS 3.5); ban chủ nhiệm và BTC xem thêm quỹ sự kiện (FR-FIN-11). */
+/** Tab Đóng quỹ: danh sách đợt, hoặc một đợt khi URL có `?dues=`. */
+function DuesTab({ active }: { active: boolean }) {
+  const vm = useDuesCampaignsViewModel(active)
+  return (
+    <>
+      {vm.openedCampaignId ? <DuesCampaignPanel campaignId={vm.openedCampaignId} onBack={vm.backToList} /> : <DuesCampaignList vm={vm} />}
+      <OpenDuesSheet
+        open={vm.openSheet}
+        onClose={() => vm.setOpenSheet(false)}
+        onOpened={(campaignId) => {
+          vm.setOpenSheet(false)
+          vm.openCampaign(campaignId)
+        }}
+      />
+    </>
+  )
+}
+
+/** FR-FIN-06: sổ Quỹ chung cho mọi thành viên (SRS 3.5); ban chủ nhiệm và BTC xem thêm quỹ sự kiện (FR-FIN-11); ban chủ nhiệm có tab Đóng quỹ (FR-FIN-09). */
 export function FinancePage() {
   const vm = useFinancePageViewModel()
   return (
@@ -24,14 +47,16 @@ export function FinancePage() {
       )}
       {/* Luôn giữ cùng cấu trúc Tabs để sổ Quỹ chung không bị gắn lại khi biết có quỹ sự kiện. */}
       <Tabs value={vm.view} onValueChange={vm.setView}>
-        {vm.hasEventFunds && (
+        {(vm.hasEventFunds || vm.canViewDues || vm.canViewReport) && (
           <TabsBar
             aria-label="Chọn quỹ"
             active={vm.view}
             className="mb-5"
             items={[
               { value: 'general', label: 'Quỹ chung' },
-              { value: 'events', label: 'Quỹ sự kiện', count: vm.eventFundCount },
+              ...(vm.hasEventFunds ? [{ value: 'events', label: 'Quỹ sự kiện', count: vm.eventFundCount }] : []),
+              ...(vm.canViewDues ? [{ value: 'dues', label: 'Đóng quỹ' }] : []),
+              ...(vm.canViewReport ? [{ value: 'report', label: 'Báo cáo' }] : []),
             ]}
           />
         )}
@@ -41,6 +66,16 @@ export function FinancePage() {
         {vm.hasEventFunds && (
           <TabsContent value="events">
             <EventFundList vm={vm} />
+          </TabsContent>
+        )}
+        {vm.canViewDues && (
+          <TabsContent value="dues">
+            <DuesTab active={vm.view === 'dues'} />
+          </TabsContent>
+        )}
+        {vm.canViewReport && (
+          <TabsContent value="report">
+            <FinanceReportPanel active={vm.view === 'report'} />
           </TabsContent>
         )}
       </Tabs>

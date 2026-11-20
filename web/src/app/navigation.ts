@@ -17,6 +17,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import type { AccountType } from '@/features/account/model/accountTypes'
+import type { ClubViewerRole } from '@/features/club/model/clubTypes'
 
 export interface NavItem {
   to: string
@@ -31,8 +32,13 @@ export interface NavSection {
   items: NavItem[]
 }
 
-/** Admin chỉ có khu quản trị (SRS 3.4); người dùng có mục cá nhân và mục của CLB đang mở. */
-export function buildNavigation(clubId: string | undefined, clubName: string | undefined, accountType: AccountType = 'USER'): NavSection[] {
+/** Admin chỉ có khu quản trị (SRS 3.4); người dùng có mục cá nhân và mục của CLB đang mở; khách của sự kiện chỉ có mục Sự kiện. */
+export function buildNavigation(
+  clubId: string | undefined,
+  clubName: string | undefined,
+  accountType: AccountType = 'USER',
+  viewerRole: ClubViewerRole = 'MEMBER',
+): NavSection[] {
   if (accountType === 'ADMIN') {
     return [
       {
@@ -56,7 +62,9 @@ export function buildNavigation(clubId: string | undefined, clubName: string | u
       ],
     },
   ]
-  if (clubId) {
+  if (clubId && viewerRole === 'EVENT_GUEST') {
+    sections.push({ title: clubName ?? 'CLB', items: [{ to: `/clubs/${clubId}/events`, label: 'Sự kiện', icon: CalendarDays }] })
+  } else if (clubId) {
     sections.push({
       title: clubName ?? 'CLB',
       items: [

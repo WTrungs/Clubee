@@ -157,12 +157,17 @@ export const resignBlockerGroups: Array<{ kind: ResignBlocker['kind']; label: st
   { kind: 'POSITION', label: 'Chức vụ chưa kết thúc' },
   { kind: 'TASK', label: 'Việc bạn đang làm' },
   { kind: 'TASK_REVIEW', label: 'Việc bạn đã giao chưa kết thúc' },
+  { kind: 'ADVANCE', label: 'Tạm ứng chưa quyết toán xong' },
   { kind: 'APPOINTMENT', label: 'Có tên trong kết quả bầu của nhiệm kỳ mới' },
 ]
 
-/** Việc còn tồn thì mở được ở Công việc của tôi; chức vụ, kết quả bầu do ban chủ nhiệm xử lý nên không có liên kết. */
-export function resignBlockerLink(blocker: ResignBlocker, clubId: string): string | null {
-  return blocker.kind === 'TASK' || blocker.kind === 'TASK_REVIEW' ? `/me/tasks?task=${encodeURIComponent(blocker.refId)}&taskClub=${encodeURIComponent(clubId)}` : null
+/** Việc còn tồn mở ở Công việc của tôi, tạm ứng mở ở trang Tài chính; chức vụ, kết quả bầu do ban chủ nhiệm xử lý nên không có liên kết. */
+export function resignBlockerLink(blocker: ResignBlocker): string | null {
+  if (blocker.kind === 'TASK' || blocker.kind === 'TASK_REVIEW') {
+    return `/me/tasks?task=${encodeURIComponent(blocker.refId)}&taskClub=${encodeURIComponent(blocker.clubId)}`
+  }
+  if (blocker.kind === 'ADVANCE') return `/clubs/${encodeURIComponent(blocker.clubId)}/finance?adv=${encodeURIComponent(blocker.refId)}`
+  return null
 }
 
 export function removalSummary(name: string, backlogCount: number | null): string {

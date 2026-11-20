@@ -3,7 +3,7 @@ import { db, type DbFund, type DbTransaction } from './db'
 import { can, canAnywhere, holdersOf, type AccessScope } from './mockAccess'
 import { canAccessClub } from './mockMembers'
 import { DEPARTMENT_ROLES, isBoardMember, positionsIn } from './mockPermissions'
-import { isEventLead, isEventStaff } from './mockStaffEvents'
+import { isCoHostBoard, isEventLead, isEventStaff } from './mockStaffEvents'
 import { nowIso } from './mockTime'
 import { eventFundId, generalFundId } from './seed/financeSeed'
 
@@ -108,12 +108,12 @@ export function isDepartmentLead(userId: string, clubId: string): boolean {
   return positionsIn(userId, clubId).some((position) => position.role === 'DEPARTMENT_HEAD' || position.role === 'DEPARTMENT_VICE_HEAD')
 }
 
-/** Quỹ chung: mọi thành viên; quỹ sự kiện: ban chủ nhiệm và BTC của sự kiện (SRS 3.5). */
+/** Quỹ chung: mọi thành viên; quỹ sự kiện: ban chủ nhiệm và BTC của sự kiện (SRS 3.5), ban chủ nhiệm CLB đồng tổ chức chỉ xem (FR-EVT-09). */
 export function canViewFund(userId: string, fund: DbFund): boolean {
   if (fund.kind === 'GENERAL') return canAccessClub(userId, fund.clubId)
   if (isBoardMember(userId, fund.clubId)) return true
   const event = eventOfFund(fund)
-  return event !== undefined && (isEventLead(userId, event) || isEventStaff(userId, event))
+  return event !== undefined && (isEventLead(userId, event) || isEventStaff(userId, event) || isCoHostBoard(userId, event))
 }
 
 /** Xem được mọi khoản chưa ghi sổ của quỹ: ban chủ nhiệm, và Trưởng BTC với quỹ sự kiện của mình. */
@@ -147,7 +147,11 @@ export function canProposeIn(userId: string, fund: DbFund): boolean {
   return can(userId, fund.clubId, 'PROPOSE_EXPENSE', fundScope(fund))
 }
 
-/** Ai có thể tạo giao dịch ở CLB thì được tải chứng từ lên trước. */
+/** Ai có thể tạo giao dịch ở CLB, hoặc đang giữ tiền tạm ứng cần nộp chứng từ quyết toán (FR-FIN-08), thì được tải chứng từ lên trước. */
 export function canUploadVoucher(userId: string, clubId: string): boolean {
-  return keepsLedger(userId, clubId) || canAnywhere(userId, clubId, 'PROPOSE_EXPENSE')
+  // Liệt kê lại trạng thái giữ tiền thay vì dùng `HELD_STATUSES`: mockAdvances đã import file này, import ngược sẽ thành vòng.
+  const holdsAdvance = db.advances.some(
+    (advance) => advance.clubId === clubId && advance.requesterId === userId && (advance.status === 'DISBURSED' || advance.status === 'PARTIALLY_SETTLED'),
+  )
+  return keepsLedger(userId, clubId) || canAnywhere(userId, clubId, 'PROPOSE_EXPENSE') || (holdsAdvance && canAccessClub(userId, clubId))
 }

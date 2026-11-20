@@ -23,10 +23,11 @@ export const financeCategoryLabel: Record<FinanceCategory, string> = {
   TRAVEL: 'Di chuyển',
   OTHER_EXPENSE: 'Chi khác',
   FUND_TRANSFER: 'Chuyển quỹ',
+  CO_HOST_SHARE: 'Chia CLB đồng tổ chức',
 }
 
 /** Hạng mục để lọc sổ quỹ: mọi hạng mục thu, chi và chuyển quỹ. */
-export const LEDGER_CATEGORIES: FinanceCategory[] = [...INCOME_CATEGORIES, ...EXPENSE_CATEGORIES, 'FUND_TRANSFER']
+export const LEDGER_CATEGORIES: FinanceCategory[] = [...INCOME_CATEGORIES, ...EXPENSE_CATEGORIES, 'CO_HOST_SHARE', 'FUND_TRANSFER']
 
 export const transactionTypeLabel: Record<TransactionType, string> = {
   INCOME: 'Khoản thu',

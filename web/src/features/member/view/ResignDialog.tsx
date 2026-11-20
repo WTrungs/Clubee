@@ -11,7 +11,6 @@ import type { ResignBlocker } from '../model/memberTypes'
 import { resignBlockerGroups, resignBlockerLink } from '../viewModel/memberDisplay'
 
 interface ResignFormProps {
-  clubId: string
   clubName: string
   blockers: ResignBlocker[]
   /** Đang tải lại khoản còn tồn từ máy chủ; danh sách đang hiện có thể đã cũ. */
@@ -22,7 +21,7 @@ interface ResignFormProps {
   onConfirm: (reason: string) => void
 }
 
-function BlockerList({ blockers, clubId }: { blockers: ResignBlocker[]; clubId: string }) {
+function BlockerList({ blockers }: { blockers: ResignBlocker[] }) {
   return (
     <div className="space-y-4">
       {resignBlockerGroups.map((group) => {
@@ -35,7 +34,7 @@ function BlockerList({ blockers, clubId }: { blockers: ResignBlocker[]; clubId: 
             </h3>
             <ul className="list-disc space-y-1 pl-5 text-sm">
               {items.map((blocker) => {
-                const link = resignBlockerLink(blocker, clubId)
+                const link = resignBlockerLink(blocker)
                 return (
                   <li key={`${blocker.kind}-${blocker.refId}`}>
                     {link ? (
@@ -56,7 +55,7 @@ function BlockerList({ blockers, clubId }: { blockers: ResignBlocker[]; clubId: 
   )
 }
 
-function ResignForm({ clubId, clubName, blockers, checking, pending, errorMessage, onClose, onConfirm }: ResignFormProps) {
+function ResignForm({ clubName, blockers, checking, pending, errorMessage, onClose, onConfirm }: ResignFormProps) {
   const formId = useId()
   const [reason, setReason] = useState('')
   const [touched, setTouched] = useState(false)
@@ -101,7 +100,7 @@ function ResignForm({ clubId, clubName, blockers, checking, pending, errorMessag
     >
       {blocked ? (
         <div className="space-y-4">
-          <BlockerList blockers={blockers} clubId={clubId} />
+          <BlockerList blockers={blockers} />
           <FormAlert message={errorMessage} />
         </div>
       ) : (

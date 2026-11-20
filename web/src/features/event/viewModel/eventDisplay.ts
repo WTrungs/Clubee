@@ -1,6 +1,6 @@
 import { formatDateTime, formatTimeRange } from '@/shared/format/formatDate'
 import type { Tone } from '@/shared/ui/tone'
-import type { EventAction, EventDetail, EventStatus, EventSummary, EventTransitionAction, MyRegistration, RegistrationStatus, ScheduleChange } from '../model/eventTypes'
+import type { CoHost, CoHostStatus, EventAction, EventDetail, EventStatus, EventSummary, EventTransitionAction, MyRegistration, RegistrationStatus, ScheduleChange } from '../model/eventTypes'
 
 export const eventStatusDisplay: Record<EventStatus, { label: string; tone: Tone }> = {
   DRAFT: { label: 'Dự thảo', tone: 'neutral' },
@@ -11,6 +11,22 @@ export const eventStatusDisplay: Record<EventStatus, { label: string; tone: Tone
   ENDED: { label: 'Đã kết thúc', tone: 'neutral' },
   CLOSED: { label: 'Đã đóng', tone: 'neutral' },
   CANCELLED: { label: 'Đã hủy', tone: 'danger' },
+}
+
+/** ST-COH; tên trạng thái nhìn từ CLB chủ trì, phía CLB được mời đọc như lời mời. */
+export const coHostStatusDisplay: Record<CoHostStatus, { label: string; invitationLabel: string; tone: Tone }> = {
+  SENT: { label: 'Chờ trả lời', invitationLabel: 'Chờ bạn trả lời', tone: 'warning' },
+  ACCEPTED: { label: 'Đang đồng tổ chức', invitationLabel: 'Đang đồng tổ chức', tone: 'success' },
+  DECLINED: { label: 'Đã từ chối', invitationLabel: 'Đã từ chối', tone: 'neutral' },
+  REMOVED: { label: 'Đã gỡ', invitationLabel: 'Đã bị gỡ', tone: 'danger' },
+}
+
+/** Dòng phụ dưới tên CLB đồng tổ chức: lý do từ chối, lý do gỡ, hoặc số nhân sự đang tham gia. */
+export function coHostNote(coHost: Pick<CoHost, 'status' | 'staffCount' | 'decisionNote' | 'removeReason'>): string {
+  if (coHost.status === 'DECLINED') return `Lý do: ${coHost.decisionNote ?? ''}`
+  if (coHost.status === 'REMOVED') return `Lý do gỡ: ${coHost.removeReason ?? ''}`
+  if (coHost.status === 'SENT') return 'Ban chủ nhiệm CLB này chưa trả lời.'
+  return coHost.staffCount > 0 ? `${coHost.staffCount} nhân sự trong BTC` : 'Chưa có nhân sự trong BTC'
 }
 
 export const registrationStatusDisplay: Record<RegistrationStatus, { label: string; tone: Tone }> = {
@@ -65,9 +81,11 @@ export function cancelRegistrationText(status: RegistrationStatus, cancelDeadlin
 /** Đường đi chính của ST-EVT, dùng cho thanh tiến trình. Đã hủy là điểm cuối riêng. */
 export const EVENT_LIFECYCLE: EventStatus[] = ['DRAFT', 'PENDING_APPROVAL', 'APPROVED', 'REGISTRATION_OPEN', 'ONGOING', 'ENDED', 'CLOSED']
 
-/** Sự kiện Đã kết thúc chỉ đóng được khi quỹ đã quyết toán (BR-EVT-05); máy chủ chỉ trả trạng thái quỹ cho người xem được quỹ. */
-export function closeHint(event: Pick<EventDetail, 'status' | 'fundStatus'>): string | null {
-  return event.status === 'ENDED' && event.fundStatus === 'OPEN' ? 'Cần quyết toán quỹ sự kiện trước khi đóng sự kiện.' : null
+/** Sự kiện Đã kết thúc chỉ đóng được khi hết tạm ứng mở và quỹ đã quyết toán (BR-EVT-05); máy chủ chỉ trả hai trường này cho người xem được quỹ. */
+export function closeHint(event: Pick<EventDetail, 'status' | 'fundStatus' | 'openAdvanceCount'>): string | null {
+  if (event.status !== 'ENDED') return null
+  if ((event.openAdvanceCount ?? 0) > 0) return 'Cần quyết toán các tạm ứng và quỹ sự kiện trước khi đóng sự kiện.'
+  return event.fundStatus === 'OPEN' ? 'Cần quyết toán quỹ sự kiện trước khi đóng sự kiện.' : null
 }
 
 export interface LifecycleStep {

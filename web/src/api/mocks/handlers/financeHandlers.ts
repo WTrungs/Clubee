@@ -16,6 +16,7 @@ import {
   type TransactionSummary,
   type TransactionTransitionRequest,
   type FundTransitionRequest,
+  type SettleShare,
 } from '@/features/finance/model/financeTypes'
 import { formatMoney } from '@/shared/format/formatMoney'
 import { REASON_MAX, REASON_MIN } from '@/shared/lib/reasonRules'
@@ -43,7 +44,9 @@ import {
 import { API, currentUser, matchesKeyword, networkDelay, newId, paginate, problem, writer } from '../mockHttp'
 import { personRef } from '../mockMembers'
 import { isBoardMember } from '../mockPermissions'
-import { financeTarget, notify } from '../mockNotifications'
+import { financeTarget, notify, sharedEventsTarget } from '../mockNotifications'
+import { canListAdvances, openAdvanceCountOf } from '../mockAdvances'
+import { clubNameOf, coHostDeciders } from '../mockCoHosts'
 import { isRealDate, nowIso, vnToday } from '../mockTime'
 import { DEFAULT_RECEIPT_THRESHOLD, generalFundId } from '../seed/financeSeed'
 
@@ -80,9 +83,10 @@ function fundActions(userId: string, fund: DbFund): FundAction[] {
   const open = fund.status === 'OPEN'
   const proposer = canProposeIn(userId, fund)
   if (open && keepsLedger(userId, fund.clubId)) actions.push('RECORD_INCOME')
-  if (open && proposer) actions.push('PROPOSE_EXPENSE')
+  if (open && proposer) actions.push('PROPOSE_EXPENSE', 'PROPOSE_ADVANCE')
   // Người đề xuất được thấy tab khoản chi để theo dõi khoản của mình.
   if (proposer || canViewRequests(userId, fund)) actions.push('VIEW_REQUESTS')
+  if (canListAdvances(userId, fund)) actions.push('VIEW_ADVANCES')
   if (settleBlocker(fund) === null && keepsLedger(userId, fund.clubId)) actions.push('SETTLE')
   return actions
 }
@@ -95,6 +99,11 @@ function settleBlocker(fund: DbFund): Response | null {
   if (fund.kind !== 'EVENT' || !event) return problem(422, 'Chỉ quyết toán quỹ sự kiện; Quỹ chung không quyết toán.', 'INVALID_TRANSITION')
   if (fund.status !== 'OPEN') return problem(422, 'Quỹ đã quyết toán.', 'FUND_SETTLED')
   if (!SETTLEABLE_EVENT.includes(event.status)) return problem(422, 'Chỉ quyết toán khi sự kiện đã kết thúc hoặc đã hủy.', 'INVALID_TRANSITION')
+  // Tạm ứng kiểm trước khoản chờ duyệt: chốt tạm ứng có thể sinh khoản chi bổ sung chờ duyệt (FR-FIN-08).
+  const advances = openAdvanceCountOf(fund.id)
+  if (advances > 0) {
+    return problem(422, `Quỹ còn ${advances} tạm ứng chưa quyết toán xong; cần chốt hết tạm ứng trước khi quyết toán quỹ.`, 'FUND_HAS_OPEN_ADVANCES')
+  }
   const pending = pendingCountOf(fund.id)
   if (pending > 0) {
     return problem(422, `Quỹ còn ${pending} khoản chờ duyệt hoặc chờ ghi sổ; cần xử lý xong trước khi quyết toán.`, 'FUND_HAS_PENDING')
@@ -102,10 +111,81 @@ function settleBlocker(fund: DbFund): Response | null {
   return null
 }
 
-/** Chuyển số dư còn lại về Quỹ chung, quỹ sang Đã quyết toán; sự kiện giữ nguyên trạng thái, nút đóng mở theo quỹ (BR-EVT-05). */
-function settleFund(fund: DbFund, userId: string): void {
+const SHARE_NOTE_MAX = 200
+
+/** CLB đồng tổ chức đang Chấp nhận của sự kiện có quỹ này (FR-FIN-11). */
+function coHostsOfFund(fund: DbFund): Array<{ id: string; name: string }> {
+  if (fund.kind !== 'EVENT' || !fund.eventId) return []
+  return db.eventCoHosts
+    .filter((coHost) => coHost.eventId === fund.eventId && coHost.status === 'ACCEPTED')
+    .map((coHost) => ({ id: coHost.clubId, name: clubNameOf(coHost.clubId) }))
+}
+
+/** Kiểm khoản chia: 400 theo ô khi sai từng dòng, 422 khi tổng vượt số dư (BR-FIN-08); null là hợp lệ. */
+function shareProblem(fund: DbFund, shares: unknown): Response | null {
+  if (shares === undefined) return null
+  if (!Array.isArray(shares)) return problem(400, 'Khoản chia không hợp lệ.', 'VALIDATION', [{ field: 'shares', message: 'Danh sách khoản chia không hợp lệ.' }])
+  const allowed = new Set(coHostsOfFund(fund).map((club) => club.id))
+  const seen = new Set<string>()
+  const errors: FieldError[] = []
+  shares.forEach((raw: Partial<SettleShare>, index) => {
+    const clubId = typeof raw?.clubId === 'string' ? raw.clubId : ''
+    if (!allowed.has(clubId)) errors.push({ field: `shares[${index}].clubId`, message: 'Chỉ chia cho CLB đang đồng tổ chức sự kiện.' })
+    else if (seen.has(clubId)) errors.push({ field: `shares[${index}].clubId`, message: 'Mỗi CLB chỉ một khoản chia.' })
+    seen.add(clubId)
+    if (typeof raw?.amount !== 'number' || !Number.isInteger(raw.amount) || raw.amount <= 0) {
+      errors.push({ field: `shares[${index}].amount`, message: 'Số tiền chia là số nguyên dương (BR-FIN-04).' })
+    }
+    if (typeof raw?.note === 'string' && raw.note.trim().length > SHARE_NOTE_MAX) {
+      errors.push({ field: `shares[${index}].note`, message: `Ghi chú tối đa ${SHARE_NOTE_MAX} ký tự.` })
+    }
+  })
+  if (errors.length > 0) return problem(400, 'Khoản chia chưa hợp lệ.', 'VALIDATION', errors)
+  const total = (shares as SettleShare[]).reduce((sum, share) => sum + share.amount, 0)
   const balance = fundBalance(fund.id)
+  if (total > balance) {
+    return problem(422, `Tổng khoản chia ${formatMoney(total)} vượt số dư quỹ ${formatMoney(balance)}.`, 'SHARE_EXCEEDS_BALANCE', [
+      { field: 'shares', message: `Số dư còn ${formatMoney(balance)}.` },
+    ])
+  }
+  return null
+}
+
+/**
+ * Ghi các khoản chia cho CLB đồng tổ chức (khoản chi Đã ghi sổ, hạng mục hệ thống), rồi chuyển phần còn lại về Quỹ chung,
+ * quỹ sang Đã quyết toán; quỹ vẫn thuộc CLB chủ trì (BR-FIN-07). Sự kiện giữ nguyên trạng thái, nút đóng mở theo quỹ (BR-EVT-05).
+ */
+function settleFund(fund: DbFund, userId: string, shares: SettleShare[]): void {
   const now = nowIso()
+  const event = eventOfFund(fund)
+  for (const share of shares) {
+    const clubName = clubNameOf(share.clubId)
+    const note = share.note.trim()
+    newTransaction({
+      clubId: fund.clubId,
+      fundId: fund.id,
+      type: 'EXPENSE',
+      direction: 'OUT',
+      amount: share.amount,
+      category: 'CO_HOST_SHARE',
+      description: `Chia cho ${clubName} khi quyết toán${note ? `: ${note}` : ''}`,
+      proposerId: userId,
+      attachmentIds: [],
+      status: 'POSTED',
+      posterId: userId,
+      postedAt: now,
+      occurredOn: vnToday(),
+    })
+    notify(coHostDeciders(share.clubId), {
+      clubId: share.clubId,
+      category: 'FINANCE',
+      title: `${clubNameOf(fund.clubId)} chia ${formatMoney(share.amount)} cho CLB bạn khi quyết toán ${event?.name ?? fundName(fund)}`,
+      body: note,
+      target: sharedEventsTarget(share.clubId),
+      actorId: userId,
+    })
+  }
+  const balance = fundBalance(fund.id)
   if (balance > 0) {
     newTransaction({
       clubId: fund.clubId,
@@ -148,6 +228,9 @@ function toFundDetail(fund: DbFund, userId: string): FundDetail {
     pendingCount: canViewRequests(userId, fund) ? pendingCountOf(fund.id) : null,
     settledAt: fund.settledAt,
     settledBy: fund.settledBy ? personRef(fund.settledBy) : null,
+    coHosts: coHostsOfFund(fund),
+    advanceSettleDays: db.clubs.find((club) => club.id === fund.clubId)?.advanceSettleDays ?? 14,
+    openAdvanceCount: canListAdvances(userId, fund) ? openAdvanceCountOf(fund.id) : null,
     allowedActions: fundActions(userId, fund),
     version: fund.version,
   }
@@ -237,6 +320,7 @@ function toDetail(transaction: DbTransaction, userId: string, perspectiveFundId?
     cancelledBy: transaction.cancelledBy ? personRef(transaction.cancelledBy) : null,
     cancelledAt: transaction.cancelledAt,
     cancellationReason: transaction.cancellationReason,
+    advanceId: transaction.advanceId ?? null,
     allowedActions: transactionActions(userId, transaction),
     version: transaction.version,
   }
@@ -606,7 +690,9 @@ export const financeHandlers = [
     if (body.version !== fund.version) return problem(409, 'Quỹ vừa được người khác cập nhật. Tải lại để xem số dư mới nhất.', 'VERSION_CONFLICT')
     const blocked = settleBlocker(fund)
     if (blocked) return blocked
-    settleFund(fund, user.value.id)
+    const invalidShares = shareProblem(fund, body.shares)
+    if (invalidShares) return invalidShares
+    settleFund(fund, user.value.id, (body.shares ?? []).map((share) => ({ clubId: share.clubId, amount: share.amount, note: share.note ?? '' })))
     return HttpResponse.json(toFundDetail(fund, user.value.id))
   }),
 

@@ -1,5 +1,5 @@
 import { motion } from 'motion/react'
-import { BookOpenText, ClipboardCheck, FilePlus2, Landmark, Plus, ReceiptText, SearchX, Wallet } from 'lucide-react'
+import { BookOpenText, ClipboardCheck, FilePlus2, HandCoins, Landmark, Plus, ReceiptText, SearchX, Wallet } from 'lucide-react'
 import { useId } from 'react'
 import { formatDate } from '@/shared/format/formatDate'
 import { formatMoney } from '@/shared/format/formatMoney'
@@ -8,8 +8,11 @@ import { AnimatedNumber } from '@/shared/ui/AnimatedNumber'
 import { Button } from '@/shared/ui/Button'
 import { ConfirmDialog } from '@/shared/ui/ConfirmDialog'
 import { ConflictBanner } from '@/shared/ui/ConflictBanner'
-import { NativeSelect } from '@/shared/ui/Input'
+import { FormAlert } from '@/shared/ui/FormAlert'
+import { FormField } from '@/shared/ui/FormField'
+import { Input, NativeSelect } from '@/shared/ui/Input'
 import { FilterChip, Pagination, SearchInput } from '@/shared/ui/ListControls'
+import { MoneyInput } from '@/shared/ui/MoneyInput'
 import { Skeleton } from '@/shared/ui/Skeleton'
 import { EmptyState, ErrorState } from '@/shared/ui/StateViews'
 import { Tabs, TabsBar, TabsContent } from '@/shared/ui/Tabs'
@@ -24,8 +27,12 @@ import {
   type LedgerPeriod,
   type RequestFilter,
 } from '../viewModel/financeDisplay'
-import { useFundPanelViewModel, type FundPanelViewModel } from '../viewModel/useFundPanelViewModel'
+import { SHARE_NOTE_MAX, useFundPanelViewModel, type FundPanelViewModel } from '../viewModel/useFundPanelViewModel'
+import { useAdvanceListViewModel } from '../viewModel/useAdvanceListViewModel'
+import { AdvanceDetailSheet } from './AdvanceDetailSheet'
+import { AdvanceList } from './AdvanceList'
 import { LedgerRow, RequestRow } from './FinanceMeta'
+import { ProposeAdvanceSheet } from './ProposeAdvanceSheet'
 import { ProposeExpenseSheet } from './ProposeExpenseSheet'
 import { RecordIncomeSheet } from './RecordIncomeSheet'
 import { TransactionDetailSheet } from './TransactionDetailSheet'
@@ -57,12 +64,17 @@ function BalanceCard({ fund, vm }: { fund: FundDetail; vm: FundPanelViewModel })
           {fund.settledBy ? ` bởi ${fund.settledBy.fullName}` : ''}. Quỹ không nhận thêm giao dịch.
         </p>
       )}
+      {vm.advancesBlockSettle > 0 && (
+        <p role="status" className="mt-3 rounded-xl bg-brand-foreground/15 px-3 py-2 text-sm">
+          Còn {vm.advancesBlockSettle} tạm ứng chưa quyết toán xong. Chốt hết tạm ứng mới quyết toán được quỹ này.
+        </p>
+      )}
       {vm.pendingBlocksSettle > 0 && (
         <p role="status" className="mt-3 rounded-xl bg-brand-foreground/15 px-3 py-2 text-sm">
           Còn {vm.pendingBlocksSettle} khoản chờ duyệt hoặc chờ ghi sổ. Xử lý xong mới quyết toán được quỹ này.
         </p>
       )}
-      {(vm.canRecordIncome || vm.canProposeExpense || vm.canSettle) && (
+      {(vm.canRecordIncome || vm.canProposeExpense || vm.canProposeAdvance || vm.canSettle) && (
         <div className="mt-5 flex flex-wrap gap-2">
           {vm.canSettle && (
             <Button variant="secondary" size="sm" onClick={vm.openSettle}>
@@ -80,6 +92,12 @@ function BalanceCard({ fund, vm }: { fund: FundDetail; vm: FundPanelViewModel })
             <Button variant="secondary" size="sm" onClick={vm.openPropose}>
               <FilePlus2 aria-hidden />
               Đề xuất chi
+            </Button>
+          )}
+          {vm.canProposeAdvance && (
+            <Button variant="secondary" size="sm" onClick={vm.openProposeAdvance}>
+              <HandCoins aria-hidden />
+              Đề xuất tạm ứng
             </Button>
           )}
         </div>
@@ -210,6 +228,7 @@ function Ledger({ vm }: { vm: FundPanelViewModel }) {
 /** Một quỹ (chung hoặc sự kiện): thẻ số dư, sổ quỹ và các thao tác máy chủ cho phép. */
 export function FundPanel({ fundId }: { fundId: string }) {
   const vm = useFundPanelViewModel(fundId)
+  const advances = useAdvanceListViewModel(fundId, vm.tab === 'advances')
   const ledger = (
     <>
       <Ledger vm={vm} />
@@ -224,24 +243,32 @@ export function FundPanel({ fundId }: { fundId: string }) {
       {vm.fundError && !vm.fundLoading && <ErrorState error={vm.fundError} onRetry={vm.retryFund} />}
       {vm.fund && <BalanceCard fund={vm.fund} vm={vm} />}
 
-      {!vm.fundError && !vm.canViewRequests && ledger}
-      {!vm.fundError && vm.canViewRequests && (
+      {!vm.fundError && !vm.canViewRequests && !vm.canViewAdvances && ledger}
+      {!vm.fundError && (vm.canViewRequests || vm.canViewAdvances) && (
         <Tabs value={vm.tab} onValueChange={vm.setTab}>
           <TabsBar
             aria-label="Nội dung quỹ"
             active={vm.tab}
             items={[
               { value: 'ledger', label: 'Sổ quỹ' },
-              { value: 'requests', label: 'Khoản chi', count: vm.fund?.pendingCount ?? undefined },
+              ...(vm.canViewRequests ? [{ value: 'requests', label: 'Khoản chi', count: vm.fund?.pendingCount ?? undefined }] : []),
+              ...(vm.canViewAdvances ? [{ value: 'advances', label: 'Tạm ứng' }] : []),
             ]}
           />
           <TabsContent value="ledger" className="space-y-5 pt-5">
             {ledger}
           </TabsContent>
-          <TabsContent value="requests" className="space-y-5 pt-5">
-            <Requests vm={vm} />
-            <Pagination page={vm.requestPage} totalPages={vm.requestTotalPages} totalElements={vm.requestTotalElements} pageSize={vm.pageSize} onPageChange={vm.setRequestPage} />
-          </TabsContent>
+          {vm.canViewRequests && (
+            <TabsContent value="requests" className="space-y-5 pt-5">
+              <Requests vm={vm} />
+              <Pagination page={vm.requestPage} totalPages={vm.requestTotalPages} totalElements={vm.requestTotalElements} pageSize={vm.pageSize} onPageChange={vm.setRequestPage} />
+            </TabsContent>
+          )}
+          {vm.canViewAdvances && (
+            <TabsContent value="advances" className="space-y-5 pt-5">
+              <AdvanceList vm={advances} />
+            </TabsContent>
+          )}
         </Tabs>
       )}
 
@@ -250,10 +277,13 @@ export function FundPanel({ fundId }: { fundId: string }) {
         transactionId={vm.openedTransactionId}
         fundId={fundId}
         onOpenTransaction={vm.switchTransaction}
+        onOpenAdvance={vm.canViewAdvances ? advances.openAdvance : undefined}
         onClose={vm.closeTransaction}
       />
       {vm.fund && <RecordIncomeSheet open={vm.incomeOpen} fundId={vm.fund.id} fundName={vm.fund.name} onClose={vm.closeIncome} />}
       {vm.fund && <ProposeExpenseSheet open={vm.proposeOpen} fund={vm.fund} onClose={vm.closePropose} />}
+      {vm.fund && <ProposeAdvanceSheet open={vm.advanceOpen} fund={vm.fund} onClose={vm.closeProposeAdvance} />}
+      <AdvanceDetailSheet advanceId={advances.openedAdvanceId} onClose={advances.closeAdvance} onOpenTransaction={advances.openLinkedTransaction} />
       {vm.fund && (
         <ConfirmDialog
           open={vm.settleOpen}
@@ -268,13 +298,41 @@ export function FundPanel({ fundId }: { fundId: string }) {
           pending={vm.settling}
           onConfirm={vm.confirmSettle}
         >
+          {vm.shareClubs.length > 0 && (
+            <fieldset className="mb-4 space-y-3">
+              <legend className="mb-1 text-sm font-semibold">Chia cho CLB đồng tổ chức</legend>
+              <p className="text-xs text-muted-foreground">Không bắt buộc. Mỗi khoản ghi thành khoản chi đã ghi sổ của quỹ này; quỹ vẫn thuộc CLB bạn.</p>
+              {vm.shareClubs.map((club) => {
+                const draft = vm.shareDrafts[club.id] ?? { amount: '', note: '' }
+                return (
+                  <div key={club.id} className="space-y-2 rounded-xl border p-3">
+                    <FormField label={`Số tiền chia cho ${club.name}`} error={vm.sharePlan.errors[club.id]}>
+                      <MoneyInput value={draft.amount} onChange={(event) => vm.setShareDraft(club.id, { amount: event.target.value })} />
+                    </FormField>
+                    <FormField label={`Ghi chú cho ${club.name}`}>
+                      <Input maxLength={SHARE_NOTE_MAX} value={draft.note} onChange={(event) => vm.setShareDraft(club.id, { note: event.target.value })} />
+                    </FormField>
+                  </div>
+                )
+              })}
+              <FormAlert message={vm.sharePlan.totalError} />
+            </fieldset>
+          )}
+          <FormAlert message={vm.settleError} />
           <p role="status" className="rounded-xl border bg-muted/40 p-3 text-sm">
             {vm.settleBalanceLoading ? (
               'Đang tải số dư mới nhất…'
-            ) : vm.fund.balance > 0 ? (
+            ) : vm.sharePlan.remainder > 0 ? (
               <>
-                Chuyển <span className="font-bold tabular-nums">{formatMoney(vm.fund.balance)}</span> còn lại về Quỹ chung bằng một giao dịch chuyển quỹ.
+                {vm.sharePlan.total > 0 && (
+                  <>
+                    Chia <span className="font-bold tabular-nums">{formatMoney(vm.sharePlan.total)}</span> cho CLB đồng tổ chức.{' '}
+                  </>
+                )}
+                Chuyển <span className="font-bold tabular-nums">{formatMoney(vm.sharePlan.remainder)}</span> còn lại về Quỹ chung bằng một giao dịch chuyển quỹ.
               </>
+            ) : vm.fund.balance > 0 && vm.sharePlan.total > 0 ? (
+              'Toàn bộ số dư chia cho CLB đồng tổ chức nên không có giao dịch chuyển quỹ.'
             ) : (
               'Quỹ không còn số dư nên không có giao dịch chuyển quỹ.'
             )}

@@ -7,6 +7,7 @@ import type {
   FundQuery,
   FundSummary,
   FundTransitionRequest,
+  SettleShare,
   TransactionDetail,
   TransactionQuery,
   TransactionSummary,
@@ -39,8 +40,8 @@ export const financeRepository = {
   transaction: (clubId: string, transactionId: string, fundId?: string) =>
     httpClient.get<TransactionDetail>(`${club(clubId)}/transactions/${encodeURIComponent(transactionId)}`, { query: { fundId } }),
   /** FR-FIN-11: Thủ quỹ quyết toán quỹ sự kiện. */
-  settle: (clubId: string, fundId: string, version: number) =>
-    httpClient.post<FundDetail>(`${club(clubId)}/funds/${encodeURIComponent(fundId)}/transitions`, { action: 'SETTLE', version } satisfies FundTransitionRequest),
+  settle: (clubId: string, fundId: string, version: number, shares: SettleShare[] = []) =>
+    httpClient.post<FundDetail>(`${club(clubId)}/funds/${encodeURIComponent(fundId)}/transitions`, { action: 'SETTLE', version, shares } satisfies FundTransitionRequest),
   create: (clubId: string, request: CreateTransactionRequest) => httpClient.post<TransactionDetail>(`${club(clubId)}/transactions`, request),
   /** ST-EXP: rút, duyệt, từ chối, ghi sổ (FR-FIN-02..04). */
   transition: (clubId: string, transactionId: string, request: TransactionTransitionRequest) =>

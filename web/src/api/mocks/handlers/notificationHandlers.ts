@@ -2,7 +2,9 @@ import { http, HttpResponse } from 'msw'
 import type { NotificationCategory, NotificationDetail, NotificationSummary } from '@/features/notification/model/notificationTypes'
 import { db, type DbNotification, type DbNotificationRecipient } from '../db'
 import { API, currentUser, matchesKeyword, networkDelay, paginate, problem, writer } from '../mockHttp'
+import { canViewAdvance } from '../mockAdvances'
 import { canViewTransaction } from '../mockFinance'
+import { isInAudience } from '../mockAnnouncements'
 import { canAccessClub, personRef } from '../mockMembers'
 import { nowIso } from '../mockTime'
 
@@ -75,14 +77,26 @@ export const notificationHandlers = [
     const entry = findOwn(user.value.id, String(params.notificationId))
     if (!entry) return notFound()
     const { notification, recipient } = entry
-    // BR-SEC-02: nội dung thông báo của CLB chỉ mở được khi người nhận còn là thành viên tại thời điểm mở.
-    if (notification.kind === 'MANUAL' && notification.clubId && !canAccessClub(user.value.id, notification.clubId)) {
-      return problem(403, `Bạn không còn là thành viên ${clubNameOf(notification.clubId) ?? 'CLB này'} nên không xem được nội dung thông báo.`, 'NOT_A_MEMBER')
+    // BR-SEC-02: thông báo gửi tay chỉ mở được khi người nhận còn thuộc nhóm nhận; bản ghi cũ không lưu nhóm thì kiểm còn là thành viên.
+    if (notification.kind === 'MANUAL' && notification.clubId) {
+      const { audience, clubId } = notification
+      if (audience ? !isInAudience(user.value.id, clubId, audience) : !canAccessClub(user.value.id, clubId)) {
+        if (!canAccessClub(user.value.id, clubId) && audience?.kind !== 'EVENT_STAFF') {
+          return problem(403, `Bạn không còn là thành viên ${clubNameOf(clubId) ?? 'CLB này'} nên không xem được nội dung thông báo.`, 'NOT_A_MEMBER')
+        }
+        const group = audience?.kind === 'EVENT_STAFF' ? 'ban tổ chức sự kiện' : 'ban'
+        return problem(403, `Bạn không còn thuộc ${group} nhận thông báo này nên không xem được nội dung.`, 'NOT_IN_AUDIENCE')
+      }
     }
     // Nội dung thông báo tài chính nêu số tiền, quỹ, người đề xuất: chỉ mở khi còn xem được giao dịch đó.
     const transaction = notification.target?.type === 'FINANCE' ? db.transactions.find((candidate) => candidate.id === notification.target?.id) : undefined
     if (transaction && !canViewTransaction(user.value.id, transaction)) {
       return problem(403, 'Bạn không còn quyền xem khoản thu chi này nên không xem được nội dung thông báo.', 'FORBIDDEN')
+    }
+    // Thông báo tạm ứng cũng nêu số tiền, mục đích, người ứng: chỉ mở khi còn xem được tạm ứng đó.
+    const advance = notification.target?.type === 'ADVANCE' ? db.advances.find((candidate) => candidate.id === notification.target?.id) : undefined
+    if (advance && !canViewAdvance(user.value.id, advance)) {
+      return problem(403, 'Bạn không còn quyền xem tạm ứng này nên không xem được nội dung thông báo.', 'FORBIDDEN')
     }
     const detail: NotificationDetail = {
       ...toSummary(notification, recipient),

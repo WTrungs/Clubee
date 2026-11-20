@@ -1,4 +1,4 @@
-import type { EventFormat, EventStatus, RegistrationStatus, StaffKind } from '@/features/event/model/eventTypes'
+import type { CoHostStatus, EventFormat, EventStatus, RegistrationStatus, StaffKind } from '@/features/event/model/eventTypes'
 import { vnDayAt } from '../mockTime'
 
 export interface DbEvent {
@@ -54,6 +54,50 @@ export interface DbEventStaff {
   joinedAt: string
   /** Thời điểm thôi làm nhân sự, ví dụ khi bị đưa ra khỏi CLB (FR-MEM-08). */
   leftAt: string | null
+  /** CLB gốc của nhân sự `CO_HOST` (FR-EVT-08); rời CLB gốc hoặc CLB đó bị gỡ thì thôi làm nhân sự. */
+  homeClubId?: string
+}
+
+/** Lời mời đồng tổ chức theo ST-COH (FR-EVT-08); quỹ vẫn thuộc CLB chủ trì (BR-FIN-07). */
+export interface DbEventCoHost {
+  id: string
+  eventId: string
+  hostClubId: string
+  clubId: string
+  status: CoHostStatus
+  message: string
+  invitedBy: string
+  invitedAt: string
+  decidedBy: string | null
+  decidedAt: string | null
+  decisionNote: string | null
+  removedBy: string | null
+  removedAt: string | null
+  removeReason: string | null
+  version: number
+}
+
+/** Lời mời Đã gửi từ Đêm nhạc Mùa đông tới CLB Tiếng Anh, chờ ban chủ nhiệm CLB đó trả lời. */
+export function createCoHostSeed(): DbEventCoHost[] {
+  return [
+    {
+      id: 'ch-winter-english',
+      eventId: 'e-winter',
+      hostClubId: 'c-guitar',
+      clubId: 'c-english',
+      status: 'SENT',
+      message: 'Mời CLB Tiếng Anh cùng tổ chức phần giao lưu song ngữ.',
+      invitedBy: 'u-bao',
+      invitedAt: vnDayAt(-2, 10),
+      decidedBy: null,
+      decidedAt: null,
+      decisionNote: null,
+      removedBy: null,
+      removedAt: null,
+      removeReason: null,
+      version: 1,
+    },
+  ]
 }
 
 export interface DbRegistration {

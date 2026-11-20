@@ -2,7 +2,7 @@ import type { StaffEventSummary } from '@/features/account/model/accountTypes'
 import { db } from './db'
 import { canAccessClub } from './mockMembers'
 import { eventTarget, notify } from './mockNotifications'
-import { endPositions, EVENT_STAFF_ACTIVE, grantPosition, hasPosition, positionHolderOf } from './mockPermissions'
+import { endPositions, EVENT_STAFF_ACTIVE, grantPosition, hasPosition, isBoardMember, positionHolderOf } from './mockPermissions'
 import { nowIso } from './mockTime'
 import type { DbEvent, DbSubcommittee } from './seed/eventSeed'
 
@@ -43,6 +43,39 @@ export function isEventStaff(userId: string, event: DbEvent, { outsideOnly = fal
   )
 }
 
+/** CLB đồng tổ chức (đang Chấp nhận) mà người này thuộc ban chủ nhiệm, khi sự kiện còn hoạt động (FR-EVT-09); undefined nếu không có. */
+export function coHostBoardClubOf(userId: string, event: DbEvent): string | undefined {
+  if (!EVENT_STAFF_ACTIVE.includes(event.status)) return undefined
+  return db.eventCoHosts.find((coHost) => coHost.eventId === event.id && coHost.status === 'ACCEPTED' && isBoardMember(userId, coHost.clubId))?.clubId
+}
+
+/** FR-EVT-09: ban chủ nhiệm CLB đồng tổ chức chỉ xem tiến độ, nhân sự, quỹ của sự kiện chung; không thao tác gì. */
+export const isCoHostBoard = (userId: string, event: DbEvent) => coHostBoardClubOf(userId, event) !== undefined
+
+/** Ai xem được sự kiện: người ngoài CLB chỉ qua tư cách CTV, nhân sự hoặc ban chủ nhiệm CLB đồng tổ chức; thành viên đã rời thì mất quyền (BR-MEM-04). */
+export function canViewEvent(userId: string, event: DbEvent): boolean {
+  if (!canAccessClub(userId, event.clubId)) return isEventStaff(userId, event, { outsideOnly: true }) || isCoHostBoard(userId, event)
+  // Ban chủ nhiệm vẫn xem được đề xuất mình đã từ chối (FR-EVT-03: về Dự thảo kèm lý do).
+  if (event.status === 'DRAFT') return event.proposerId === userId || (event.rejectionReason !== null && isBoardMember(userId, event.clubId))
+  if (event.status === 'PENDING_APPROVAL') return event.proposerId === userId || isBoardMember(userId, event.clubId)
+  return true
+}
+
+/** Ban chủ nhiệm, Trưởng BTC, nhân sự BTC: những người xem được danh sách tham dự, điểm danh (SRS 3.5). */
+export function isOrganizer(userId: string, event: DbEvent): boolean {
+  return isBoardMember(userId, event.clubId) || isEventLead(userId, event) || isEventStaff(userId, event)
+}
+
+/** Cơ cấu BTC và tiến độ: người tổ chức, cộng ban chủ nhiệm CLB đồng tổ chức (FR-EVT-09). */
+export function canViewStaff(userId: string, event: DbEvent): boolean {
+  return isOrganizer(userId, event) || isCoHostBoard(userId, event)
+}
+
+/** Khách của sự kiện: không là thành viên nhưng đang làm BTC một sự kiện còn hoạt động của CLB (FR-EVT-07, SRS 3.5). */
+export function isEventGuest(userId: string, clubId: string): boolean {
+  return staffEventsOf(userId).some((event) => event.clubId === clubId)
+}
+
 /** Sự kiện người dùng đang làm BTC ở CLB mà họ không là thành viên, ví dụ CTV (FR-ACC-06). */
 export function staffEventsOf(userId: string): StaffEventSummary[] {
   return db.events
@@ -52,7 +85,8 @@ export function staffEventsOf(userId: string): StaffEventSummary[] {
         (candidate) => candidate.eventId === event.id && candidate.userId === userId && candidate.leftAt === null && candidate.kind !== 'MEMBER',
       )
       const lead = hasPosition(userId, 'EVENT_LEAD', event.id)
-      if (!staff && !lead) return []
+      const coHostBoard = isCoHostBoard(userId, event)
+      if (!staff && !lead && !coHostBoard) return []
       const club = db.clubs.find((candidate) => candidate.id === event.clubId)
       return [
         {
@@ -60,7 +94,13 @@ export function staffEventsOf(userId: string): StaffEventSummary[] {
           eventName: event.name,
           clubId: event.clubId,
           clubName: club?.name ?? '',
-          roleTitle: lead ? 'Trưởng BTC' : staff?.kind === 'COLLABORATOR' ? 'Cộng tác viên' : 'Nhân sự BTC',
+          roleTitle: lead
+            ? 'Trưởng BTC'
+            : staff?.kind === 'COLLABORATOR'
+              ? 'Cộng tác viên'
+              : staff
+                ? 'Nhân sự CLB đồng tổ chức'
+                : 'Ban chủ nhiệm CLB đồng tổ chức',
         },
       ]
     })

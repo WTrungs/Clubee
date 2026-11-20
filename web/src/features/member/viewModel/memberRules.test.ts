@@ -172,3 +172,23 @@ describe('removing a member (FR-MEM-08, BR-MEM-04, BR-ORG-02)', () => {
     expect(error?.code).toBe('LAST_PRESIDENT')
   })
 })
+
+describe('removing a co-host member from their home club (FR-EVT-08, BR-MEM-04)', () => {
+  it('ends their staff place and subcommittee lead post in the other club event at once', async () => {
+    signInAs('u-tu')
+    await eventRepository.decideCoHost('c-english', 'ch-winter-english', { decision: 'ACCEPT', note: null, version: 1 })
+    signInAs('u-bao')
+    await eventRepository.addStaff('c-guitar', 'e-winter', 'sc-winter-logistics', 'u-tam', 'ch-winter-english')
+    await eventRepository.setSubcommitteeLead('c-guitar', 'e-winter', 'sc-winter-logistics', { userId: 'u-tam', reason: 'Cần người lo phần song ngữ.' })
+
+    signInAs('u-tu')
+    const tam = membershipIdOf('u-tam', 'c-english')
+    await memberRepository.transition('c-english', tam, { action: 'REMOVE', reason: 'Không tham gia sinh hoạt.', version: versionOf(tam) })
+    expect(positionHolderOf('SUBCOMMITTEE_LEAD', 'sc-winter-logistics')).toBeNull()
+    expect(db.eventStaff.find((staff) => staff.userId === 'u-tam' && staff.eventId === 'e-winter')?.leftAt).not.toBeNull()
+    // Không đưa vào tồn đọng của CLB Tiếng Anh: chức vụ thuộc CLB Guitar.
+    expect(db.backlogItems.filter((item) => item.clubId === 'c-english' && item.kind === 'POSITION')).toHaveLength(0)
+    const told = db.notifications.find((notification) => notification.title === 'Dương Thanh Tâm thôi làm nhân sự Đêm nhạc Mùa đông')
+    expect(db.notificationRecipients.some((recipient) => recipient.notificationId === told?.id && recipient.userId === 'u-bao')).toBe(true)
+  })
+})

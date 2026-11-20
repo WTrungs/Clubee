@@ -2,15 +2,15 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tansta
 import { useState } from 'react'
 import { useLocation, useNavigate, useSearchParams } from 'react-router'
 import { toast } from 'sonner'
-import { getErrorMessage, isConflict } from '@/api/apiError'
+import { ApiError, getErrorMessage, isConflict } from '@/api/apiError'
 import { useCurrentClub } from '@/features/club/viewModel/clubContext'
 import { eventQueryKeys } from '@/features/event/viewModel/eventQueryKeys'
 import { toVnDateKey } from '@/shared/format/formatDate'
-import { formatMoney } from '@/shared/format/formatMoney'
+import { formatMoney, parseMoney } from '@/shared/format/formatMoney'
 import { useClampPage } from '@/shared/hooks/useClampPage'
 import { useDebouncedValue } from '@/shared/hooks/useDebouncedValue'
 import { financeRepository } from '../model/financeRepository'
-import type { FinanceCategory, FundDetail, TransactionQuery } from '../model/financeTypes'
+import type { FinanceCategory, FundDetail, SettleShare, TransactionQuery } from '../model/financeTypes'
 import { periodRange, requestFilterDisplay, type LedgerPeriod, type RequestFilter } from './financeDisplay'
 import { financeQueryKeys } from './financeQueryKeys'
 
@@ -18,13 +18,59 @@ const PAGE_SIZE = 20
 /** Mã giao dịch đang mở trong sheet nằm trên URL để thông báo dẫn thẳng tới được. */
 export const TRANSACTION_PARAM = 'tx'
 
-export type FundTab = 'ledger' | 'requests'
+export type FundTab = 'ledger' | 'requests' | 'advances'
 
 /** Số khoản còn treo khi quỹ sự kiện đã đến lúc quyết toán (sự kiện kết thúc hoặc hủy); 0 khi không cần báo. */
 export function settlePendingCount(fund: Pick<FundDetail, 'kind' | 'status' | 'event' | 'pendingCount'> | undefined): number {
   if (!fund || fund.kind !== 'EVENT' || fund.status !== 'OPEN' || !fund.event) return 0
   if (fund.event.status !== 'ENDED' && fund.event.status !== 'CANCELLED') return 0
   return fund.pendingCount ?? 0
+}
+
+/** Số tạm ứng còn mở chặn quyết toán quỹ sự kiện đã đến lúc quyết toán (FR-FIN-11); 0 khi không áp dụng hoặc không xem được. */
+export function settleOpenAdvanceCount(fund: Pick<FundDetail, 'kind' | 'status' | 'event' | 'openAdvanceCount'> | undefined): number {
+  if (!fund || fund.kind !== 'EVENT' || fund.status !== 'OPEN' || !fund.event) return 0
+  if (fund.event.status !== 'ENDED' && fund.event.status !== 'CANCELLED') return 0
+  return fund.openAdvanceCount ?? 0
+}
+
+export interface ShareDraft {
+  amount: string
+  note: string
+}
+
+export const SHARE_NOTE_MAX = 200
+
+/** Câu báo lỗi khoản chia từ máy chủ: câu chung kèm lý do theo từng dòng. */
+function settleShareError(error: ApiError): string | null {
+  const lines = error.fieldErrors.filter((fieldError) => fieldError.field.startsWith('shares')).map((fieldError) => fieldError.message)
+  if (error.code !== 'SHARE_EXCEEDS_BALANCE' && lines.length === 0) return null
+  return [error.detail, ...lines].filter(Boolean).join(' ')
+}
+
+/**
+ * FR-FIN-11, BR-FIN-08: đổi ô nhập khoản chia thành khoản gửi đi; ô trống bỏ qua, ô sai thì báo lỗi theo CLB.
+ * Tổng vượt số dư thì báo ở `total`; phần còn lại chuyển về Quỹ chung.
+ */
+export function settleShares(coHosts: Array<{ id: string; name: string }>, drafts: Record<string, ShareDraft>, balance: number) {
+  const shares: SettleShare[] = []
+  const errors: Record<string, string> = {}
+  for (const club of coHosts) {
+    const draft = drafts[club.id] ?? { amount: '', note: '' }
+    if (draft.amount.trim() === '') continue
+    const amount = parseMoney(draft.amount)
+    if (amount === null || amount <= 0) errors[club.id] = 'Nhập số tiền nguyên dương, hoặc để trống nếu không chia.'
+    else if (draft.note.trim().length > SHARE_NOTE_MAX) errors[club.id] = `Ghi chú tối đa ${SHARE_NOTE_MAX} ký tự.`
+    else shares.push({ clubId: club.id, amount, note: draft.note.trim() })
+  }
+  const total = shares.reduce((sum, share) => sum + share.amount, 0)
+  return {
+    shares,
+    errors,
+    total,
+    remainder: Math.max(balance - total, 0),
+    totalError: total > balance ? `Tổng khoản chia ${formatMoney(total)} vượt số dư ${formatMoney(balance)}.` : null,
+  }
 }
 
 /** FR-FIN-06: số dư tính tại thời điểm xem, sổ quỹ lọc theo kỳ, hạng mục, từ khóa và phân trang (FR-RPT-01). */
@@ -43,6 +89,7 @@ export function useFundPanelViewModel(fundId: string) {
   const [today] = useState(() => toVnDateKey(new Date()))
   const [incomeOpen, setIncomeOpen] = useState(false)
   const [proposeOpen, setProposeOpen] = useState(false)
+  const [advanceOpen, setAdvanceOpen] = useState(false)
   const [tab, setTab] = useState<FundTab>('ledger')
   const [requestFilter, setRequestFilter] = useState<RequestFilter>('PENDING')
   const [mineOnly, setMineOnly] = useState(false)
@@ -51,6 +98,7 @@ export function useFundPanelViewModel(fundId: string) {
   const fund = useQuery({ queryKey: financeQueryKeys.fund(clubId, fundId), queryFn: () => financeRepository.fund(clubId, fundId) })
   const allowed = fund.data?.allowedActions ?? []
   const [settleOpen, setSettleOpen] = useState(false)
+  const [shareDrafts, setShareDrafts] = useState<Record<string, ShareDraft>>({})
   const [conflict, setConflict] = useState(false)
 
   // Quyết toán mở nút đóng sự kiện (BR-EVT-05), nên làm mới cả quỹ lẫn chi tiết sự kiện.
@@ -58,19 +106,30 @@ export function useFundPanelViewModel(fundId: string) {
     Promise.all([queryClient.invalidateQueries({ queryKey: financeQueryKeys.all }), queryClient.invalidateQueries({ queryKey: eventQueryKeys.all })])
 
   const settle = useMutation({
-    /** `balance`: số dư người dùng thấy trong hộp xác nhận, để câu báo nói đúng có chuyển tiền hay không. */
-    mutationFn: (balance: number) => {
+    /** `balance`: phần còn lại người dùng thấy trong hộp xác nhận, để câu báo nói đúng có chuyển tiền hay không. */
+    mutationFn: ({ balance, shares }: { balance: number; shares: SettleShare[] }) => {
       if (!fund.data) throw new Error('Fund not loaded')
-      return financeRepository.settle(clubId, fundId, fund.data.version).then((settled) => ({ settled, balance }))
+      return financeRepository.settle(clubId, fundId, fund.data.version, shares).then((settled) => ({ settled, balance, shares }))
     },
     meta: { silentError: true },
-    onSuccess: async ({ settled, balance }) => {
+    onSuccess: async ({ settled, balance, shares }) => {
       queryClient.setQueryData(financeQueryKeys.fund(clubId, fundId), settled)
       await refreshFundAndEvent()
       setSettleOpen(false)
-      toast.success(balance > 0 ? `Đã quyết toán quỹ, chuyển ${formatMoney(balance)} về Quỹ chung.` : 'Đã quyết toán quỹ.')
+      const shared = shares.reduce((sum, share) => sum + share.amount, 0)
+      const parts = [
+        ...(shared > 0 ? [`chia ${formatMoney(shared)} cho CLB đồng tổ chức`] : []),
+        ...(balance > 0 ? [`chuyển ${formatMoney(balance)} về Quỹ chung`] : []),
+      ]
+      toast.success(parts.length > 0 ? `Đã quyết toán quỹ, ${parts.join(', ')}.` : 'Đã quyết toán quỹ.')
+      setShareDrafts({})
     },
     onError: (error) => {
+      // Khoản chia sai (CLB vừa bị gỡ, tổng vượt số dư mới) thì giữ hộp mở, giữ số đã nhập và báo lý do trong hộp.
+      if (error instanceof ApiError && (error.code === 'SHARE_EXCEEDS_BALANCE' || error.fieldErrors.some((fieldError) => fieldError.field.startsWith('shares')))) {
+        void fund.refetch()
+        return
+      }
       setSettleOpen(false)
       if (isConflict(error)) {
         setConflict(true)
@@ -81,7 +140,8 @@ export function useFundPanelViewModel(fundId: string) {
     },
   })
   const canViewRequests = allowed.includes('VIEW_REQUESTS')
-  const activeTab: FundTab = canViewRequests ? tab : 'ledger'
+  const canViewAdvances = allowed.includes('VIEW_ADVANCES')
+  const activeTab: FundTab = tab === 'requests' && canViewRequests ? 'requests' : tab === 'advances' && canViewAdvances ? 'advances' : 'ledger'
   const query: TransactionQuery = {
     fundId,
     status: ['POSTED'],
@@ -147,18 +207,33 @@ export function useFundPanelViewModel(fundId: string) {
     canSettle: allowed.includes('SETTLE'),
     /** Sự kiện đã kết thúc hoặc đã hủy nhưng quỹ còn khoản treo nên chưa quyết toán được (FR-FIN-11). */
     pendingBlocksSettle: settlePendingCount(fund.data),
+    advancesBlockSettle: settleOpenAdvanceCount(fund.data),
     settleOpen,
     /** Mở hộp quyết toán và hỏi lại số dư, vì số tiền chuyển về Quỹ chung phải là số mới nhất. */
     openSettle: () => {
+      settle.reset()
+      setShareDrafts({})
       setSettleOpen(true)
       void fund.refetch()
     },
+    /** CLB đồng tổ chức nhận khoản chia (FR-FIN-11); rỗng thì hộp quyết toán như cũ. */
+    shareClubs: fund.data?.coHosts ?? [],
+    shareDrafts,
+    setShareDraft: (clubIdOfShare: string, patch: Partial<ShareDraft>) =>
+      setShareDrafts((current) => ({ ...current, [clubIdOfShare]: { ...(current[clubIdOfShare] ?? { amount: '', note: '' }), ...patch } })),
+    sharePlan: settleShares(fund.data?.coHosts ?? [], shareDrafts, fund.data?.balance ?? 0),
     settleBalanceLoading: settleOpen && fund.isFetching,
     closeSettle: () => {
       if (!settle.isPending) setSettleOpen(false)
     },
-    confirmSettle: () => settle.mutate(fund.data?.balance ?? 0),
+    confirmSettle: () => {
+      const plan = settleShares(fund.data?.coHosts ?? [], shareDrafts, fund.data?.balance ?? 0)
+      if (Object.keys(plan.errors).length > 0 || plan.totalError) return
+      settle.mutate({ balance: plan.remainder, shares: plan.shares })
+    },
     settling: settle.isPending,
+    /** Lỗi khoản chia máy chủ trả về, hiện trong hộp quyết toán. */
+    settleError: settle.error instanceof ApiError && settleOpen ? settleShareError(settle.error) : null,
     conflict,
     reloadAfterConflict: () => {
       setConflict(false)
@@ -167,7 +242,13 @@ export function useFundPanelViewModel(fundId: string) {
     canProposeExpense: allowed.includes('PROPOSE_EXPENSE'),
     canViewRequests,
     tab: activeTab,
-    setTab: (value: string) => setTab(value === 'requests' ? 'requests' : 'ledger'),
+    setTab: (value: string) => setTab(value === 'requests' || value === 'advances' ? value : 'ledger'),
+    /** FR-FIN-07: tab Tạm ứng và nút đề xuất tạm ứng theo `allowedActions` của quỹ. */
+    canViewAdvances,
+    canProposeAdvance: allowed.includes('PROPOSE_ADVANCE'),
+    advanceOpen,
+    openProposeAdvance: () => setAdvanceOpen(true),
+    closeProposeAdvance: () => setAdvanceOpen(false),
 
     keyword,
     setKeyword: (value: string) => {

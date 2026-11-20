@@ -14,4 +14,10 @@ describe('buildNavigation', () => {
     expect(inClub[1]?.title).toBe('CLB Guitar Sinh viên')
     expect(inClub[1]?.items[0]).toMatchObject({ to: '/clubs/c-guitar', label: 'Tổng quan' })
   })
+
+  it('gives an event guest only the Events item of the host club (FR-EVT-07, SRS 3.5)', () => {
+    const guest = buildNavigation('c-guitar', 'CLB Guitar Sinh viên', 'USER', 'EVENT_GUEST')
+    expect(labels(guest)[1]).toEqual(['CLB Guitar Sinh viên', ['Sự kiện']])
+    expect(guest[1]?.items[0]?.to).toBe('/clubs/c-guitar/events')
+  })
 })

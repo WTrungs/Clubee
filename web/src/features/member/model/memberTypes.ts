@@ -94,10 +94,13 @@ export interface LeaveDecisionRequest {
   version: number
 }
 
-/** Khoản còn tồn khiến chưa tự xin rời được (BR-MEM-03); tạm ứng, tài sản thêm khi có module. */
+/** Khoản còn tồn khiến chưa tự xin rời được (BR-MEM-03); tài sản thêm khi có module. */
 export interface ResignBlocker {
-  kind: 'POSITION' | 'TASK' | 'TASK_REVIEW' | 'APPOINTMENT'
+  /** `ADVANCE`: tạm ứng còn mở do người này ứng, `refId` là mã tạm ứng. */
+  kind: 'POSITION' | 'TASK' | 'TASK_REVIEW' | 'APPOINTMENT' | 'ADVANCE'
   refId: string
+  /** CLB của khoản này; việc, chức vụ ở sự kiện chung thuộc CLB chủ trì (FR-EVT-08). */
+  clubId: string
   title: string
 }
 

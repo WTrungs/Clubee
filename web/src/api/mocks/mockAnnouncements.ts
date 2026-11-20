@@ -53,6 +53,15 @@ export function announcementAudiences(userId: string, clubId: string): Announcem
   }))
 }
 
+/** BR-SEC-02: người nhận còn thuộc nhóm nhận lúc mở; BTC gồm cả CTV, nhân sự CLB đồng tổ chức khi sự kiện còn hoạt động. */
+export function isInAudience(userId: string, clubId: string, audience: AnnouncementAudienceRef): boolean {
+  if (audience.kind === 'CLUB') return canAccessClub(userId, clubId)
+  if (audience.kind === 'DEPARTMENT') return clubRoster(clubId, audience.scopeId).includes(userId)
+  const event = db.events.find((candidate) => candidate.id === audience.scopeId && candidate.clubId === clubId)
+  if (!event || !eventStaffOf(event.id).includes(userId)) return false
+  return canAccessClub(userId, clubId) || EVENT_STAFF_ACTIVE.includes(event.status)
+}
+
 /** Nhóm nhận nằm trong phạm vi chức vụ của người gửi thì trả danh sách người nhận, ngoài phạm vi thì trả null. */
 export function audienceRecipients(userId: string, clubId: string, audience: AnnouncementAudienceRef): string[] | null {
   const group = audienceGroups(userId, clubId).find((candidate) => candidate.kind === audience.kind && candidate.scopeId === audience.scopeId)

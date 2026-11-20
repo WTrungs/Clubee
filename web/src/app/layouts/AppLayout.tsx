@@ -5,6 +5,7 @@ import { Link, NavLink, ScrollRestoration, useLocation, useMatch, useOutlet } fr
 import { ClubSwitcher } from '@/features/account/view/ClubSwitcher'
 import { UserMenu } from '@/features/account/view/UserMenu'
 import { homeOf } from '@/features/account/viewModel/redirect'
+import { pickGuestClub } from '@/features/account/viewModel/useClubSwitcherViewModel'
 import { useCurrentUser } from '@/features/account/viewModel/useSession'
 import { NotificationBell } from '@/features/notification/view/NotificationBell'
 import { cn } from '@/shared/lib/cn'
@@ -59,8 +60,10 @@ export function AppLayout() {
   const routeClubId = clubMatch?.params.clubId
   const user = useCurrentUser()
   const [drawerOpen, setDrawerOpen] = useState(false)
-  const clubName = user.memberships.find((membership) => membership.clubId === routeClubId)?.clubName
-  const sections = buildNavigation(routeClubId, clubName, user.accountType)
+  // Người ngoài CLB đang làm BTC một sự kiện của CLB này là khách (FR-EVT-07); máy chủ vẫn tự kiểm từng trang.
+  const guestClub = pickGuestClub(user.memberships, user.staffEvents, routeClubId)
+  const clubName = guestClub?.clubName ?? user.memberships.find((membership) => membership.clubId === routeClubId)?.clubName
+  const sections = buildNavigation(routeClubId, clubName, user.accountType, guestClub ? 'EVENT_GUEST' : 'MEMBER')
   const admin = user.accountType === 'ADMIN'
   const home = homeOf(user.accountType)
 

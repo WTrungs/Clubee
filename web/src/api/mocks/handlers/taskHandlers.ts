@@ -19,6 +19,7 @@ import { db } from '../db'
 import { can, forbidden, type AccessScope } from '../mockAccess'
 import { API, currentUser, matchesKeyword, networkDelay, newId, paginate, problem, writer } from '../mockHttp'
 import { canAccessClub, personRef as person } from '../mockMembers'
+import { isEventGuest } from '../mockStaffEvents'
 import { isBoardMember } from '../mockPermissions'
 import { assignableScopes, hasTaskAccess, isTaskOverdue as isOverdue, lockedEventStatusOf, managesScope, resolveScope } from '../mockScopes'
 import { isDueSoon } from '../mockTaskJobs'
@@ -273,7 +274,7 @@ export const taskHandlers = [
     const user = currentUser()
     if (!user.ok) return user.response
     const clubId = String(params.clubId)
-    if (!canAccessClub(user.value.id, clubId)) return problem(403, 'Bạn không phải thành viên của CLB này.', 'NOT_A_MEMBER')
+    if (!canAccessClub(user.value.id, clubId) && !isEventGuest(user.value.id, clubId)) return problem(403, 'Bạn không phải thành viên của CLB này.', 'NOT_A_MEMBER')
     return HttpResponse.json(assignableScopes(user.value.id, clubId))
   }),
 
@@ -303,7 +304,8 @@ export const taskHandlers = [
     const user = writer(request)
     if (!user.ok) return user.response
     const clubId = String(params.clubId)
-    if (!canAccessClub(user.value.id, clubId)) return problem(403, 'Bạn không phải thành viên của CLB này.', 'NOT_A_MEMBER')
+    // Nhân sự CLB đồng tổ chức làm trưởng tiểu ban giao việc trong tiểu ban của mình (FR-EVT-08); phạm vi kiểm ngay dưới.
+    if (!canAccessClub(user.value.id, clubId) && !isEventGuest(user.value.id, clubId)) return problem(403, 'Bạn không phải thành viên của CLB này.', 'NOT_A_MEMBER')
     const body = (await request.json()) as Partial<CreateTaskRequest>
     const scope = assignableScopes(user.value.id, clubId).find((candidate) => candidate.type === body.scopeType && candidate.id === body.scopeId)
     if (!scope) return problem(403, 'Bạn chỉ được giao việc trong ban, tiểu ban mình phụ trách.', 'SCOPE_FORBIDDEN')

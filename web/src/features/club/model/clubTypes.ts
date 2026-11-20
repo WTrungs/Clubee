@@ -19,6 +19,14 @@ export type ClubAction =
   | 'REQUEST_PRESIDENCY_TRANSFER'
   /** FR-ORG-05: ban chủ nhiệm xem bảng phân quyền; sửa được hay không nằm ở `allowedActions` của bảng phân quyền. */
   | 'VIEW_PERMISSIONS'
+  /** FR-EVT-08: ban chủ nhiệm xem và trả lời lời mời đồng tổ chức ở tab Sự kiện chung. */
+  | 'VIEW_SHARED_EVENTS'
+  /** FR-FIN-09: ban chủ nhiệm xem tab Đóng quỹ. */
+  | 'VIEW_DUES'
+  /** FR-FIN-09: người giữ sổ (mặc định Thủ quỹ) mở đợt đóng quỹ. */
+  | 'OPEN_DUES'
+  /** FR-FIN-12: ban chủ nhiệm xem tab Báo cáo thu chi. */
+  | 'VIEW_FINANCE_REPORT'
 
 /** Nhiệm kỳ đang phụ trách CLB: Đang chạy hoặc Đang bàn giao. */
 export interface TermSummary {
@@ -52,10 +60,14 @@ export interface ClubDetail extends ClubContacts {
   currentTerm: TermSummary | null
   myPositionTitles: string[]
   allowedActions: ClubAction[]
-  /** Mỗi CLB có đúng một Quỹ chung (FR-FIN-06). */
+  /** Mỗi CLB có đúng một Quỹ chung (FR-FIN-06); khách của sự kiện nhận chuỗi rỗng. */
   generalFundId: string
+  /** Khách của sự kiện (CTV, nhân sự CLB đồng tổ chức) chỉ có thông tin công khai và mục Sự kiện. */
+  viewerRole: ClubViewerRole
   version: number
 }
+
+export type ClubViewerRole = 'MEMBER' | 'EVENT_GUEST'
 
 /** FR-CLB-01: người tạo thành thành viên Chính thức và Chủ nhiệm của nhiệm kỳ đầu. */
 export interface CreateClubRequest {

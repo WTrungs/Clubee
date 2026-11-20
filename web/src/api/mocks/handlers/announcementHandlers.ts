@@ -66,6 +66,7 @@ export const announcementHandlers = [
       title,
       body: text,
       sendEmail: body.sendEmail === true,
+      audience: { kind: audience.kind, scopeId: audience.scopeId },
       target: audience.kind === 'EVENT_STAFF' ? eventTarget(clubId, audience.scopeId) : clubTarget(clubId),
       actorId: user.value.id,
     })

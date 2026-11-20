@@ -29,7 +29,7 @@ afterEach(() => vi.restoreAllMocks())
 const newTask = (ownerId: string) => ({ ...db.tasks[0], id: 't-new', clubId: 'c-guitar', ownerId, status: 'ASSIGNED' }) as (typeof db.tasks)[number]
 
 describe('leave and resign display (FR-MEM-07, BR-MEM-03)', () => {
-  it('labels request statuses and resign blockers, linking tasks to My tasks only', () => {
+  it('labels request statuses and resign blockers, linking tasks to My tasks and advances to Finance', () => {
     expect(Object.fromEntries(Object.entries(leaveRequestStatusDisplay).map(([status, display]) => [status, display.label]))).toEqual({
       PENDING: 'Chờ duyệt',
       APPROVED: 'Đã duyệt',
@@ -37,10 +37,11 @@ describe('leave and resign display (FR-MEM-07, BR-MEM-03)', () => {
       WITHDRAWN: 'Đã rút',
       CLOSED: 'Đã đóng',
     })
-    expect(resignBlockerLink({ kind: 'TASK', refId: 't-poster', title: 'Poster' }, 'c-guitar')).toBe('/me/tasks?task=t-poster&taskClub=c-guitar')
-    expect(resignBlockerLink({ kind: 'TASK_REVIEW', refId: 't-a b', title: 'A' }, 'c-guitar')).toBe('/me/tasks?task=t-a%20b&taskClub=c-guitar')
-    expect(resignBlockerLink({ kind: 'POSITION', refId: 'p-1', title: 'Trưởng ban' }, 'c-guitar')).toBeNull()
-    expect(resignBlockerGroups.map((group) => group.kind)).toEqual(['POSITION', 'TASK', 'TASK_REVIEW', 'APPOINTMENT'])
+    expect(resignBlockerLink({ kind: 'TASK', refId: 't-poster', clubId: 'c-guitar', title: 'Poster' })).toBe('/me/tasks?task=t-poster&taskClub=c-guitar')
+    expect(resignBlockerLink({ kind: 'TASK_REVIEW', refId: 't-a b', clubId: 'c-english', title: 'A' })).toBe('/me/tasks?task=t-a%20b&taskClub=c-english')
+    expect(resignBlockerLink({ kind: 'POSITION', refId: 'p-1', clubId: 'c-guitar', title: 'Trưởng ban' })).toBeNull()
+    expect(resignBlockerLink({ kind: 'ADVANCE', refId: 'adv-1', clubId: 'c-guitar', title: 'Dây đàn' })).toBe('/clubs/c-guitar/finance?adv=adv-1')
+    expect(resignBlockerGroups.map((group) => group.kind)).toEqual(['POSITION', 'TASK', 'TASK_REVIEW', 'ADVANCE', 'APPOINTMENT'])
   })
 })
 
