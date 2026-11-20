@@ -19,8 +19,42 @@ export interface SessionScopeOption {
 
 export type SessionWhen = 'UPCOMING' | 'PAST'
 
-/** Có khi người gọi là người phụ trách buổi: người tạo, ban chủ nhiệm, Trưởng ban, Phó ban của ban đó; sửa, hủy chỉ trước giờ bắt đầu. */
-export type SessionAction = 'VIEW_ATTENDANCE' | 'EDIT' | 'CANCEL'
+/**
+ * `VIEW_ATTENDANCE`, `VIEW_REGISTRATIONS`, `EDIT`, `CANCEL` có khi người gọi là người phụ trách buổi: người tạo, ban chủ nhiệm,
+ * Trưởng ban, Phó ban của ban đó; sửa, hủy chỉ trước giờ bắt đầu. `REGISTER` có khi người gọi thuộc đối tượng, buổi có số chỗ,
+ * còn hạn đăng ký và người gọi chưa có đăng ký còn hiệu lực (FR-ATT-03).
+ */
+export type SessionAction = 'VIEW_ATTENDANCE' | 'VIEW_REGISTRATIONS' | 'EDIT' | 'CANCEL' | 'REGISTER'
+
+/** Nhận chỗ, Danh sách chờ, Đã hủy (FR-ATT-03). */
+export type SessionRegistrationStatus = 'CONFIRMED' | 'WAITLISTED' | 'CANCELLED'
+
+export interface MySessionRegistration {
+  id: string
+  status: SessionRegistrationStatus
+  waitlistPosition: number | null
+  registeredAt: string
+  promotedAt: string | null
+  /** Người giữ chỗ hủy được tới trước giờ bắt đầu số giờ CLB cấu hình; người ở danh sách chờ tới giờ bắt đầu. */
+  cancelDeadline: string
+  allowedActions: Array<'CANCEL'>
+}
+
+/** Tình hình chỗ của buổi có giới hạn chỗ. */
+export interface SessionSeats {
+  capacity: number
+  taken: number
+  waitlist: number
+}
+
+export interface SessionRegistrationRow {
+  id: string
+  attendee: PersonRef
+  status: Exclude<SessionRegistrationStatus, 'CANCELLED'>
+  waitlistPosition: number | null
+  registeredAt: string
+  promotedAt: string | null
+}
 
 /** Vị trí của buổi trong chuỗi lặp (FR-ATT-02). */
 export interface SessionSeriesInfo {
@@ -58,6 +92,10 @@ export interface SessionDetail extends SessionSummary {
   createdAt: string
   allowedActions: SessionAction[]
   cancellation: SessionCancellation | null
+  /** `null` với buổi không giới hạn chỗ. */
+  seats: SessionSeats | null
+  /** Đăng ký còn hiệu lực của người gọi. */
+  myRegistration: MySessionRegistration | null
   version: number
 }
 

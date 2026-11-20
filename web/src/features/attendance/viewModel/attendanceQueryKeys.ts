@@ -7,6 +7,8 @@ export const attendanceQueryKeys = {
   sessionList: (clubId: string, query: SessionQuery) => ['sessions', 'list', clubId, query] as const,
   session: (clubId: string, sessionId: string) => ['sessions', 'detail', clubId, sessionId] as const,
   sessionScopes: (clubId: string) => ['sessions', 'scopes', clubId] as const,
+  registrationsOf: (clubId: string, sessionId: string) => ['sessions', 'registrations', clubId, sessionId] as const,
+  registrations: (clubId: string, sessionId: string, query: { q?: string; page?: number }) => ['sessions', 'registrations', clubId, sessionId, query] as const,
   attendance: ['attendance'] as const,
   /** Mọi danh sách điểm danh của một buổi hoặc một sự kiện (mọi ngày, mọi bộ lọc). */
   sheets: (activity: AttendanceActivityRef) => ['attendance', 'sheet', activity.type, activity.clubId, activity.id] as const,

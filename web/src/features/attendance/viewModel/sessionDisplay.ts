@@ -1,5 +1,6 @@
 import type { Tone } from '@/shared/ui/tone'
-import type { SessionScope, SessionSummary } from '../model/sessionTypes'
+import { formatDateTime } from '@/shared/format/formatDate'
+import type { MySessionRegistration, SessionScope, SessionSeats, SessionSummary } from '../model/sessionTypes'
 
 export type SessionTiming = 'CANCELLED' | 'UPCOMING' | 'ONGOING' | 'ENDED' | 'CLOSED'
 
@@ -38,4 +39,28 @@ export function scopeFilterQuery(value: string): { scopeType?: 'CLUB' | 'DEPARTM
   if (!value) return {}
   if (value === 'CLUB') return { scopeType: 'CLUB' }
   return { scopeType: 'DEPARTMENT', departmentId: value }
+}
+
+/** Số chỗ còn trống của buổi có giới hạn (FR-ATT-03). */
+export function seatsLeft(seats: SessionSeats): { remaining: number; full: boolean } {
+  const remaining = Math.max(seats.capacity - seats.taken, 0)
+  return { remaining, full: remaining === 0 }
+}
+
+/** Câu nêu hạn hủy của người đã đăng ký; qua hạn thì nói rõ để người đó báo người phụ trách. Buổi đã hủy hoặc đã bắt đầu thì thôi nhắc. */
+export function sessionCancelHint(
+  mine: Pick<MySessionRegistration, 'allowedActions' | 'cancelDeadline'>,
+  session: Pick<SessionSummary, 'startAt' | 'cancelled'>,
+  now: number,
+): string | null {
+  if (session.cancelled || now >= Date.parse(session.startAt)) return null
+  return mine.allowedActions.includes('CANCEL')
+    ? `Hủy được đến ${formatDateTime(mine.cancelDeadline)}.`
+    : `Đã qua hạn hủy (${formatDateTime(mine.cancelDeadline)}). Báo người phụ trách buổi nếu bạn không đến được.`
+}
+
+export function sessionCancelRegistrationText(mine: Pick<MySessionRegistration, 'status' | 'cancelDeadline'>): string {
+  const deadline = `Hạn hủy: ${formatDateTime(mine.cancelDeadline)}.`
+  if (mine.status === 'WAITLISTED') return `Bạn sẽ rời danh sách chờ. Bạn vẫn đăng ký lại được khi buổi còn nhận đăng ký. ${deadline}`
+  return `Bạn sẽ mất chỗ và người đầu danh sách chờ được nhận chỗ thay. Bạn vẫn đăng ký lại được khi buổi còn nhận đăng ký. ${deadline}`
 }

@@ -7,6 +7,7 @@ import type {
   CreateSessionSeriesResult,
   SessionDetail,
   SessionQuery,
+  SessionRegistrationRow,
   SessionScopeOption,
   SessionSummary,
   UpdateSessionRequest,
@@ -27,5 +28,11 @@ export const sessionRepository = {
     httpClient.patch<SessionDetail>(`${sessions(clubId)}/${encodeURIComponent(sessionId)}`, request),
   cancel: (clubId: string, sessionId: string, request: CancelSessionRequest) =>
     httpClient.post<SessionDetail>(`${sessions(clubId)}/${encodeURIComponent(sessionId)}/cancellation`, request),
+  /** FR-ATT-03: tự đăng ký; hết chỗ thì vào danh sách chờ. Trả buổi sau khi đăng ký. */
+  register: (clubId: string, sessionId: string) => httpClient.post<SessionDetail>(`${sessions(clubId)}/${encodeURIComponent(sessionId)}/registrations`, {}),
+  cancelRegistration: (clubId: string, sessionId: string, registrationId: string) =>
+    httpClient.post<SessionDetail>(`${sessions(clubId)}/${encodeURIComponent(sessionId)}/registrations/${encodeURIComponent(registrationId)}/cancellation`, {}),
+  registrations: (clubId: string, sessionId: string, query: { q?: string; page?: number; size?: number }) =>
+    httpClient.get<Page<SessionRegistrationRow>>(`${sessions(clubId)}/${encodeURIComponent(sessionId)}/registrations`, { query }),
   scopes: (clubId: string) => httpClient.get<SessionScopeOption[]>(`/clubs/${encodeURIComponent(clubId)}/session-scopes`),
 }

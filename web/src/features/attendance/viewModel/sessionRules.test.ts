@@ -93,12 +93,12 @@ describe('reading sessions', () => {
 
   it('shows the attendance tab only to the people running the session, and editing only before it starts (FR-ATT-02)', async () => {
     signInAs('u-ha')
-    expect((await sessionRepository.get('c-guitar', 's-media-plan')).allowedActions).toEqual([])
+    expect((await sessionRepository.get('c-guitar', 's-media-plan')).allowedActions).toEqual(['REGISTER'])
     signInAs('u-linh')
-    expect((await sessionRepository.get('c-guitar', 's-media-plan')).allowedActions).toEqual(['VIEW_ATTENDANCE', 'EDIT', 'CANCEL'])
+    expect((await sessionRepository.get('c-guitar', 's-media-plan')).allowedActions).toEqual(['VIEW_ATTENDANCE', 'VIEW_REGISTRATIONS', 'EDIT', 'CANCEL'])
     expect((await sessionRepository.get('c-guitar', 's-media-photo')).allowedActions).toEqual(['VIEW_ATTENDANCE'])
     signInAs('u-mai')
-    expect((await sessionRepository.get('c-guitar', 's-media-plan')).allowedActions).toEqual(['VIEW_ATTENDANCE', 'EDIT', 'CANCEL'])
+    expect((await sessionRepository.get('c-guitar', 's-media-plan')).allowedActions).toEqual(['VIEW_ATTENDANCE', 'VIEW_REGISTRATIONS', 'EDIT', 'CANCEL'])
   })
 
   it('keeps sessions inside their club (NFR-SEC-02)', async () => {

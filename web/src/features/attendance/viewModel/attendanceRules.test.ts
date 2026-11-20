@@ -66,12 +66,12 @@ describe('manual attendance (FR-ATT-07)', () => {
   })
 
   it('counts only members who had joined by the session day, and rejects an unknown filter', async () => {
-    const long = db.memberships.find((membership) => membership.userId === 'u-long' && membership.clubId === 'c-guitar')
-    if (long) long.joinedOn = vnDate(-1)
+    // Buổi không giới hạn chỗ tính cả phạm vi; người gia nhập sau ngày diễn ra buổi không thuộc đối tượng.
+    const nam = db.memberships.find((membership) => membership.userId === 'u-nam' && membership.clubId === 'c-guitar')
+    if (nam) nam.joinedOn = vnDate(1)
     signInAs('u-anh')
-    const fingerstyle = await attendanceRepository.sheet(session('s-fingerstyle'), {})
-    expect(fingerstyle.rows.content.map((row) => row.person.id)).not.toContain('u-long')
-    expect((await attendanceRepository.sheet(weekly, {})).rows.content.map((row) => row.person.id)).toContain('u-long')
+    expect((await attendanceRepository.sheet(weekly, {})).rows.content.map((row) => row.person.id)).not.toContain('u-nam')
+    expect((await attendanceRepository.sheet(session('s-music-rehearsal'), {})).rows.content.map((row) => row.person.id)).toContain('u-nam')
     expect((await fail(attendanceRepository.sheet(weekly, { status: 'MAYBE' as never })))?.status).toBe(400)
   })
 

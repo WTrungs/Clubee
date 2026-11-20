@@ -15,6 +15,8 @@ import { capacityLabel, sessionScopeLabel, seriesLabel } from '../viewModel/sess
 import { useSessionDetailViewModel } from '../viewModel/useSessionDetailViewModel'
 import { AttendancePanel } from './AttendancePanel'
 import { SessionEditSheet } from './SessionEditSheet'
+import { SessionRegistrationList } from './SessionRegistrationList'
+import { SessionSeatPanel } from './SessionSeatPanel'
 import { SessionTimingBadge } from './SessionMeta'
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
@@ -114,7 +116,8 @@ export function SessionDetailPage() {
 
       <Tabs value={vm.tab} onValueChange={vm.setTab}>
         <TabsBar items={vm.tabs} active={vm.tab} aria-label="Nội dung buổi sinh hoạt" />
-        <TabsContent value="info" className="pt-5">
+        <TabsContent value="info" className="space-y-5 pt-5">
+          {session.seats && <SessionSeatPanel clubId={vm.clubId} session={session} seats={session.seats} />}
           <section aria-labelledby="session-info" className="space-y-5 rounded-2xl border bg-card p-5 shadow-sm">
             <h2 id="session-info" className="text-base font-bold">
               Thông tin buổi
@@ -144,6 +147,11 @@ export function SessionDetailPage() {
             )}
           </section>
         </TabsContent>
+        {vm.canViewRegistrations && (
+          <TabsContent value="registrations" className="pt-5">
+            <SessionRegistrationList clubId={vm.clubId} sessionId={vm.sessionId} />
+          </TabsContent>
+        )}
         {vm.canViewAttendance && (
           <TabsContent value="attendance" className="pt-5">
             <AttendancePanel activity={{ type: 'SESSION', clubId: vm.clubId, id: vm.sessionId }} />

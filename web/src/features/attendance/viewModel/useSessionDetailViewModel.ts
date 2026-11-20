@@ -7,7 +7,7 @@ import { useCurrentClub } from '@/features/club/viewModel/clubContext'
 import { sessionRepository } from '../model/sessionRepository'
 import { attendanceQueryKeys } from './attendanceQueryKeys'
 
-export type SessionTab = 'info' | 'attendance'
+export type SessionTab = 'info' | 'registrations' | 'attendance'
 
 export function useSessionDetailViewModel() {
   const { clubId } = useCurrentClub()
@@ -40,8 +40,10 @@ export function useSessionDetailViewModel() {
       void session.refetch()
     },
   })
+  const canViewRegistrations = actions.includes('VIEW_REGISTRATIONS')
   const tabs: Array<{ value: SessionTab; label: string }> = [
     { value: 'info', label: 'Thông tin' },
+    ...(canViewRegistrations ? [{ value: 'registrations' as const, label: 'Đăng ký' }] : []),
     ...(canViewAttendance ? [{ value: 'attendance' as const, label: 'Điểm danh' }] : []),
   ]
   const requested = searchParams.get('tab')
@@ -55,6 +57,7 @@ export function useSessionDetailViewModel() {
     error: session.error,
     refetch: () => void session.refetch(),
     canViewAttendance,
+    canViewRegistrations,
     canEdit: actions.includes('EDIT'),
     canCancel: actions.includes('CANCEL'),
     editOpen,

@@ -19,6 +19,7 @@ import { can } from './mockAccess'
 import { EVENT_STAFF_ACTIVE, isBoardMember } from './mockPermissions'
 import { isEventLead, isEventStaff } from './mockStaffEvents'
 import { holdsSeat } from './mockRegistrations'
+import { activeSessionRegistrations } from './mockSessionRegistrations'
 import { nowIso, shiftDate, toVnIso } from './mockTime'
 import { DEFAULT_ATTENDANCE_LEAD_MINUTES, DEFAULT_QR_ROTATE_SECONDS } from './seed/attendanceSeed'
 import type { DbEvent } from './seed/eventSeed'
@@ -91,13 +92,18 @@ export function sessionActivity(session: DbSession): AttendanceActivity {
     canClose: manages,
     opensAt: () => minutesBefore(session.startAt, leadMinutesOf(session.clubId)),
     startsAt: () => session.startAt,
-    // Chỉ tính người đã gia nhập trước hoặc trong ngày diễn ra buổi.
-    expected: () =>
-      db.memberships
-        .filter((membership) => membership.clubId === session.clubId && WORKING_STATUSES.includes(membership.status))
+    // Buổi có số chỗ: đối tượng là người giữ chỗ (FR-ATT-03); không giới hạn: cả phạm vi, đã gia nhập trước ngày buổi.
+    expected: () => {
+      const working = db.memberships.filter((membership) => membership.clubId === session.clubId && WORKING_STATUSES.includes(membership.status))
+      if (session.capacity !== null) {
+        const seated = new Set(activeSessionRegistrations(session.id).filter((registration) => registration.status === 'CONFIRMED').map((registration) => registration.userId))
+        return working.filter((membership) => seated.has(membership.userId)).map((membership) => membership.userId)
+      }
+      return working
         .filter((membership) => session.departmentId === null || membership.departmentId === session.departmentId)
         .filter((membership) => membership.joinedOn === null || membership.joinedOn <= sessionDay)
-        .map((membership) => membership.userId),
+        .map((membership) => membership.userId)
+    },
     forbidden: {
       view: 'Chỉ người phụ trách buổi và ban chủ nhiệm xem được điểm danh.',
       mark: 'Chỉ người phụ trách buổi và ban chủ nhiệm được điểm danh.',

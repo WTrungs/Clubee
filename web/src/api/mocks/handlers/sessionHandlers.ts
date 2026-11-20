@@ -6,14 +6,27 @@ import type {
   CreateSessionSeriesRequest,
   SessionAction,
   SessionDetail,
+  SessionRegistrationRow,
   SessionSummary,
   UpdateSessionRequest,
 } from '@/features/attendance/model/sessionTypes'
-import { formatDate, formatTime, formatTimeRange } from '@/shared/format/formatDate'
+import { formatDate, formatDateTime, formatTime, formatTimeRange } from '@/shared/format/formatDate'
 import { REASON_MAX, REASON_MIN } from '@/shared/lib/reasonRules'
 import { recurrenceDays, recurrenceError, seriesTimes, vnDayOf, type RecurrenceFrequency } from '@/shared/lib/sessionRecurrence'
-import { db, type DbSession } from '../db'
+import { db, type DbSession, type DbSessionRegistration } from '../db'
 import { managesSession, sessionAudience, sessionScopesFor } from '../mockAttendance'
+import {
+  activeSessionRegistrations,
+  mySessionRegistration,
+  promoteSessionWaitlist,
+  sessionCancelDeadline,
+  sessionRegistrationClosesAt,
+  sessionRegistrationOpen,
+  sessionSeats,
+  sessionSeatsTaken,
+  sessionWaitlistPosition,
+  toMySessionRegistration,
+} from '../mockSessionRegistrations'
 import { API, currentUser, matchesKeyword, networkDelay, newId, paginate, problem, writer } from '../mockHttp'
 import { canAccessClub, isActiveMember, personRef } from '../mockMembers'
 import { notify, sessionTarget } from '../mockNotifications'
@@ -48,13 +61,25 @@ function toSummary(session: DbSession): SessionSummary {
   }
 }
 
-/** Buổi đã hủy không còn điểm danh; sửa, hủy chỉ trước giờ bắt đầu. */
+/** Người gọi tự đăng ký được (FR-ATT-03): thuộc đối tượng, buổi còn nhận đăng ký, chưa có đăng ký còn hiệu lực. */
+const canRegister = (session: DbSession, userId: string) =>
+  sessionRegistrationOpen(session) && sessionAudience(session).includes(userId) && !mySessionRegistration(userId, session.id)
+
+/** Buổi đã hủy không còn thao tác nào; sửa, hủy chỉ trước giờ bắt đầu. */
 function sessionActions(session: DbSession, userId: string): SessionAction[] {
-  if (session.cancelledAt !== null || !managesSession(userId, session)) return []
-  return ['VIEW_ATTENDANCE', ...(Date.parse(session.startAt) > Date.now() ? (['EDIT', 'CANCEL'] as const) : [])]
+  if (session.cancelledAt !== null) return []
+  const actions: SessionAction[] = []
+  if (managesSession(userId, session)) {
+    actions.push('VIEW_ATTENDANCE')
+    if (session.capacity !== null) actions.push('VIEW_REGISTRATIONS')
+    if (Date.parse(session.startAt) > Date.now()) actions.push('EDIT', 'CANCEL')
+  }
+  if (canRegister(session, userId)) actions.push('REGISTER')
+  return actions
 }
 
 function toDetail(session: DbSession, userId: string): SessionDetail {
+  const mine = mySessionRegistration(userId, session.id)
   return {
     ...toSummary(session),
     description: session.description,
@@ -63,6 +88,8 @@ function toDetail(session: DbSession, userId: string): SessionDetail {
     allowedActions: sessionActions(session, userId),
     cancellation:
       session.cancelledAt && session.cancelledBy ? { by: personRef(session.cancelledBy), at: session.cancelledAt, reason: session.cancelReason ?? '' } : null,
+    seats: sessionSeats(session),
+    myRegistration: mine ? toMySessionRegistration(session, mine) : null,
     version: session.version,
   }
 }
@@ -119,6 +146,20 @@ function newSession(fields: Omit<DbSession, 'id' | 'createdAt' | 'cancelledAt' |
 
 function findSession(params: Record<string, string | readonly string[] | undefined>) {
   return db.sessions.find((candidate) => candidate.id === params.sessionId && candidate.clubId === String(params.clubId))
+}
+
+/** Luật số chỗ khi sửa buổi đã có người đăng ký (FR-ATT-03): không hạ dưới số chỗ đang giữ, không bỏ giới hạn. */
+function capacityRule(session: DbSession, capacity: unknown): Response | null {
+  const registered = activeSessionRegistrations(session.id).length
+  if (registered === 0) return null
+  if (capacity === null || capacity === undefined) {
+    return problem(422, `Buổi đã có ${registered} người đăng ký nên không bỏ giới hạn chỗ được.`, 'CAPACITY_REQUIRED')
+  }
+  const taken = sessionSeatsTaken(session.id)
+  if (typeof capacity === 'number' && Number.isInteger(capacity) && capacity < taken) {
+    return problem(422, `Đã có ${taken} người giữ chỗ nên số chỗ không thể ít hơn ${taken}.`, 'CAPACITY_BELOW_TAKEN')
+  }
+  return null
 }
 
 /** Kiểm tra chung cho sửa, hủy: người phụ trách → version → đã hủy → đã bắt đầu. */
@@ -261,6 +302,8 @@ export const sessionHandlers = [
     const body = (await request.json()) as Partial<UpdateSessionRequest>
     const blocked = editGuard(session, user.value.id, body.version, 'sửa')
     if (blocked) return blocked
+    const seatRule = capacityRule(session, body.capacity)
+    if (seatRule) return seatRule
     const { title, description, location, errors } = validate(body)
     if (errors.length > 0) return problem(400, 'Thông tin buổi sinh hoạt chưa hợp lệ.', 'VALIDATION', errors)
     const sameTime = (a: string, b: unknown) => typeof b === 'string' && Date.parse(a) === Date.parse(b)
@@ -275,6 +318,8 @@ export const sessionHandlers = [
       registrationDeadline: body.registrationDeadline ?? null,
       version: session.version + 1,
     })
+    // Tăng số chỗ thì người đầu danh sách chờ được nhận chỗ ngay.
+    promoteSessionWaitlist(session, user.value.id)
     if (moved) {
       notify(sessionAudience(session), {
         clubId,
@@ -313,5 +358,83 @@ export const sessionHandlers = [
       actorId: user.value.id,
     })
     return HttpResponse.json(toDetail(session, user.value.id))
+  }),
+
+  // FR-ATT-03: tự đăng ký buổi có giới hạn chỗ; hết chỗ thì vào danh sách chờ theo thứ tự đăng ký (BR-EVT-03).
+  http.post(`${API}/clubs/:clubId/sessions/:sessionId/registrations`, async ({ request, params }) => {
+    await networkDelay()
+    const user = writer(request)
+    if (!user.ok) return user.response
+    const clubId = String(params.clubId)
+    if (!canAccessClub(user.value.id, clubId)) return notMember()
+    const session = findSession(params)
+    if (!session) return problem(404, 'Không tìm thấy buổi sinh hoạt.', 'SESSION_NOT_FOUND')
+    if (!sessionAudience(session).includes(user.value.id)) {
+      return problem(403, 'Chỉ thành viên Thử việc, Chính thức thuộc phạm vi của buổi được đăng ký.', 'FORBIDDEN')
+    }
+    if (mySessionRegistration(user.value.id, session.id)) return problem(409, 'Bạn đã đăng ký buổi này.', 'ALREADY_REGISTERED')
+    if (session.cancelledAt) return problem(422, 'Buổi sinh hoạt đã hủy.', 'SESSION_CANCELLED')
+    if (session.capacity === null) return problem(422, 'Buổi không giới hạn chỗ nên không cần đăng ký.', 'REGISTRATION_NOT_REQUIRED')
+    if (!sessionRegistrationOpen(session)) {
+      return problem(422, `Buổi đã hết hạn đăng ký (${formatDateTime(sessionRegistrationClosesAt(session))}).`, 'REGISTRATION_CLOSED')
+    }
+    db.sessionRegistrations.push({
+      id: newId('sr'),
+      sessionId: session.id,
+      userId: user.value.id,
+      status: sessionSeatsTaken(session.id) < session.capacity ? 'CONFIRMED' : 'WAITLISTED',
+      registeredAt: nowIso(),
+      cancelledAt: null,
+      promotedAt: null,
+    })
+    return HttpResponse.json(toDetail(session, user.value.id), { status: 201 })
+  }),
+
+  http.post(`${API}/clubs/:clubId/sessions/:sessionId/registrations/:registrationId/cancellation`, async ({ request, params }) => {
+    await networkDelay()
+    const user = writer(request)
+    if (!user.ok) return user.response
+    const clubId = String(params.clubId)
+    if (!canAccessClub(user.value.id, clubId)) return notMember()
+    const session = findSession(params)
+    const registration = db.sessionRegistrations.find((candidate) => candidate.id === params.registrationId && candidate.sessionId === params.sessionId)
+    // Chỉ chính người đăng ký hủy được; đăng ký của người khác coi như không tồn tại.
+    if (!session || !registration || registration.userId !== user.value.id) return problem(404, 'Không tìm thấy đăng ký.', 'REGISTRATION_NOT_FOUND')
+    if (registration.status === 'CANCELLED') return problem(422, 'Đăng ký này đã hủy.', 'REGISTRATION_CANCELLED')
+    if (session.cancelledAt) return problem(422, 'Buổi sinh hoạt đã hủy.', 'SESSION_CANCELLED')
+    const deadline = sessionCancelDeadline(session, registration)
+    if (Date.parse(deadline) <= Date.now()) {
+      return problem(422, `Đã qua hạn hủy đăng ký (${formatDateTime(deadline)}). Báo người phụ trách buổi nếu bạn không đến được.`, 'CANCEL_DEADLINE_PASSED')
+    }
+    const freesSeat = registration.status === 'CONFIRMED'
+    Object.assign(registration, { status: 'CANCELLED', cancelledAt: nowIso() })
+    if (freesSeat) promoteSessionWaitlist(session, user.value.id)
+    return HttpResponse.json(toDetail(session, user.value.id))
+  }),
+
+  http.get(`${API}/clubs/:clubId/sessions/:sessionId/registrations`, async ({ request, params }) => {
+    await networkDelay()
+    const user = currentUser()
+    if (!user.ok) return user.response
+    const clubId = String(params.clubId)
+    if (!canAccessClub(user.value.id, clubId)) return notMember()
+    const session = findSession(params)
+    if (!session) return problem(404, 'Không tìm thấy buổi sinh hoạt.', 'SESSION_NOT_FOUND')
+    if (!managesSession(user.value.id, session)) return problem(403, 'Chỉ người phụ trách buổi và ban chủ nhiệm xem được danh sách đăng ký.', 'FORBIDDEN')
+    const url = new URL(request.url)
+    const keyword = url.searchParams.get('q')
+    const order = (registration: DbSessionRegistration) => (registration.status === 'CONFIRMED' ? 0 : 1)
+    const rows: SessionRegistrationRow[] = activeSessionRegistrations(session.id)
+      .filter((registration) => matchesKeyword(personRef(registration.userId).fullName, keyword))
+      .toSorted((a, b) => order(a) - order(b) || (sessionWaitlistPosition(a) ?? 0) - (sessionWaitlistPosition(b) ?? 0) || Date.parse(a.registeredAt) - Date.parse(b.registeredAt))
+      .map((registration) => ({
+        id: registration.id,
+        attendee: personRef(registration.userId),
+        status: registration.status as SessionRegistrationRow['status'],
+        waitlistPosition: sessionWaitlistPosition(registration),
+        registeredAt: registration.registeredAt,
+        promotedAt: registration.promotedAt,
+      }))
+    return HttpResponse.json(paginate(rows, url, 20))
   }),
 ]

@@ -30,6 +30,9 @@ export function useSessionEditViewModel(clubId: string, session: SessionDetail, 
       baseline.accept(saved.version, toSessionFormValues(saved))
       queryClient.setQueryData(attendanceQueryKeys.session(clubId, saved.id), saved)
       void queryClient.invalidateQueries({ queryKey: attendanceQueryKeys.sessionLists })
+      // Tăng số chỗ có thể đôn người chờ (FR-ATT-03): danh sách đăng ký và đối tượng điểm danh đổi theo.
+      void queryClient.invalidateQueries({ queryKey: attendanceQueryKeys.registrationsOf(clubId, saved.id) })
+      void queryClient.invalidateQueries({ queryKey: attendanceQueryKeys.sheets({ type: 'SESSION', clubId, id: saved.id }) })
       toast.success(`Đã lưu buổi “${saved.title}”.`)
       onDone()
     },

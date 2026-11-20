@@ -1,4 +1,6 @@
 import type { AttendanceActivityType, AttendanceMethod, AttendanceStatus } from '@/features/attendance/model/attendanceTypes'
+import type { SessionRegistrationStatus } from '@/features/attendance/model/sessionTypes'
+import type { DbMembership } from './memberSeed'
 import { toVnIso, vnDate, vnDayAt } from '../mockTime'
 
 /** Tham số CLB ở SRS 9.2. */
@@ -27,6 +29,18 @@ export interface DbSession {
   cancelledBy: string | null
   cancelReason: string | null
   version: number
+}
+
+/** Đăng ký buổi có giới hạn chỗ (FR-ATT-03); đăng ký đã hủy vẫn giữ để tra cứu. */
+export interface DbSessionRegistration {
+  id: string
+  sessionId: string
+  userId: string
+  status: SessionRegistrationStatus
+  registeredAt: string
+  cancelledAt: string | null
+  /** Lúc được đôn từ danh sách chờ (BR-EVT-03). */
+  promotedAt: string | null
 }
 
 /** Mỗi người tối đa một bản ghi cho mỗi buổi, hoặc mỗi ngày của sự kiện (BR-ATT-01). */
@@ -143,7 +157,7 @@ export function createSessionSeed(): DbSession[] {
       startAt: vnDayAt(3, 18, 30),
       endAt: vnDayAt(3, 20, 30),
       location: 'Phòng truyền thông A2',
-      capacity: 12,
+      capacity: 2,
       registrationDeadline: vnDayAt(2, 23, 59),
       createdBy: 'u-linh',
       createdAt: vnDayAt(-1, 21),
@@ -229,4 +243,27 @@ export function createAttendanceSheetSeed(): DbAttendanceSheet[] {
     sheet('EVENT', 'e-exchange', vnDate(-10), 2),
     sheet('EVENT', 'e-livestream', vnDate(0), 1),
   ]
+}
+
+/**
+ * Đăng ký của các buổi có số chỗ. Buổi luyện ngón (đã qua) có mọi thành viên Thử việc, Chính thức gia nhập trước ngày buổi
+ * giữ chỗ, để đối tượng điểm danh không đổi; buổi kế hoạch truyền thông đã kín 2 chỗ.
+ */
+export function createSessionRegistrationSeed(source: { memberships: readonly DbMembership[]; sessions: readonly DbSession[] }): DbSessionRegistration[] {
+  const registration = (id: string, sessionId: string, userId: string, registeredAt: string): DbSessionRegistration => ({
+    id,
+    sessionId,
+    userId,
+    status: 'CONFIRMED',
+    registeredAt,
+    cancelledAt: null,
+    promotedAt: null,
+  })
+  const fingerstyle = source.sessions.find((session) => session.id === 's-fingerstyle')
+  const fingerstyleDay = fingerstyle ? toVnIso(Date.parse(fingerstyle.startAt)).slice(0, 10) : vnDate(-2)
+  const fingerstyleSeats = source.memberships
+    .filter((membership) => membership.clubId === 'c-guitar' && (membership.status === 'ACTIVE' || membership.status === 'PROBATION'))
+    .filter((membership) => membership.joinedOn === null || membership.joinedOn <= fingerstyleDay)
+    .map((membership, index) => registration(`sr-finger-${index + 1}`, 's-fingerstyle', membership.userId, vnDayAt(-5, 9, index)))
+  return [...fingerstyleSeats, registration('sr-plan-vy', 's-media-plan', 'u-vy', vnDayAt(-1, 21, 30)), registration('sr-plan-linh', 's-media-plan', 'u-linh', vnDayAt(-1, 21, 40))]
 }

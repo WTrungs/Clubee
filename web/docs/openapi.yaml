@@ -3289,7 +3289,9 @@ paths:
       summary: Chi tiết buổi sinh hoạt
       description: |
         `allowedActions` có `VIEW_ATTENDANCE` khi người gọi là người phụ trách buổi: người tạo, ban chủ nhiệm, Trưởng ban,
-        Phó ban của ban đó (còn Thử việc hoặc Chính thức); thêm `EDIT`, `CANCEL` khi buổi chưa bắt đầu. Buổi đã hủy không có thao tác nào.
+        Phó ban của ban đó (còn Thử việc hoặc Chính thức); thêm `VIEW_REGISTRATIONS` khi buổi có số chỗ, `EDIT`, `CANCEL` khi buổi chưa bắt đầu.
+        `REGISTER` khi người gọi thuộc đối tượng, buổi có số chỗ, còn hạn đăng ký và người gọi chưa có đăng ký còn hiệu lực.
+        Buổi đã hủy không có thao tác nào.
         Lỗi: 403 `NOT_A_MEMBER`; 404 `SESSION_NOT_FOUND`.
       parameters:
         - $ref: '#/components/parameters/ClubId'
@@ -3310,12 +3312,14 @@ paths:
       description: |
         Chỉ người phụ trách buổi, trước giờ bắt đầu. Chỉ đổi buổi này, các buổi khác trong chuỗi giữ nguyên; không đổi được phạm vi.
         Kiểm tra trường như khi tạo. Đổi giờ hoặc địa điểm thì báo đối tượng của buổi.
+        Buổi đã có đăng ký (FR-ATT-03): không bỏ giới hạn chỗ (422 `CAPACITY_REQUIRED`), không hạ dưới số người đang giữ chỗ
+        (422 `CAPACITY_BELOW_TAKEN`); tăng số chỗ thì đôn người đầu danh sách chờ.
 
         Lỗi (theo thứ tự):
         - 403 `FORBIDDEN`, `NOT_A_MEMBER`, `CSRF`.
         - 404 `SESSION_NOT_FOUND`.
         - 409 `VERSION_CONFLICT`.
-        - 422 `SESSION_CANCELLED`, `SESSION_STARTED`.
+        - 422 `SESSION_CANCELLED`, `SESSION_STARTED`, `CAPACITY_REQUIRED`, `CAPACITY_BELOW_TAKEN`.
         - 400 `VALIDATION`.
       security:
         - sessionCookie: []
@@ -3377,6 +3381,90 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+  /clubs/{clubId}/sessions/{sessionId}/registrations:
+    get:
+      tags: [ATT]
+      operationId: listSessionRegistrations
+      summary: Danh sách đăng ký của buổi (FR-ATT-03)
+      description: |
+        Chỉ người phụ trách buổi. Đăng ký còn hiệu lực: người giữ chỗ trước (theo thời điểm đăng ký), rồi danh sách chờ theo thứ tự.
+        Lỗi: 403 `FORBIDDEN`, `NOT_A_MEMBER`; 404 `SESSION_NOT_FOUND`.
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - $ref: '#/components/parameters/SessionId'
+        - $ref: '#/components/parameters/Q'
+        - $ref: '#/components/parameters/Page'
+        - name: size
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 20 }
+      responses:
+        '200':
+          description: Trang đăng ký.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SessionRegistrationPage' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [ATT]
+      operationId: registerSession
+      summary: Tự đăng ký buổi giới hạn chỗ (FR-ATT-03)
+      description: |
+        Người gọi phải thuộc đối tượng của buổi (Thử việc, Chính thức của CLB hoặc của ban). Còn chỗ thì Nhận chỗ, hết chỗ thì vào
+        danh sách chờ theo thứ tự đăng ký (BR-EVT-03). Buổi có số chỗ thì đối tượng điểm danh là người đang giữ chỗ.
+
+        Lỗi (theo thứ tự):
+        - 403 `FORBIDDEN`, `NOT_A_MEMBER`, `CSRF`.
+        - 404 `SESSION_NOT_FOUND`.
+        - 409 `ALREADY_REGISTERED`.
+        - 422 `SESSION_CANCELLED`, `REGISTRATION_NOT_REQUIRED` (buổi không giới hạn chỗ), `REGISTRATION_CLOSED` (qua hạn đăng ký hoặc đã bắt đầu).
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - $ref: '#/components/parameters/SessionId'
+      responses:
+        '201':
+          description: Buổi sau khi đăng ký, có `myRegistration`.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SessionDetail' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+  /clubs/{clubId}/sessions/{sessionId}/registrations/{registrationId}/cancellation:
+    post:
+      tags: [ATT]
+      operationId: cancelSessionRegistration
+      summary: Tự hủy đăng ký buổi (FR-ATT-03)
+      description: |
+        Chỉ chính người đăng ký. Người giữ chỗ hủy được tới trước giờ bắt đầu `registrationCancelHours` giờ; người ở danh sách chờ
+        tới giờ bắt đầu. Hủy một chỗ đang giữ thì người đầu danh sách chờ được nhận chỗ và được báo (BR-EVT-03).
+        Lỗi: 404 `REGISTRATION_NOT_FOUND`; 422 `REGISTRATION_CANCELLED`, `SESSION_CANCELLED`, `CANCEL_DEADLINE_PASSED` (kèm hạn).
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - $ref: '#/components/parameters/SessionId'
+        - name: registrationId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Buổi sau khi hủy đăng ký.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SessionDetail' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
         '422': { $ref: '#/components/responses/UnprocessableEntity' }
   /clubs/{clubId}/sessions/{sessionId}/attendance:
     get:
@@ -7444,7 +7532,7 @@ components:
       allOf:
         - $ref: '#/components/schemas/SessionSummary'
         - type: object
-          required: [description, creator, createdAt, allowedActions, cancellation, version]
+          required: [description, creator, createdAt, allowedActions, cancellation, seats, myRegistration, version]
           properties:
             description: { type: string }
             creator: { $ref: '#/components/schemas/PersonRef' }
@@ -7453,7 +7541,7 @@ components:
               type: array
               items:
                 type: string
-                enum: [VIEW_ATTENDANCE, EDIT, CANCEL]
+                enum: [VIEW_ATTENDANCE, VIEW_REGISTRATIONS, EDIT, CANCEL, REGISTER]
             cancellation:
               description: Có khi buổi đã hủy.
               oneOf:
@@ -7464,6 +7552,21 @@ components:
                     by: { $ref: '#/components/schemas/PersonRef' }
                     at: { type: string, format: date-time }
                     reason: { type: string }
+            seats:
+              description: '`null` với buổi không giới hạn chỗ.'
+              oneOf:
+                - type: 'null'
+                - type: object
+                  required: [capacity, taken, waitlist]
+                  properties:
+                    capacity: { type: integer, minimum: 1 }
+                    taken: { type: integer, minimum: 0 }
+                    waitlist: { type: integer, minimum: 0 }
+            myRegistration:
+              description: Đăng ký còn hiệu lực của người gọi.
+              oneOf:
+                - type: 'null'
+                - $ref: '#/components/schemas/MySessionRegistration'
             version: { type: integer }
     SessionPage:
       allOf:
@@ -7521,6 +7624,42 @@ components:
         capacity: { type: [integer, 'null'], minimum: 1, maximum: 99999 }
         registrationDeadline: { $ref: '#/components/schemas/NullableDateTime' }
         version: { type: integer }
+    SessionRegistrationStatus:
+      type: string
+      description: Nhận chỗ, Danh sách chờ, Đã hủy.
+      enum: [CONFIRMED, WAITLISTED, CANCELLED]
+    MySessionRegistration:
+      type: object
+      required: [id, status, waitlistPosition, registeredAt, promotedAt, cancelDeadline, allowedActions]
+      properties:
+        id: { type: string }
+        status: { $ref: '#/components/schemas/SessionRegistrationStatus' }
+        waitlistPosition: { type: [integer, 'null'], minimum: 1 }
+        registeredAt: { type: string, format: date-time }
+        promotedAt: { $ref: '#/components/schemas/NullableDateTime' }
+        cancelDeadline: { type: string, format: date-time }
+        allowedActions:
+          type: array
+          items: { type: string, enum: [CANCEL] }
+    SessionRegistrationRow:
+      type: object
+      required: [id, attendee, status, waitlistPosition, registeredAt, promotedAt]
+      properties:
+        id: { type: string }
+        attendee: { $ref: '#/components/schemas/PersonRef' }
+        status: { type: string, enum: [CONFIRMED, WAITLISTED] }
+        waitlistPosition: { type: [integer, 'null'], minimum: 1 }
+        registeredAt: { type: string, format: date-time }
+        promotedAt: { $ref: '#/components/schemas/NullableDateTime' }
+    SessionRegistrationPage:
+      allOf:
+        - $ref: '#/components/schemas/PageMeta'
+        - type: object
+          required: [content]
+          properties:
+            content:
+              type: array
+              items: { $ref: '#/components/schemas/SessionRegistrationRow' }
     CancelSessionRequest:
       type: object
       required: [reason, version]
