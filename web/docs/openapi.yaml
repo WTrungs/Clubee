@@ -39,6 +39,8 @@ tags:
     description: Tài chính (SRS 5.10)
   - name: NOT
     description: Thông báo (SRS 5.13)
+  - name: DOC
+    description: Tài liệu (SRS 5.12)
   - name: RPT
     description: Báo cáo, nhật ký (SRS 5.15)
 security:
@@ -3236,6 +3238,158 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+  /clubs/{clubId}/document-scopes:
+    get:
+      tags: [DOC]
+      operationId: listDocumentScopes
+      summary: Nơi tôi được tải tài liệu lên (FR-DOC-01)
+      description: Theo quyền `MANAGE_DOCUMENTS` của bảng phân quyền và phạm vi chức vụ (CLB, ban đang hoạt động, sự kiện còn hoạt động). Rỗng khi không tải lên được. Lỗi 403 `NOT_A_MEMBER`.
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+      responses:
+        '200':
+          description: Các nơi.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/DocumentScopeOption' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /clubs/{clubId}/documents:
+    get:
+      tags: [DOC]
+      operationId: listDocuments
+      summary: Tìm tài liệu (FR-DOC-02)
+      description: |
+        Chỉ trả tài liệu người gọi được xem: `CLUB` mọi thành viên; `OWNER` thành viên có ban chính là ban sở hữu, hoặc BTC sự kiện sở hữu;
+        ban chủ nhiệm xem mọi tài liệu. `q` tìm theo tên, tên tệp, nhãn. Mới tải lên trước, 50 dòng một trang. Lỗi 403 `NOT_A_MEMBER`.
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - $ref: '#/components/parameters/Q'
+        - name: tag
+          in: query
+          schema: { type: string }
+        - name: termId
+          in: query
+          schema: { type: string }
+        - name: ownerType
+          in: query
+          schema: { type: string, enum: [CLUB, DEPARTMENT, EVENT] }
+        - name: ownerId
+          in: query
+          schema: { type: string }
+        - $ref: '#/components/parameters/Page'
+      responses:
+        '200':
+          description: Trang tài liệu.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DocumentPage' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [DOC]
+      operationId: uploadDocument
+      summary: Tải tài liệu lên (FR-DOC-01)
+      description: |
+        multipart: `file` (IF-05: JPG, PNG, PDF, DOCX, XLSX, PPTX, tối đa 15 MB), `title` 3–150, `description` tối đa 1000, `ownerType`,
+        `ownerId` (bỏ khi `CLUB`), `termId` (web luôn gửi, mặc định nhiệm kỳ hiện tại; thiếu thì máy chủ lấy nhiệm kỳ hiện tại), `tags` lặp lại tối đa 10 (mỗi nhãn tối đa 30 ký tự), `visibility`.
+        Người tải lên được chụp họ tên; người đó rời CLB thì tài liệu vẫn còn.
+        Lỗi (theo thứ tự): 403 `NOT_A_MEMBER`, `CSRF`, `FORBIDDEN` (không có quyền Quản lý tài liệu ở đâu, hoặc ở nơi chọn); 400 `VALIDATION`.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file, title, ownerType, visibility]
+              properties:
+                file: { type: string, format: binary }
+                title: { type: string, minLength: 3, maxLength: 150 }
+                description: { type: string, maxLength: 1000 }
+                ownerType: { type: string, enum: [CLUB, DEPARTMENT, EVENT] }
+                ownerId: { type: string }
+                termId: { type: string }
+                tags:
+                  type: array
+                  maxItems: 10
+                  items: { type: string, maxLength: 30 }
+                visibility: { $ref: '#/components/schemas/DocumentVisibility' }
+      responses:
+        '201':
+          description: Tài liệu vừa tải lên.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DocumentDetail' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /clubs/{clubId}/documents/facets:
+    get:
+      tags: [DOC]
+      operationId: getDocumentFacets
+      summary: Nhãn, nhiệm kỳ, nơi sở hữu để lọc (FR-DOC-02)
+      description: Chỉ tính trên tài liệu người gọi xem được. Lỗi 403 `NOT_A_MEMBER`.
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+      responses:
+        '200':
+          description: Giá trị lọc.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DocumentFacets' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /clubs/{clubId}/documents/{documentId}:
+    get:
+      tags: [DOC]
+      operationId: getDocument
+      summary: Chi tiết tài liệu (FR-DOC-02)
+      description: Lỗi 403 `NOT_A_MEMBER`, `FORBIDDEN` (không còn quyền xem); 404 `DOCUMENT_NOT_FOUND`.
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - name: documentId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Tài liệu.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DocumentDetail' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /clubs/{clubId}/documents/{documentId}/file:
+    get:
+      tags: [DOC]
+      operationId: downloadDocument
+      summary: Tải tài liệu xuống (FR-DOC-02)
+      description: |
+        Kiểm lại quyền xem mỗi lần tải. Trả nội dung tệp kèm `Content-Disposition: attachment` (`filename*` UTF-8) và `Cache-Control: no-store`.
+        Lỗi 403 `NOT_A_MEMBER`, `FORBIDDEN`; 404 `DOCUMENT_NOT_FOUND`.
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - name: documentId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Nội dung tệp.
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
   /me/club-history:
     get:
       tags: [RPT]
@@ -5409,7 +5563,7 @@ components:
         version: { type: integer }
     PermissionKey:
       type: string
-      enum: [CONFIGURE_CLUB, MANAGE_TERMS, MANAGE_DEPARTMENTS, ASSIGN_POSITIONS, EDIT_PERMISSIONS, MANAGE_MEMBERS, CREATE_EVENT, APPROVE_EVENT, RUN_EVENT, MANAGE_EVENT_STAFF, ASSIGN_TASK, MANAGE_SESSIONS, SEND_ANNOUNCEMENT, PROPOSE_EXPENSE, APPROVE_EXPENSE, RECORD_LEDGER]
+      enum: [CONFIGURE_CLUB, MANAGE_TERMS, MANAGE_DEPARTMENTS, ASSIGN_POSITIONS, EDIT_PERMISSIONS, MANAGE_MEMBERS, CREATE_EVENT, APPROVE_EVENT, RUN_EVENT, MANAGE_EVENT_STAFF, ASSIGN_TASK, MANAGE_SESSIONS, SEND_ANNOUNCEMENT, MANAGE_DOCUMENTS, PROPOSE_EXPENSE, APPROVE_EXPENSE, RECORD_LEDGER]
     PermissionMatrixCell:
       type: object
       required: [role, permission, enabled, defaultEnabled, state, lockReason]
@@ -5455,7 +5609,7 @@ components:
           type: array
           description: Mỗi ô (`role`, `permission`) xuất hiện tối đa một lần; ô lặp trả 400.
           minItems: 1
-          maxItems: 112
+          maxItems: 119
           items:
             type: object
             required: [role, permission, enabled]
@@ -8026,6 +8180,77 @@ components:
           type: array
           items: { type: string, enum: [DECIDE] }
         version: { type: integer }
+    DocumentVisibility:
+      type: string
+      description: '`CLUB` toàn CLB; `OWNER` ban hoặc BTC của nơi sở hữu (kèm ban chủ nhiệm); `BOARD` chỉ ban chủ nhiệm.'
+      enum: [CLUB, OWNER, BOARD]
+    DocumentOwner:
+      type: object
+      required: [type, id, name]
+      properties:
+        type: { type: string, enum: [CLUB, DEPARTMENT, EVENT] }
+        id: { $ref: '#/components/schemas/NullableString' }
+        name: { type: string }
+    DocumentScopeOption:
+      $ref: '#/components/schemas/DocumentOwner'
+    DocumentSummary:
+      type: object
+      required: [id, title, fileName, fileSize, contentType, owner, term, tags, visibility, uploadedBy, uploadedAt]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        fileName: { type: string }
+        fileSize: { type: integer }
+        contentType: { type: string }
+        owner: { $ref: '#/components/schemas/DocumentOwner' }
+        term:
+          oneOf:
+            - type: 'null'
+            - type: object
+              required: [id, name]
+              properties:
+                id: { type: string }
+                name: { type: string }
+        tags:
+          type: array
+          items: { type: string }
+        visibility: { $ref: '#/components/schemas/DocumentVisibility' }
+        uploadedBy: { $ref: '#/components/schemas/PersonRef' }
+        uploadedAt: { type: string, format: date-time }
+    DocumentDetail:
+      allOf:
+        - $ref: '#/components/schemas/DocumentSummary'
+        - type: object
+          required: [description]
+          properties:
+            description: { type: string }
+    DocumentPage:
+      allOf:
+        - $ref: '#/components/schemas/PageMeta'
+        - type: object
+          required: [content]
+          properties:
+            content:
+              type: array
+              items: { $ref: '#/components/schemas/DocumentSummary' }
+    DocumentFacets:
+      type: object
+      required: [tags, terms, owners]
+      properties:
+        tags:
+          type: array
+          items: { type: string }
+        terms:
+          type: array
+          items:
+            type: object
+            required: [id, name]
+            properties:
+              id: { type: string }
+              name: { type: string }
+        owners:
+          type: array
+          items: { $ref: '#/components/schemas/DocumentOwner' }
     ClubHistoryEntry:
       type: object
       required: [clubId, clubName, status, departmentName, joinedOn, leftOn]

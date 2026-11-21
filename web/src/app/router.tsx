@@ -101,6 +101,7 @@ export const router = createBrowserRouter([
                         path: 'sessions/:sessionId',
                         lazy: () => import('@/features/attendance/view/SessionDetailPage').then((module) => ({ Component: module.SessionDetailPage })),
                       },
+                      { path: 'documents', lazy: () => import('@/features/document/view/DocumentsPage').then((module) => ({ Component: module.DocumentsPage })) },
                       { path: 'finance', lazy: () => import('@/features/finance/view/FinancePage').then((module) => ({ Component: module.FinancePage })) },
                     ],
                   },

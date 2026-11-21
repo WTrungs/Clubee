@@ -30,7 +30,7 @@ describe('viewing the permission matrix (FR-ORG-05)', () => {
     signInAs('u-anh')
     const matrix = await orgRepository.permissionMatrix('c-guitar')
     expect(matrix).toMatchObject({ version: 1, changedFromDefault: 0, allowedActions: ['EDIT', 'RESET'] })
-    expect(matrix.cells).toHaveLength(16 * 7)
+    expect(matrix.cells).toHaveLength(17 * 7)
     expect(cell(matrix, 'PRESIDENT', 'MANAGE_MEMBERS')).toMatchObject({ state: 'OWN_ROLE', enabled: true })
     expect(cell(matrix, 'PRESIDENT', 'EDIT_PERMISSIONS')).toMatchObject({ state: 'LOCKED', lockReason: expect.stringContaining('Chủ nhiệm luôn giữ') })
     expect(cell(matrix, 'EVENT_LEAD', 'APPROVE_EXPENSE')).toMatchObject({ state: 'LOCKED', enabled: false })
@@ -123,7 +123,7 @@ describe('editing the matrix (FR-ORG-05, BR-ACL-01..05)', () => {
     const put = (changes: unknown[]) => fail(orgRepository.updatePermissionMatrix('c-guitar', { changes: changes as PermissionChange[], version: 1 }))
     const one: PermissionChange = { role: 'TREASURER', permission: 'MANAGE_MEMBERS', enabled: false }
     expect(await put([])).toMatchObject({ status: 400, detail: 'Chưa có thay đổi nào để lưu.' })
-    expect(await put(Array.from({ length: 113 }, () => one))).toMatchObject({ status: 400, detail: 'Mỗi lần lưu tối đa 112 ô.' })
+    expect(await put(Array.from({ length: 120 }, () => one))).toMatchObject({ status: 400, detail: 'Mỗi lần lưu tối đa 119 ô.' })
     expect(await put([one, one])).toMatchObject({ status: 400, fieldErrors: [{ field: 'changes', message: 'Có ô bị lặp.' }] })
     expect(await put([one, { role: 'MEMBER', permission: 'MANAGE_MEMBERS', enabled: true }])).toMatchObject({ status: 400, fieldErrors: [{ field: 'changes[1]' }] })
     expect(db.permissionOverrides).toEqual([])

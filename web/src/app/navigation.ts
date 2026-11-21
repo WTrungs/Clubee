@@ -5,6 +5,7 @@ import {
   CalendarRange,
   ChartNoAxesColumn,
   Compass,
+  FolderOpen,
   Gauge,
   KanbanSquare,
   LayoutDashboard,
@@ -79,6 +80,7 @@ export function buildNavigation(
         { to: `/clubs/${clubId}/events`, label: 'Sự kiện', icon: CalendarDays },
         { to: `/clubs/${clubId}/sessions`, label: 'Sinh hoạt', icon: CalendarCheck },
         { to: `/clubs/${clubId}/tasks`, label: 'Công việc', icon: KanbanSquare },
+        { to: `/clubs/${clubId}/documents`, label: 'Tài liệu', icon: FolderOpen },
         { to: `/clubs/${clubId}/finance`, label: 'Tài chính', icon: Wallet },
       ],
     })
