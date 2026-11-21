@@ -39,6 +39,8 @@ tags:
     description: Tài chính (SRS 5.10)
   - name: NOT
     description: Thông báo (SRS 5.13)
+  - name: RPT
+    description: Báo cáo, nhật ký (SRS 5.15)
 security:
   - sessionCookie: []
 paths:
@@ -3231,6 +3233,121 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/SessionDetail' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /me/club-history:
+    get:
+      tags: [RPT]
+      operationId: getMyClubHistory
+      summary: CLB tôi đang và đã tham gia (FR-ATT-10)
+      description: Mỗi CLB một dòng, lấy lần gia nhập gần nhất; CLB đang tham gia trước, đã rời (`LEFT`) sau. Không có yêu cầu gia nhập chưa duyệt.
+      responses:
+        '200':
+          description: Danh sách CLB.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ClubHistoryEntry' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /me/report-periods:
+    get:
+      tags: [RPT]
+      operationId: getMyReportPeriods
+      summary: Các kỳ chọn được cho báo cáo cá nhân ở một CLB (FR-RPT-02)
+      description: Cùng cách tính với báo cáo thu chi (tháng, học kỳ theo mốc CLB, nhiệm kỳ). Lỗi 403 `NOT_A_MEMBER` khi chưa từng là thành viên.
+      parameters:
+        - name: clubId
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Các kỳ.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReportPeriods' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /me/attendance:
+    get:
+      tags: [RPT]
+      operationId: getMyAttendance
+      summary: Lịch sử điểm danh của tôi ở một CLB (FR-ATT-10)
+      description: |
+        Bản ghi của chính người gọi ở buổi sinh hoạt và sự kiện của CLB, ngày diễn ra trong kỳ, mới nhất trước; kèm đếm theo trạng thái và
+        tỷ lệ chuyên cần = (Có mặt + Đi muộn) / (số bản ghi − Vắng có phép). Người đã rời CLB vẫn xem được dữ liệu của mình.
+        Lỗi: 400 `VALIDATION` (kỳ); 403 `NOT_A_MEMBER`.
+      parameters:
+        - name: clubId
+          in: query
+          required: true
+          schema: { type: string }
+        - name: period
+          in: query
+          required: true
+          schema: { type: string, enum: [MONTH, SEMESTER, TERM, CUSTOM] }
+        - name: key
+          in: query
+          description: Mã kỳ trong `GET /me/report-periods` (tháng, học kỳ, nhiệm kỳ).
+          schema: { type: string }
+        - name: from
+          in: query
+          description: Bắt buộc khi `period=CUSTOM`.
+          schema: { type: string, format: date }
+        - name: to
+          in: query
+          description: Bắt buộc khi `period=CUSTOM`; tối đa 5 năm sau `from`.
+          schema: { type: string, format: date }
+        - $ref: '#/components/parameters/Page'
+        - name: size
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 20 }
+      responses:
+        '200':
+          description: Trang lịch sử.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MyAttendancePage' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /me/report:
+    get:
+      tags: [RPT]
+      operationId: getMyReport
+      summary: Báo cáo cá nhân ở một CLB (FR-RPT-02)
+      description: |
+        Chuyên cần trong kỳ; công việc người gọi là người chính (xong trong kỳ đúng hạn, trễ hạn; còn mở và đang quá hạn tính tới hiện tại);
+        các đợt đóng quỹ có hạn nộp trong kỳ. Điểm đóng góp (KPI) chưa có. Lỗi: 400 `VALIDATION` (kỳ); 403 `NOT_A_MEMBER`.
+      parameters:
+        - name: clubId
+          in: query
+          required: true
+          schema: { type: string }
+        - name: period
+          in: query
+          required: true
+          schema: { type: string, enum: [MONTH, SEMESTER, TERM, CUSTOM] }
+        - name: key
+          in: query
+          description: Mã kỳ trong `GET /me/report-periods` (tháng, học kỳ, nhiệm kỳ).
+          schema: { type: string }
+        - name: from
+          in: query
+          description: Bắt buộc khi `period=CUSTOM`.
+          schema: { type: string, format: date }
+        - name: to
+          in: query
+          description: Bắt buộc khi `period=CUSTOM`; tối đa 5 năm sau `from`.
+          schema: { type: string, format: date }
+      responses:
+        '200':
+          description: Báo cáo.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MyReport' }
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
@@ -7909,6 +8026,95 @@ components:
           type: array
           items: { type: string, enum: [DECIDE] }
         version: { type: integer }
+    ClubHistoryEntry:
+      type: object
+      required: [clubId, clubName, status, departmentName, joinedOn, leftOn]
+      properties:
+        clubId: { type: string }
+        clubName: { type: string }
+        status: { type: string, enum: [PROBATION, ACTIVE, ON_LEAVE, LEFT] }
+        departmentName: { $ref: '#/components/schemas/NullableString' }
+        joinedOn: { $ref: '#/components/schemas/NullableDate' }
+        leftOn: { $ref: '#/components/schemas/NullableDate' }
+    ReportRange:
+      type: object
+      required: [label, from, to]
+      properties:
+        label: { type: string }
+        from: { type: string, format: date }
+        to: { type: string, format: date }
+    AttendanceTally:
+      type: object
+      required: [present, late, excused, absent, total, rate]
+      properties:
+        present: { type: integer }
+        late: { type: integer }
+        excused: { type: integer }
+        absent: { type: integer }
+        total: { type: integer }
+        rate:
+          type: [number, 'null']
+          minimum: 0
+          maximum: 1
+          description: (Có mặt + Đi muộn) / (số bản ghi − Vắng có phép); `null` khi mẫu số bằng 0.
+    MyAttendancePage:
+      allOf:
+        - $ref: '#/components/schemas/PageMeta'
+        - type: object
+          required: [content, range, tally]
+          properties:
+            range: { $ref: '#/components/schemas/ReportRange' }
+            tally: { $ref: '#/components/schemas/AttendanceTally' }
+            content:
+              type: array
+              items:
+                type: object
+                required: [id, activity, date, status, method, edited]
+                properties:
+                  id: { type: string }
+                  activity:
+                    type: object
+                    required: [type, id, title]
+                    properties:
+                      type: { type: string, enum: [SESSION, EVENT] }
+                      id: { type: string }
+                      title: { type: string }
+                  date: { type: string, format: date }
+                  status: { $ref: '#/components/schemas/AttendanceStatus' }
+                  method: { type: string, enum: [MANUAL, QR] }
+                  edited: { type: boolean }
+    MyReport:
+      type: object
+      required: [club, range, attendance, tasks, dues]
+      properties:
+        club:
+          type: object
+          required: [id, name]
+          properties:
+            id: { type: string }
+            name: { type: string }
+        range: { $ref: '#/components/schemas/ReportRange' }
+        attendance: { $ref: '#/components/schemas/AttendanceTally' }
+        tasks:
+          type: object
+          required: [doneOnTime, doneLate, open, overdue]
+          properties:
+            doneOnTime: { type: integer }
+            doneLate: { type: integer }
+            open: { type: integer }
+            overdue: { type: integer }
+        dues:
+          type: array
+          items:
+            type: object
+            required: [campaignId, name, dueOn, amountDue, paid, status]
+            properties:
+              campaignId: { type: string }
+              name: { type: string }
+              dueOn: { type: string, format: date }
+              amountDue: { type: integer }
+              paid: { type: integer }
+              status: { type: string, enum: [UNPAID, PARTIAL, PAID, EXEMPT] }
     CalendarItem:
       type: object
       required: [type, id, clubId, clubName, title, startAt, endAt, location, relations, cancelled]

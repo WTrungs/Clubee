@@ -2,60 +2,20 @@ import { AlertTriangle, BarChart3, FilterX, HandCoins, ShieldAlert, WalletCards 
 import { useId, type ReactNode } from 'react'
 import { Link } from 'react-router'
 import { useCurrentClub } from '@/features/club/viewModel/clubContext'
+import { ReportPeriodPicker } from '@/features/report/view/ReportPeriodPicker'
 import { formatDate } from '@/shared/format/formatDate'
 import { formatMoney } from '@/shared/format/formatMoney'
 import { cn } from '@/shared/lib/cn'
 import { Badge } from '@/shared/ui/Badge'
 import { Button } from '@/shared/ui/Button'
-import { FormField } from '@/shared/ui/FormField'
-import { Input, NativeSelect } from '@/shared/ui/Input'
+import { NativeSelect } from '@/shared/ui/Input'
 import { Pagination } from '@/shared/ui/ListControls'
 import { Skeleton } from '@/shared/ui/Skeleton'
 import { EmptyState, ErrorState } from '@/shared/ui/StateViews'
 import type { FinanceReport } from '../model/financeReportTypes'
 import { financeCategoryLabel } from '../viewModel/financeDisplay'
-import { netText, REPORT_PERIOD_KINDS, reportMonthLabel, reportPeriodKindLabel, reportShare } from '../viewModel/financeReportDisplay'
+import { netText, reportMonthLabel, reportShare } from '../viewModel/financeReportDisplay'
 import { useFinanceReportViewModel, type FinanceReportViewModel } from '../viewModel/useFinanceReportViewModel'
-
-function PeriodPicker({ vm }: { vm: FinanceReportViewModel }) {
-  return (
-    <div className="flex flex-col gap-3 rounded-2xl border bg-card p-4 shadow-sm sm:flex-row sm:flex-wrap sm:items-start">
-      <FormField label="Loại kỳ" className="sm:w-44">
-        <NativeSelect value={vm.period} onChange={(event) => vm.setPeriod(event.target.value as FinanceReportViewModel['period'])}>
-          {REPORT_PERIOD_KINDS.map((kind) => (
-            <option key={kind} value={kind}>
-              {reportPeriodKindLabel[kind]}
-            </option>
-          ))}
-        </NativeSelect>
-      </FormField>
-      {vm.period !== 'CUSTOM' ? (
-        <FormField label="Kỳ" className="sm:w-64">
-          <NativeSelect value={vm.key ?? ''} onChange={(event) => vm.setKey(event.target.value)} disabled={vm.options.length === 0}>
-            {vm.options.length === 0 && <option value="">{vm.periodsLoading ? 'Đang tải…' : 'Chưa có kỳ nào'}</option>}
-            {vm.options.map((option) => (
-              <option key={option.key} value={option.key}>
-                {option.label}
-              </option>
-            ))}
-          </NativeSelect>
-        </FormField>
-      ) : (
-        <>
-          <FormField label="Từ ngày" className="sm:w-40" error={vm.customError?.field === 'from' ? vm.customError.message : undefined}>
-            <Input inputMode="numeric" placeholder="dd/mm/yyyy" value={vm.customFrom} onChange={(event) => vm.setCustomFrom(event.target.value)} />
-          </FormField>
-          <FormField label="Đến ngày" className="sm:w-40" error={vm.customError?.field === 'to' ? vm.customError.message : undefined}>
-            <Input inputMode="numeric" placeholder="dd/mm/yyyy" value={vm.customTo} onChange={(event) => vm.setCustomTo(event.target.value)} />
-          </FormField>
-          <Button onClick={vm.applyCustom} className="sm:mt-7">
-            Xem
-          </Button>
-        </>
-      )}
-    </div>
-  )
-}
 
 function Stat({ label, value, tone }: { label: string; value: string; tone?: 'success' | 'danger' | 'warning' }) {
   return (
@@ -351,7 +311,7 @@ export function FinanceReportPanel({ active }: { active: boolean }) {
   const { clubId } = useCurrentClub()
   return (
     <div className="space-y-5">
-      <PeriodPicker vm={vm} />
+      <ReportPeriodPicker params={vm.periodParams} loading={vm.periodsLoading} />
       {vm.periodsError && <ErrorState error={vm.periodsError} onRetry={vm.retryPeriods} />}
       {vm.loading && !vm.report && (
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4" role="status" aria-label="Đang tải báo cáo">

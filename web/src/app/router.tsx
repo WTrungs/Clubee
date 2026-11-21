@@ -69,6 +69,7 @@ export const router = createBrowserRouter([
                     lazy: () => import('@/features/member/view/InvitationPage').then((module) => ({ Component: module.InvitationPage })),
                   },
                   { path: '/me/tasks', lazy: () => import('@/features/task/view/MyTasksPage').then((module) => ({ Component: module.MyTasksPage })) },
+                  { path: '/me/activity', lazy: () => import('@/features/report/view/MyActivityPage').then((module) => ({ Component: module.MyActivityPage })) },
                   { path: '/me/calendar', lazy: () => import('@/features/calendar/view/CalendarPage').then((module) => ({ Component: module.CalendarPage })) },
                   {
                     path: '/scan',
