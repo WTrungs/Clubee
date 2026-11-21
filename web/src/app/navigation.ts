@@ -1,5 +1,6 @@
 import {
   CalendarCheck,
+  CalendarClock,
   CalendarDays,
   CalendarRange,
   Compass,
@@ -58,6 +59,7 @@ export function buildNavigation(
         { to: '/clubs', label: 'CLB của tôi', icon: LayoutGrid, end: true },
         { to: '/directory', label: 'Tìm CLB', icon: Compass, end: true },
         { to: '/me/tasks', label: 'Công việc của tôi', icon: ListTodo, end: true },
+        { to: '/me/calendar', label: 'Lịch của tôi', icon: CalendarClock, end: true },
         { to: '/scan', label: 'Quét mã điểm danh', icon: ScanLine, end: true },
       ],
     },

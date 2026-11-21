@@ -3234,6 +3234,40 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+  /me/calendar:
+    get:
+      tags: [ATT]
+      operationId: getMyCalendar
+      summary: Lịch hoạt động của tôi (FR-ATT-09)
+      description: |
+        Gộp buổi sinh hoạt và sự kiện ở mọi CLB của người gọi, có giao với khoảng `from`–`to` (ngày giờ Việt Nam, tính cả hai đầu,
+        tối đa 62 ngày). Mỗi mục kèm quan hệ với người gọi:
+        - Buổi sinh hoạt: `AUDIENCE` (thuộc phạm vi, Thử việc hoặc Chính thức), `REGISTERED`, `WAITLISTED` (buổi có số chỗ), `CREATOR`.
+        - Sự kiện (đã duyệt trở đi, kể cả đã hủy): `REGISTERED`, `WAITLISTED`, `STAFF` (Trưởng BTC, nhân sự BTC, CTV, nhân sự CLB đồng tổ chức),
+          `OPEN` (đang mở đăng ký, chưa qua hạn, ở CLB người gọi còn Thử việc hoặc Chính thức). Sự kiện Đã đóng vẫn hiện `STAFF` cho BTC lúc tổ chức.
+        Người Tạm nghỉ không có `AUDIENCE`, `OPEN` (BR-MEM-05). Mục đã hủy giữ lại với `cancelled: true`.
+        Lỗi: 400 `VALIDATION` (`from`, `to`).
+      parameters:
+        - name: from
+          in: query
+          required: true
+          schema: { type: string, format: date }
+        - name: to
+          in: query
+          required: true
+          schema: { type: string, format: date }
+        - name: clubId
+          in: query
+          description: Chỉ lấy mục của CLB này.
+          schema: { type: string }
+      responses:
+        '200':
+          description: Lịch.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Calendar' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
   /clubs/{clubId}/session-series:
     post:
       tags: [ATT]
@@ -7875,6 +7909,42 @@ components:
           type: array
           items: { type: string, enum: [DECIDE] }
         version: { type: integer }
+    CalendarItem:
+      type: object
+      required: [type, id, clubId, clubName, title, startAt, endAt, location, relations, cancelled]
+      properties:
+        type: { type: string, enum: [SESSION, EVENT] }
+        id: { type: string }
+        clubId: { type: string }
+        clubName: { type: string }
+        title: { type: string }
+        startAt: { type: string, format: date-time }
+        endAt: { type: string, format: date-time }
+        location: { type: string }
+        relations:
+          type: array
+          minItems: 1
+          items: { type: string, enum: [AUDIENCE, CREATOR, REGISTERED, WAITLISTED, STAFF, OPEN] }
+        cancelled: { type: boolean }
+    Calendar:
+      type: object
+      required: [from, to, items, clubs]
+      properties:
+        from: { type: string, format: date }
+        to: { type: string, format: date }
+        items:
+          type: array
+          description: Sắp theo giờ bắt đầu.
+          items: { $ref: '#/components/schemas/CalendarItem' }
+        clubs:
+          type: array
+          description: CLB để lọc.
+          items:
+            type: object
+            required: [id, name]
+            properties:
+              id: { type: string }
+              name: { type: string }
     CancelSessionRequest:
       type: object
       required: [reason, version]
