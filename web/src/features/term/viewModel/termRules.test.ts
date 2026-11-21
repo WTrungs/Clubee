@@ -36,7 +36,7 @@ describe('declaring the next term (FR-TERM-01, BR-TERM-01, ST-TERM)', () => {
     const list = await termRepository.list('c-guitar')
     // Nhiệm kỳ đã đóng của seed đứng cuối.
     expect(list.map((item) => item.status)).toEqual(['PREPARING', 'RUNNING', 'CLOSED'])
-    expect(list[1]).toMatchObject({ id: 't-guitar-2026', departmentPlan: null, allowedActions: [] })
+    expect(list[1]).toMatchObject({ id: 't-guitar-2026', departmentPlan: null, allowedActions: ['EXTEND'] })
     // Nhiệm kỳ đang chạy không đổi cho tới khi bàn giao (BR-TERM-01).
     expect((await clubRepository.getClub('c-guitar')).currentTerm).toMatchObject({ id: 't-guitar-2026', status: 'RUNNING' })
   })

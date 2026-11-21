@@ -286,6 +286,7 @@ export const clubHandlers = [
       closedAt: null,
       departmentPlan: null,
       closedDepartments: null,
+      extensions: [],
       version: 1,
     })
     const membership: DbMembership = {

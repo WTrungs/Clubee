@@ -13,6 +13,7 @@ import { createTestWrapper, signInAs } from '@/testUtils'
 import { termRepository } from '../model/termRepository'
 import type { Term } from '../model/termTypes'
 import { useDepartmentPlanViewModel } from './useDepartmentPlanViewModel'
+import { useExtendTermViewModel } from './useExtendTermViewModel'
 import { useTermFormViewModel } from './useTermFormViewModel'
 
 async function preparingTerm(): Promise<Term> {
@@ -113,5 +114,52 @@ describe('useDepartmentPlanViewModel (FR-TERM-01, NFR-REL-03)', () => {
     expect(result.current.conflict).toBe(false)
     expect(result.current.form.getValues('entries.0.name')).not.toBe('Tên do tôi sửa')
     expect(onDone).not.toHaveBeenCalled()
+  })
+})
+
+describe('useExtendTermViewModel (FR-TERM-02, NFR-REL-03)', () => {
+  const runningTerm = async () => {
+    signInAs('u-anh')
+    const term = (await termRepository.list('c-guitar')).find((candidate) => candidate.id === 't-guitar-2026')
+    if (!term) throw new Error('Thiếu nhiệm kỳ seed')
+    return term
+  }
+
+  it('previews the moved positions, checks the date and extends', async () => {
+    const term = await runningTerm()
+    const onDone = vi.fn()
+    const wrapper = await clubWrapper()
+    const { result } = renderHook(() => useExtendTermViewModel(term, onDone), { wrapper })
+    expect(result.current.preview).toBe('6 chức vụ thường trực hết hạn cùng nhiệm kỳ sẽ dời theo ngày mới.')
+    act(() => result.current.form.setValue('endDate', toVnText(vnDate(300 + 400))))
+    expect(result.current.preview).toContain('sẽ dời theo ngày mới')
+    await act(() => result.current.submit())
+    expect(result.current.form.getFieldState('endDate').error?.message).toContain('tối đa 365 ngày')
+
+    act(() => {
+      result.current.form.setValue('endDate', toVnText(vnDate(330)))
+      result.current.form.setValue('reason', 'Lùi đại hội vì trùng lịch thi.')
+    })
+    expect(result.current.preview).toBe(`6 chức vụ thường trực dời hạn tới ${toVnText(vnDate(330))}.`)
+    await act(() => result.current.submit())
+    await waitFor(() => expect(onDone).toHaveBeenCalled())
+    expect(db.terms.find((candidate) => candidate.id === 't-guitar-2026')?.endOn).toBe(vnDate(330))
+  })
+
+  it('closes and reloads instead of overwriting when the term changed meanwhile', async () => {
+    const term = await runningTerm()
+    await termRepository.extend('c-guitar', term.id, { endOn: vnDate(310), reason: 'Gia hạn ở thiết bị khác.', version: term.version })
+    const toastError = vi.spyOn(toast, 'error')
+    const onDone = vi.fn()
+    const wrapper = await clubWrapper()
+    const { result } = renderHook(() => useExtendTermViewModel(term, onDone), { wrapper })
+    act(() => {
+      result.current.form.setValue('endDate', toVnText(vnDate(330)))
+      result.current.form.setValue('reason', 'Lùi đại hội vì trùng lịch thi.')
+    })
+    await act(() => result.current.submit())
+    await waitFor(() => expect(onDone).toHaveBeenCalled())
+    expect(toastError).toHaveBeenCalledWith(expect.stringContaining('vừa được người khác cập nhật'))
+    expect(db.terms.find((candidate) => candidate.id === 't-guitar-2026')?.endOn).toBe(vnDate(310))
   })
 })

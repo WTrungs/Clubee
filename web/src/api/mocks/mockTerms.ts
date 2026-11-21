@@ -2,9 +2,11 @@ import type { EventStatus } from '@/features/event/model/eventTypes'
 import type { TaskStatus } from '@/features/task/model/taskTypes'
 import type { DepartmentOption, HandoverCompletionPreview, HandoverCounts, HandoverItemCounts, HandoverItemKind, HandoverItemStatus } from '@/features/term/model/handoverTypes'
 import type { DepartmentPlanEntry } from '@/features/term/model/termTypes'
+import { formatDate } from '@/shared/format/formatDate'
 import { formatMoney } from '@/shared/format/formatMoney'
-import { db, type DbAppointment, type DbDepartment, type DbHandover, type DbHandoverItem, type DbHandoverSnapshot, type DbPlanEntry, type DbTerm } from './db'
+import { db, type DbAppointment, type DbDepartment, type DbHandover, type DbHandoverItem, type DbHandoverSnapshot, type DbPlanEntry, type DbPosition, type DbTerm } from './db'
 import { can } from './mockAccess'
+import { audit } from './mockAudit'
 import { fundBalance, PENDING_STATUSES } from './mockFinance'
 import { newId } from './mockHttp'
 import { canAccessClub, departmentMemberCount, eligibleMembers, membershipOf, personRef } from './mockMembers'
@@ -181,6 +183,49 @@ export function handoverBlockers(handover: DbHandover): string[] {
 export function isTermOverdue(clubId: string): boolean {
   const term = currentTermOf(clubId)
   return term?.status === 'RUNNING' && vnToday() > term.endOn
+}
+
+/** FR-TERM-02: chức vụ thường trực chưa kết thúc, hết hạn đúng ngày cuối nhiệm kỳ; chức vụ có hạn ngắn hơn hoặc đã thu hồi giữ nguyên. */
+export function positionsEndingWith(term: DbTerm): DbPosition[] {
+  return db.positions.filter(
+    (position) => position.clubId === term.clubId && STANDING_ROLES.includes(position.role) && position.revokedAt === null && position.endOn === term.endOn && isPositionOpen(position),
+  )
+}
+
+/** FR-TERM-02: dời ngày kết thúc, dời theo các chức vụ hết hạn cùng nhiệm kỳ, ghi lịch sử, nhật ký và báo người giữ chức. */
+export function extendTerm(term: DbTerm, input: { endOn: string; reason: string; actorId: string }): void {
+  const moved = positionsEndingWith(term)
+  const fromEndOn = term.endOn
+  for (const position of moved) {
+    position.endOn = input.endOn
+    position.version += 1
+  }
+  term.extensions.push({ fromEndOn, toEndOn: input.endOn, reason: input.reason, by: input.actorId, at: nowIso(), movedPositions: moved.length })
+  term.endOn = input.endOn
+  term.version += 1
+  audit({
+    actorId: input.actorId,
+    clubId: term.clubId,
+    action: 'TERM_EXTEND',
+    objectType: 'TERM',
+    objectId: term.id,
+    objectLabel: term.name,
+    before: { endOn: fromEndOn },
+    after: { endOn: input.endOn, movedPositions: moved.length, positionIds: moved.map((position) => position.id) },
+    reason: input.reason,
+  })
+  const titlesOf = new Map<string, string[]>()
+  for (const position of moved) titlesOf.set(position.userId, [...(titlesOf.get(position.userId) ?? []), positionTitleOf(position)])
+  for (const [userId, titles] of titlesOf) {
+    notify([userId], {
+      clubId: term.clubId,
+      category: 'TERM',
+      title: `${term.name} được gia hạn tới ${formatDate(input.endOn)}`,
+      body: `Chức vụ ${titles.join(', ')} của bạn dời hạn theo nhiệm kỳ, tới ${formatDate(input.endOn)}. Lý do: ${input.reason}`,
+      target: termsTarget(term.clubId),
+      actorId: input.actorId,
+    })
+  }
 }
 
 /** Gán chức vụ thường trực mới được khi có nhiệm kỳ đang chạy, chưa quá ngày kết thúc và không đang bàn giao (nhóm chốt ngày 14/11). */

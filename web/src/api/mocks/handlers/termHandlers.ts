@@ -15,7 +15,9 @@ import type {
   SaveAppointmentsRequest,
   StartHandoverRequest,
 } from '@/features/term/model/handoverTypes'
-import type { CreateTermRequest, DepartmentPlanEntryRequest, Term, TermAction, TermStatus, UpdateTermRequest } from '@/features/term/model/termTypes'
+import type { CreateTermRequest, DepartmentPlanEntryRequest, ExtendTermRequest, Term, TermAction, TermStatus, UpdateTermRequest } from '@/features/term/model/termTypes'
+import { REASON_MAX, REASON_MIN } from '@/shared/lib/reasonRules'
+import { termExtensionProblem } from '@/shared/lib/termExtensionRules'
 import { db, type DbAppointment, type DbHandover, type DbHandoverItem, type DbPlanEntry, type DbTerm } from '../db'
 import { eventOfFund, fundBalance, fundName, pendingCountOf } from '../mockFinance'
 import { API, currentUser, networkDelay, newId, paginate, problem, writer } from '../mockHttp'
@@ -33,6 +35,7 @@ import {
   completionPreview,
   copyDepartmentPlan,
   dropBlockedReason,
+  extendTerm,
   handoverBlockers,
   handoverCounts,
   handoverItemsOf,
@@ -43,6 +46,7 @@ import {
   keptEntry,
   openHandoverOf,
   planEntryIdOf,
+  positionsEndingWith,
   preparingTermOf,
   resolvedPlan,
   syncHandoverItems,
@@ -74,6 +78,7 @@ function termActions(term: DbTerm, viewerId: string, handover: DbHandover | unde
   return [
     ...(preparing && managesTerms ? (['EDIT'] as const) : []),
     ...(preparing && managesTerms && currentTermOf(term.clubId)?.status === 'RUNNING' ? (['START_HANDOVER'] as const) : []),
+    ...(term.status === 'RUNNING' && managesTerms ? (['EXTEND'] as const) : []),
     ...(handover && canViewHandover(viewerId, handover) ? (['VIEW_HANDOVER'] as const) : []),
   ]
 }
@@ -84,6 +89,7 @@ function toTerm(term: DbTerm, viewerId: string): Term {
   const open = handover?.status === 'OPEN'
   if (handover && open) syncHandoverItems(handover)
   const counts = handover && open ? handoverCounts(handover.id) : null
+  const actions = termActions(term, viewerId, handover)
   return {
     id: term.id,
     name: term.name,
@@ -96,7 +102,16 @@ function toTerm(term: DbTerm, viewerId: string): Term {
     departmentPlan: preparing ? toPlanEntries(term) : null,
     handoverId: handover?.id ?? null,
     handoverProgress: counts ? { pending: counts.pending, confirmed: counts.confirmed } : null,
-    allowedActions: termActions(term, viewerId, handover),
+    extensions: term.extensions.map((extension) => ({
+      fromEndOn: extension.fromEndOn,
+      toEndOn: extension.toEndOn,
+      reason: extension.reason,
+      extendedBy: personRef(extension.by),
+      extendedAt: extension.at,
+      movedPositions: extension.movedPositions,
+    })),
+    positionsEndingWithTerm: actions.includes('EXTEND') ? positionsEndingWith(term).length : null,
+    allowedActions: actions,
     version: term.version,
   }
 }
@@ -397,6 +412,7 @@ export const termHandlers = [
       closedAt: null,
       departmentPlan: copyDepartmentPlan(clubId),
       closedDepartments: null,
+      extensions: [],
       version: 1,
     }
     db.terms.push(term)
@@ -428,6 +444,32 @@ export const termHandlers = [
     term.endOn = endOn
     if (planned) term.departmentPlan = planned.plan
     term.version += 1
+    return HttpResponse.json(toTerm(term, user.value.id))
+  }),
+
+  http.post(`${API}/clubs/:clubId/terms/:termId/extensions`, async ({ request, params }) => {
+    await networkDelay()
+    const user = writer(request)
+    if (!user.ok) return user.response
+    const clubId = String(params.clubId)
+    if (!canAccessClub(user.value.id, clubId)) return notMember()
+    const term = db.terms.find((candidate) => candidate.id === params.termId && candidate.clubId === clubId)
+    if (!term) return problem(404, 'Không tìm thấy nhiệm kỳ.', 'TERM_NOT_FOUND')
+    if (!can(user.value.id, clubId, 'MANAGE_TERMS')) return boardOnly(clubId, 'gia hạn nhiệm kỳ')
+    const body = (await request.json()) as Partial<ExtendTermRequest>
+    if (body.version !== term.version) return problem(409, 'Nhiệm kỳ vừa được người khác cập nhật. Tải lại để xem ngày kết thúc mới nhất.', 'VERSION_CONFLICT')
+    if (term.status !== 'RUNNING') {
+      const detail = term.status === 'HANDING_OVER' ? 'Nhiệm kỳ đang bàn giao nên không gia hạn được nữa.' : 'Chỉ gia hạn được nhiệm kỳ đang chạy.'
+      return problem(422, detail, 'TERM_NOT_RUNNING')
+    }
+    const reason = text(body.reason)
+    const endProblem = isRealDate(body.endOn) ? termExtensionProblem(term.endOn, body.endOn, vnToday()) : 'Ngày kết thúc mới không hợp lệ.'
+    const errors: FieldError[] = [
+      ...(endProblem ? [{ field: 'endOn', message: endProblem }] : []),
+      ...(reason.length < REASON_MIN || reason.length > REASON_MAX ? [{ field: 'reason', message: `Nhập lý do từ ${REASON_MIN} đến ${REASON_MAX} ký tự.` }] : []),
+    ]
+    if (errors.length > 0) return problem(400, 'Thông tin gia hạn chưa hợp lệ.', 'VALIDATION', errors)
+    extendTerm(term, { endOn: String(body.endOn), reason, actorId: user.value.id })
     return HttpResponse.json(toTerm(term, user.value.id))
   }),
 

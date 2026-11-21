@@ -24,7 +24,19 @@ export interface DbTerm {
   departmentPlan: DbPlanEntry[] | null
   /** Tên các ban lúc nhiệm kỳ đóng, vì ban giữ lại có thể đổi tên ở nhiệm kỳ sau (để dành cho FR-TERM-08). */
   closedDepartments: Array<{ id: string; name: string }> | null
+  /** Lịch sử gia hạn khi nhiệm kỳ đang chạy (FR-TERM-02), cũ trước. */
+  extensions: DbTermExtension[]
   version: number
+}
+
+export interface DbTermExtension {
+  fromEndOn: string
+  toEndOn: string
+  reason: string
+  by: string
+  at: string
+  /** Số chức vụ thường trực được dời hạn theo. */
+  movedPositions: number
 }
 
 export type DepartmentStatus = 'ACTIVE' | 'CLOSED'
@@ -93,6 +105,7 @@ export function createTermSeed(): DbTerm[] {
     closedAt: null,
     departmentPlan: null,
     closedDepartments: null,
+    extensions: [],
     version: 1,
   })
   // Nhiệm kỳ đang chạy đứng trước nhiệm kỳ cũ cùng CLB vì chức vụ mẫu lấy hạn theo nhiệm kỳ đầu tiên tìm thấy.

@@ -1,7 +1,7 @@
 import { httpClient } from '@/api/httpClient'
 import type { Page } from '@/api/pagination'
 import type { CompleteHandoverRequest, ConfirmItemsRequest, Handover, HandoverItem, HandoverItemQuery, SaveAppointmentsRequest, StartHandoverRequest } from './handoverTypes'
-import type { CreateTermRequest, Term, UpdateTermRequest } from './termTypes'
+import type { CreateTermRequest, ExtendTermRequest, Term, UpdateTermRequest } from './termTypes'
 
 const club = (clubId: string) => `/clubs/${encodeURIComponent(clubId)}`
 const terms = (clubId: string) => `${club(clubId)}/terms`
@@ -13,6 +13,8 @@ export const termRepository = {
   /** FR-TERM-01. */
   create: (clubId: string, request: CreateTermRequest) => httpClient.post<Term>(terms(clubId), request),
   update: (clubId: string, termId: string, request: UpdateTermRequest) => httpClient.patch<Term>(`${terms(clubId)}/${encodeURIComponent(termId)}`, request),
+  /** FR-TERM-02: chức vụ thường trực hết hạn cùng nhiệm kỳ được dời theo ngày mới. */
+  extend: (clubId: string, termId: string, request: ExtendTermRequest) => httpClient.post<Term>(`${terms(clubId)}/${encodeURIComponent(termId)}/extensions`, request),
   /** FR-TERM-03: nhiệm kỳ đang chạy chuyển Đang bàn giao, tạo phiên bàn giao. */
   startHandover: (clubId: string, request: StartHandoverRequest) => httpClient.post<Handover>(`${club(clubId)}/handovers`, request),
   handover: (clubId: string, handoverId: string) => httpClient.get<Handover>(handover(clubId, handoverId)),

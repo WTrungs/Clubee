@@ -1,9 +1,15 @@
 import { expect, test } from '@playwright/test'
-import { loginAs, openNavLink, snap, useDarkTheme } from './helpers.ts'
+import { expectNoHorizontalScroll, loginAs, openNavLink, openNotification, settleToast, snap, switchUser, useDarkTheme } from './helpers.ts'
 
 // Ngày tính theo năm hiện tại để test không hết hạn theo thời gian.
 const year = new Date().getFullYear() + 1
 const nextTerm = { name: `Nhiệm kỳ ${year}–${year + 1}`, start: `01/09/${year}`, end: `31/08/${year + 1}` }
+const vnText = (date: Date) => [date.getDate(), date.getMonth() + 1].map((part) => String(part).padStart(2, '0')).join('/') + `/${date.getFullYear()}`
+const parseVn = (text: string) => {
+  const [day, month, yearPart] = text.split('/').map(Number)
+  return new Date(yearPart ?? 0, (month ?? 1) - 1, day ?? 1)
+}
+const addDays = (date: Date, days: number) => new Date(date.getFullYear(), date.getMonth(), date.getDate() + days)
 
 test.describe('Nhiệm kỳ', () => {
   test('ban chủ nhiệm khai báo nhiệm kỳ mới rồi sửa kế hoạch ban', async ({ page }, testInfo) => {
@@ -61,6 +67,45 @@ test.describe('Nhiệm kỳ', () => {
     await openNavLink(page, 'Cơ cấu')
     await expect(page.getByRole('button', { name: /^Ban Truyền thông \d+ người/ })).toBeVisible()
     await expect(page.getByRole('button', { name: /^Ban Sự kiện/ })).toHaveCount(0)
+  })
+
+  test('ban chủ nhiệm gia hạn nhiệm kỳ, chức vụ thường trực dời theo và người giữ chức được báo', async ({ page }, testInfo) => {
+    await loginAs(page, 'anh.nguyen@demo.test')
+    await page.goto('/clubs/c-guitar/terms')
+    const current = page.getByRole('region', { name: 'Nhiệm kỳ 2026–2027' })
+    const period = (await current.getByText(/^\d{2}\/\d{2}\/\d{4} – \d{2}\/\d{2}\/\d{4}/).textContent()) ?? ''
+    const oldEnd = parseVn(period.split(' – ')[1]?.slice(0, 10) ?? '')
+    const newEnd = vnText(addDays(oldEnd, 60))
+
+    await current.getByRole('button', { name: 'Gia hạn nhiệm kỳ' }).click()
+    const dialog = page.getByRole('dialog', { name: 'Gia hạn Nhiệm kỳ 2026–2027' })
+    await expect(dialog.getByText('6 chức vụ thường trực hết hạn cùng nhiệm kỳ sẽ dời theo ngày mới.')).toBeVisible()
+    await dialog.getByRole('textbox', { name: 'Ngày kết thúc mới' }).fill(vnText(addDays(oldEnd, 400)))
+    await dialog.getByRole('button', { name: 'Gia hạn', exact: true }).click()
+    await expect(dialog.getByText('Mỗi lần gia hạn dời tối đa 365 ngày so với ngày kết thúc hiện tại.')).toBeVisible()
+    await expect(dialog.getByText('Vui lòng nhập ít nhất 5 ký tự.')).toBeVisible()
+    await dialog.getByRole('textbox', { name: 'Ngày kết thúc mới' }).fill(newEnd)
+    await dialog.getByRole('textbox', { name: 'Lý do gia hạn' }).fill('Lùi đại hội bầu ban chủ nhiệm vì trùng lịch thi cuối kỳ.')
+    await expect(dialog.getByText(`6 chức vụ thường trực dời hạn tới ${newEnd}.`)).toBeVisible()
+    await expectNoHorizontalScroll(page)
+    await snap(page, testInfo, 'termsExtendDialog')
+    await dialog.getByRole('button', { name: 'Gia hạn', exact: true }).click()
+    await settleToast(page, `Đã gia hạn Nhiệm kỳ 2026–2027 tới ${newEnd}.`)
+
+    const history = current.getByRole('list', { name: 'Lịch sử gia hạn' })
+    await expect(history.getByRole('listitem')).toHaveCount(1)
+    await expect(history).toContainText(newEnd)
+    await expect(history).toContainText('6 chức vụ dời theo')
+    await expect(history).toContainText('Lùi đại hội bầu ban chủ nhiệm vì trùng lịch thi cuối kỳ.')
+    await expect(current.getByText(new RegExp(`– ${newEnd}`))).toBeVisible()
+    await expectNoHorizontalScroll(page)
+    await snap(page, testInfo, 'termsExtended')
+
+    await switchUser(page, 'Nguyễn Minh Anh', 'linh.dang@demo.test')
+    // Thông báo mở thẳng trang Nhiệm kỳ.
+    await openNotification(page, new RegExp(`Nhiệm kỳ 2026–2027 được gia hạn tới ${newEnd}`))
+    await expect(page.getByRole('list', { name: 'Lịch sử gia hạn' })).toContainText(newEnd)
+    await expect(page.getByRole('button', { name: 'Gia hạn nhiệm kỳ' })).toHaveCount(0)
   })
 
   test('thành viên thường chỉ xem, không có nút khai báo', async ({ page }, testInfo) => {

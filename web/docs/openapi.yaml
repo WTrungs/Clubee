@@ -2015,6 +2015,46 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
         '422': { $ref: '#/components/responses/UnprocessableEntity' }
+  /clubs/{clubId}/terms/{termId}/extensions:
+    post:
+      tags: [TERM]
+      operationId: extendTerm
+      summary: Gia hạn nhiệm kỳ đang chạy (FR-TERM-02)
+      description: |
+        Ban chủ nhiệm (quyền `MANAGE_TERMS`), chỉ nhiệm kỳ Đang chạy; nhiệm kỳ quá hạn vẫn gia hạn được.
+        - `endOn` phải sau ngày kết thúc hiện tại và sau hôm nay, dời tối đa 365 ngày mỗi lần.
+        - Chức vụ thường trực chưa kết thúc, hết hạn đúng ngày kết thúc cũ được dời theo; chức vụ có hạn ngắn hơn giữ nguyên.
+        - Ghi `extensions`, nhật ký `TERM_EXTEND` và báo người có chức vụ được dời. Gia hạn xong thì hết `TERM_OVERDUE`.
+
+        Lỗi:
+        - 400 `VALIDATION` (`endOn`, `reason` 5–500 ký tự).
+        - 403 `NOT_A_MEMBER`, `FORBIDDEN`.
+        - 404 `TERM_NOT_FOUND`.
+        - 409 `VERSION_CONFLICT`.
+        - 422 `TERM_NOT_RUNNING` (nhiệm kỳ Chuẩn bị, Đang bàn giao hoặc Đã đóng).
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - $ref: '#/components/parameters/TermId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ExtendTermRequest' }
+      responses:
+        '200':
+          description: Nhiệm kỳ sau khi gia hạn.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Term' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
   /clubs/{clubId}/handovers:
     post:
       tags: [TERM]
@@ -6793,7 +6833,7 @@ components:
           description: Lý do chưa bỏ được ban; null là bỏ được.
     Term:
       type: object
-      required: [id, name, startOn, endOn, status, createdAt, createdBy, closedAt, departmentPlan, handoverId, handoverProgress, allowedActions, version]
+      required: [id, name, startOn, endOn, status, createdAt, createdBy, closedAt, departmentPlan, handoverId, handoverProgress, extensions, positionsEndingWithTerm, allowedActions, version]
       properties:
         id: { type: string }
         name: { type: string }
@@ -6820,14 +6860,41 @@ components:
           oneOf:
             - $ref: '#/components/schemas/HandoverProgress'
             - type: 'null'
+        extensions:
+          type: array
+          description: Lịch sử gia hạn (FR-TERM-02), cũ trước.
+          items: { $ref: '#/components/schemas/TermExtension' }
+        positionsEndingWithTerm:
+          description: Số chức vụ thường trực sẽ dời theo khi gia hạn; chỉ có khi `allowedActions` có `EXTEND`.
+          oneOf:
+            - type: integer
+            - type: 'null'
         allowedActions:
           type: array
           description: |
             `EDIT` và `START_HANDOVER` ở nhiệm kỳ Chuẩn bị cho ban chủ nhiệm (`START_HANDOVER` khi nhiệm kỳ hiện tại còn Đang chạy).
+            `EXTEND` ở nhiệm kỳ Đang chạy cho ban chủ nhiệm.
             `VIEW_HANDOVER` khi người xem mở được phiên bàn giao `handoverId`.
           items:
             type: string
-            enum: [EDIT, START_HANDOVER, VIEW_HANDOVER]
+            enum: [EDIT, START_HANDOVER, EXTEND, VIEW_HANDOVER]
+        version: { type: integer }
+    TermExtension:
+      type: object
+      required: [fromEndOn, toEndOn, reason, extendedBy, extendedAt, movedPositions]
+      properties:
+        fromEndOn: { type: string, format: date }
+        toEndOn: { type: string, format: date }
+        reason: { type: string }
+        extendedBy: { $ref: '#/components/schemas/PersonRef' }
+        extendedAt: { type: string, format: date-time }
+        movedPositions: { type: integer, description: Số chức vụ thường trực được dời hạn theo. }
+    ExtendTermRequest:
+      type: object
+      required: [endOn, reason, version]
+      properties:
+        endOn: { type: string, format: date }
+        reason: { type: string, minLength: 5, maxLength: 500 }
         version: { type: integer }
     CreateTermRequest:
       type: object
