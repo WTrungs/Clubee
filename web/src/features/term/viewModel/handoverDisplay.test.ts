@@ -12,6 +12,8 @@ import {
   progressText,
   statusFilterCount,
   statusFilterLabel,
+  substitutedToast,
+  substituteText,
 } from './handoverDisplay'
 
 const item = (overrides: Partial<HandoverItem>): HandoverItem => ({
@@ -20,12 +22,15 @@ const item = (overrides: Partial<HandoverItem>): HandoverItem => ({
   status: 'PENDING',
   title: 'Việc',
   fund: null,
+  advance: null,
+  documents: null,
   task: null,
   event: null,
   eventLead: null,
   note: null,
   confirmedBy: null,
   confirmedAt: null,
+  substitute: null,
   allowedActions: ['CONFIRM'],
   version: 1,
   ...overrides,
@@ -99,5 +104,14 @@ describe('handover item labels (FR-TERM-04)', () => {
     expect(conflictNotice(0)).toMatch(/^Một mục vừa thay đổi/)
     expect(confirmedToast(1)).toBe('Đã xác nhận mục bàn giao.')
     expect(confirmedToast(4)).toBe('Đã xác nhận 4 mục bàn giao.')
+  })
+})
+
+describe('substitute confirmation texts (FR-TERM-07)', () => {
+  it('names who confirmed for the old holders and why', () => {
+    expect(substituteText(item({}))).toBeNull()
+    expect(substituteText(item({ substitute: { by: { id: 'u-anh', fullName: 'Nguyễn Minh Anh' }, reason: 'Thủ quỹ cũ đã rời CLB.' } }))).toBe('Xác nhận thay bởi Nguyễn Minh Anh: Thủ quỹ cũ đã rời CLB.')
+    expect(substitutedToast(1)).toBe('Đã xác nhận thay mục bàn giao.')
+    expect(substitutedToast(3)).toBe('Đã xác nhận thay 3 mục bàn giao.')
   })
 })

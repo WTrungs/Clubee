@@ -2244,6 +2244,51 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
         '422': { $ref: '#/components/responses/UnprocessableEntity' }
+  /clubs/{clubId}/handovers/{handoverId}/substitute-confirmations:
+    post:
+      tags: [TERM]
+      operationId: substituteConfirmHandoverItems
+      summary: Ban chủ nhiệm hiện tại xác nhận thay mục bàn giao (FR-TERM-07, BR-TERM-03)
+      description: |
+        Khi người cũ không bàn giao, thành viên ban chủ nhiệm hiện tại (quyền `MANAGE_TERMS`) xác nhận thay các mục Chờ xác nhận.
+        Người được bầu vào ban chủ nhiệm mới thì xác nhận trực tiếp, gọi route này nhận 403. Tất cả hoặc không gì.
+        - Mục được ghi Đã xác nhận, `substitute { by, reason }`; sự kiện cần quyết định thì giữ Trưởng BTC hiện tại.
+        - Ghi nhật ký `HANDOVER_SUBSTITUTE_CONFIRM` từng mục; báo người được bầu Chủ nhiệm, Phó chủ nhiệm, Thủ quỹ mới.
+        - Hoàn tất bàn giao vẫn như cũ (FR-TERM-06).
+
+        Thứ tự kiểm: quyền (403) → `version` từng mục (409) → phiên còn mở (422 `HANDOVER_CLOSED`) → trạng thái từng mục
+        (422 `ITEM_NOT_CONFIRMABLE`: không còn chờ, hoặc sự kiện cần quyết định mà chưa có Trưởng BTC) → dữ liệu (400:
+        `items` 1–100 dòng, mục thuộc phiên, `reason` 5–500 ký tự).
+
+        Lỗi:
+        - 400 `VALIDATION`.
+        - 403 `NOT_A_MEMBER`, `FORBIDDEN`.
+        - 404 `HANDOVER_NOT_FOUND`.
+        - 409 `VERSION_CONFLICT`.
+        - 422 `HANDOVER_CLOSED`, `ITEM_NOT_CONFIRMABLE`.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - $ref: '#/components/parameters/HandoverId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SubstituteConfirmRequest' }
+      responses:
+        '200':
+          description: Phiên bàn giao sau khi xác nhận thay.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Handover' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
   /clubs/{clubId}/handovers/{handoverId}/transitions:
     post:
       tags: [TERM]
@@ -7007,9 +7052,10 @@ components:
             Khi phiên còn mở:
             - `EDIT_APPOINTMENTS` và `COMPLETE` cho ban chủ nhiệm đang hiệu lực (ban chủ nhiệm cũ, BR-TERM-02).
             - `CONFIRM` cho người được bầu Chủ nhiệm, Phó chủ nhiệm, Thủ quỹ mới còn đủ điều kiện (kể cả người tái đắc cử).
+            - `SUBSTITUTE_CONFIRM` cho ban chủ nhiệm đang hiệu lực không nằm trong số người được bầu đó (FR-TERM-07).
           items:
             type: string
-            enum: [EDIT_APPOINTMENTS, CONFIRM, COMPLETE]
+            enum: [EDIT_APPOINTMENTS, CONFIRM, SUBSTITUTE_CONFIRM, COMPLETE]
         version:
           type: integer
           description: Tăng mỗi lần sửa kết quả bầu hoặc có lượt xác nhận.
@@ -7092,23 +7138,65 @@ components:
           properties:
             byKind:
               type: object
-              required: [FUND, EVENT, TASK]
+              required: [FUND, ADVANCE, EVENT, TASK, DOCUMENTS]
               properties:
                 FUND: { $ref: '#/components/schemas/HandoverItemCounts' }
+                ADVANCE: { $ref: '#/components/schemas/HandoverItemCounts' }
                 EVENT: { $ref: '#/components/schemas/HandoverItemCounts' }
                 TASK: { $ref: '#/components/schemas/HandoverItemCounts' }
+                DOCUMENTS: { $ref: '#/components/schemas/HandoverItemCounts' }
     HandoverItemKind:
       type: string
       description: |
-        FR-TERM-04 với các loại đã có dữ liệu: quỹ đang mở (Quỹ chung, quỹ sự kiện), sự kiện chưa đóng (trừ Dự thảo, Đã đóng,
-        Đã hủy), công việc của ban chưa xong. Việc của tiểu ban đi theo sự kiện. Tạm ứng, tài sản, tài liệu thêm khi có module.
-      enum: [FUND, EVENT, TASK]
+        FR-TERM-04: quỹ đang mở (Quỹ chung, quỹ sự kiện), tạm ứng Đã duyệt, Đã ứng hoặc Quyết toán một phần, sự kiện chưa đóng
+        (trừ Dự thảo, Đã đóng, Đã hủy), công việc của ban chưa xong, và một mục gộp tài liệu gắn nhiệm kỳ cũ (khi có ít nhất một).
+        Việc của tiểu ban đi theo sự kiện. Tạm ứng đổi trạng thái hoặc số còn phải quyết toán, tài liệu đổi số lượng thì phải xác nhận lại.
+        Tài sản thêm khi có module.
+      enum: [FUND, ADVANCE, EVENT, TASK, DOCUMENTS]
     HandoverItemStatus:
       type: string
       description: |
         Chờ xác nhận, Đã xác nhận, Không cần bàn giao (đối tượng đã xong, đã đóng, đã quyết toán; không ai xác nhận).
         Mục đã xác nhận mà dữ liệu đổi (số dư, khoản chờ mới, Trưởng BTC, người làm) thì về Chờ xác nhận, kèm `note`.
       enum: [PENDING, CONFIRMED, RESOLVED]
+    HandoverAdvanceInfo:
+      type: object
+      required: [fundName, requester, amount, status, outstanding, settleBy, overdue]
+      properties:
+        fundName: { type: string }
+        requester: { $ref: '#/components/schemas/PersonRef' }
+        amount: { type: integer }
+        status: { $ref: '#/components/schemas/AdvanceStatus' }
+        outstanding: { type: integer, description: Còn phải quyết toán; đã duyệt chưa ứng thì bằng cả khoản. }
+        settleBy: { type: string, format: date }
+        overdue: { type: boolean }
+    HandoverDocumentsInfo:
+      type: object
+      required: [termName, count]
+      properties:
+        termName: { type: string }
+        count: { type: integer }
+    HandoverSubstitute:
+      type: object
+      required: [by, reason]
+      properties:
+        by: { $ref: '#/components/schemas/PersonRef' }
+        reason: { type: string }
+    SubstituteConfirmRequest:
+      type: object
+      required: [items, reason]
+      properties:
+        items:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items:
+            type: object
+            required: [itemId, version]
+            properties:
+              itemId: { type: string }
+              version: { type: integer }
+        reason: { type: string, minLength: 5, maxLength: 500 }
     HandoverFundInfo:
       type: object
       required: [fundKind, balance, pendingCount, eventName]
@@ -7157,7 +7245,7 @@ components:
     HandoverItem:
       type: object
       description: Mục bàn giao kèm sẵn dữ liệu cần xem, vì người được bầu chưa có quyền mở quỹ, sự kiện, công việc.
-      required: [id, kind, status, title, fund, task, event, eventLead, note, confirmedBy, confirmedAt, allowedActions, version]
+      required: [id, kind, status, title, fund, advance, task, event, documents, eventLead, note, confirmedBy, confirmedAt, substitute, allowedActions, version]
       properties:
         id: { type: string }
         kind: { $ref: '#/components/schemas/HandoverItemKind' }
@@ -7166,6 +7254,14 @@ components:
         fund:
           oneOf:
             - $ref: '#/components/schemas/HandoverFundInfo'
+            - type: 'null'
+        advance:
+          oneOf:
+            - $ref: '#/components/schemas/HandoverAdvanceInfo'
+            - type: 'null'
+        documents:
+          oneOf:
+            - $ref: '#/components/schemas/HandoverDocumentsInfo'
             - type: 'null'
         task:
           oneOf:
@@ -7187,14 +7283,21 @@ components:
             - $ref: '#/components/schemas/PersonRef'
             - type: 'null'
         confirmedAt: { $ref: '#/components/schemas/NullableDateTime' }
+        substitute:
+          description: Có khi mục được ban chủ nhiệm hiện tại xác nhận thay (FR-TERM-07); `confirmedBy` khi đó là người xác nhận thay.
+          oneOf:
+            - $ref: '#/components/schemas/HandoverSubstitute'
+            - type: 'null'
         allowedActions:
           type: array
           description: |
             `CONFIRM` cho người được bầu vào ban chủ nhiệm mới còn đủ điều kiện, với mục Chờ xác nhận và với mục sự kiện
             đã xác nhận (đổi quyết định Trưởng BTC tới lúc hoàn tất).
+            `SUBSTITUTE_CONFIRM` cho ban chủ nhiệm hiện tại (không phải người được bầu) với mục Chờ xác nhận, trừ sự kiện cần
+            quyết định mà chưa có Trưởng BTC.
           items:
             type: string
-            enum: [CONFIRM]
+            enum: [CONFIRM, SUBSTITUTE_CONFIRM]
         version: { type: integer }
     HandoverItemPage:
       allOf:

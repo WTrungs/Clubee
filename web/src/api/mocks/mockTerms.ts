@@ -1,4 +1,5 @@
 import type { EventStatus } from '@/features/event/model/eventTypes'
+import type { AdvanceStatus } from '@/features/finance/model/advanceTypes'
 import type { TaskStatus } from '@/features/task/model/taskTypes'
 import type { DepartmentOption, HandoverCompletionPreview, HandoverCounts, HandoverItemCounts, HandoverItemKind, HandoverItemStatus } from '@/features/term/model/handoverTypes'
 import type { DepartmentPlanEntry } from '@/features/term/model/termTypes'
@@ -7,6 +8,7 @@ import { formatMoney } from '@/shared/format/formatMoney'
 import { db, type DbAppointment, type DbDepartment, type DbHandover, type DbHandoverItem, type DbHandoverSnapshot, type DbPlanEntry, type DbPosition, type DbTerm } from './db'
 import { can } from './mockAccess'
 import { audit } from './mockAudit'
+import { confirmedAmountOf, HELD_STATUSES } from './mockAdvances'
 import { fundBalance, PENDING_STATUSES } from './mockFinance'
 import { newId } from './mockHttp'
 import { canAccessClub, departmentMemberCount, eligibleMembers, membershipOf, personRef } from './mockMembers'
@@ -243,7 +245,17 @@ export function lastPresidentHint(clubId: string): string {
 const TASK_FINISHED: TaskStatus[] = ['DONE', 'CANCELLED']
 /** Dự thảo là riêng tư của người đề xuất; Đã đóng, Đã hủy thì không còn gì để bàn giao. */
 const EVENT_NOT_HANDED_OVER: EventStatus[] = ['DRAFT', 'CLOSED', 'CANCELLED']
-const KIND_ORDER: Record<HandoverItemKind, number> = { FUND: 0, EVENT: 1, TASK: 2 }
+const KIND_ORDER: Record<HandoverItemKind, number> = { FUND: 0, ADVANCE: 1, EVENT: 2, TASK: 3, DOCUMENTS: 4 }
+/** Tạm ứng còn tiền phải theo dõi: đã duyệt chưa ứng, đã ứng, quyết toán một phần. */
+const ADVANCE_HANDED_OVER: AdvanceStatus[] = ['APPROVED', 'DISBURSED', 'PARTIALLY_SETTLED']
+const ADVANCE_STATUS_LABEL: Record<AdvanceStatus, string> = {
+  PROPOSED: 'Chờ duyệt',
+  APPROVED: 'Đã duyệt',
+  DISBURSED: 'Đã ứng',
+  PARTIALLY_SETTLED: 'Quyết toán một phần',
+  SETTLED: 'Đã quyết toán',
+  REJECTED: 'Bị từ chối',
+}
 const STATUS_ORDER: Record<HandoverItemStatus, number> = { PENDING: 0, CONFIRMED: 1, RESOLVED: 2 }
 
 export function handoverItemsOf(handoverId: string): DbHandoverItem[] {
@@ -255,20 +267,37 @@ export function isLeadCandidate(clubId: string, userId: string): boolean {
   return eligibleMembers(clubId).some((member) => member.id === userId)
 }
 
-/** FR-TERM-04 với các loại đã có dữ liệu: quỹ đang mở, sự kiện chưa đóng, việc của ban chưa xong; việc của tiểu ban đi theo sự kiện. */
-function handoverTargets(clubId: string): Array<Pick<DbHandoverItem, 'kind' | 'refId'>> {
+/** Số tài liệu gắn một nhiệm kỳ (FR-TERM-04 bổ sung). */
+export const termDocumentCount = (termId: string) => db.documents.filter((document) => document.termId === termId).length
+
+/** Tạm ứng đã ứng thì còn phải quyết toán phần chưa có chứng từ được xác nhận; đã duyệt chưa ứng thì cả khoản. */
+export function advanceOutstanding(advance: (typeof db.advances)[number]): number {
+  return HELD_STATUSES.includes(advance.status) ? Math.max(0, advance.amount - confirmedAmountOf(advance)) : advance.amount
+}
+
+/** FR-TERM-04: quỹ mở, tạm ứng chưa quyết toán, sự kiện chưa đóng, việc của ban chưa xong, một mục gộp tài liệu nhiệm kỳ cũ. */
+function handoverTargets(handover: DbHandover): Array<Pick<DbHandoverItem, 'kind' | 'refId'>> {
+  const clubId = handover.clubId
   return [
     ...db.funds.filter((fund) => fund.clubId === clubId && fund.status === 'OPEN').map((fund) => ({ kind: 'FUND' as const, refId: fund.id })),
+    ...db.advances.filter((advance) => advance.clubId === clubId && ADVANCE_HANDED_OVER.includes(advance.status)).map((advance) => ({ kind: 'ADVANCE' as const, refId: advance.id })),
     ...db.events.filter((event) => event.clubId === clubId && !EVENT_NOT_HANDED_OVER.includes(event.status)).map((event) => ({ kind: 'EVENT' as const, refId: event.id })),
     ...db.tasks
       .filter((task) => task.clubId === clubId && task.scopeType === 'DEPARTMENT' && !TASK_FINISHED.includes(task.status))
       .map((task) => ({ kind: 'TASK' as const, refId: task.id })),
+    ...(termDocumentCount(handover.fromTermId) > 0 ? [{ kind: 'DOCUMENTS' as const, refId: handover.fromTermId }] : []),
   ]
 }
 
 /** Lý do mục không cần bàn giao nữa; null khi đối tượng vẫn cần bàn giao. */
 function resolvedReason(item: Pick<DbHandoverItem, 'kind' | 'refId'>): string | null {
   if (item.kind === 'FUND') return db.funds.find((fund) => fund.id === item.refId)?.status === 'OPEN' ? null : 'Quỹ đã quyết toán nên không cần bàn giao nữa.'
+  if (item.kind === 'ADVANCE') {
+    const status = db.advances.find((advance) => advance.id === item.refId)?.status
+    if (status !== undefined && ADVANCE_HANDED_OVER.includes(status)) return null
+    return status === 'REJECTED' ? 'Tạm ứng đã bị từ chối nên không cần bàn giao nữa.' : 'Tạm ứng đã quyết toán xong nên không cần bàn giao nữa.'
+  }
+  if (item.kind === 'DOCUMENTS') return termDocumentCount(item.refId) > 0 ? null : 'Nhiệm kỳ không còn tài liệu nào nên không cần bàn giao nữa.'
   if (item.kind === 'TASK') {
     const status = db.tasks.find((task) => task.id === item.refId)?.status
     if (status === 'DONE') return 'Công việc đã hoàn thành nên không cần bàn giao nữa.'
@@ -288,6 +317,11 @@ function currentSnapshot(item: Pick<DbHandoverItem, 'kind' | 'refId'>): DbHandov
     return { kind: 'FUND', balance: fundBalance(item.refId), pendingIds }
   }
   if (item.kind === 'TASK') return { kind: 'TASK', ownerId: db.tasks.find((task) => task.id === item.refId)?.ownerId ?? '' }
+  if (item.kind === 'ADVANCE') {
+    const advance = db.advances.find((candidate) => candidate.id === item.refId)
+    return { kind: 'ADVANCE', status: advance?.status ?? 'SETTLED', outstanding: advance ? advanceOutstanding(advance) : 0 }
+  }
+  if (item.kind === 'DOCUMENTS') return { kind: 'DOCUMENTS', count: termDocumentCount(item.refId) }
   const status = db.events.find((event) => event.id === item.refId)?.status
   return { kind: 'EVENT', leadId: positionHolderOf('EVENT_LEAD', item.refId), needsLeadDecision: status !== undefined && EVENT_STAFF_ACTIVE.includes(status) }
 }
@@ -304,6 +338,16 @@ function driftNote(item: DbHandoverItem, next: DbHandoverSnapshot, clubId: strin
       ...(added > 0 ? [`Có thêm ${added} khoản chờ duyệt hoặc chờ ghi sổ sau khi xác nhận.`] : []),
     ]
     return parts.length > 0 ? parts.join(' ') : null
+  }
+  if (before.kind === 'ADVANCE' && next.kind === 'ADVANCE') {
+    const parts = [
+      ...(before.status !== next.status ? [`Tạm ứng chuyển từ ${ADVANCE_STATUS_LABEL[before.status]} sang ${ADVANCE_STATUS_LABEL[next.status]} sau khi xác nhận.`] : []),
+      ...(before.outstanding !== next.outstanding ? [`Số còn phải quyết toán đổi từ ${formatMoney(before.outstanding)} thành ${formatMoney(next.outstanding)} sau khi xác nhận.`] : []),
+    ]
+    return parts.length > 0 ? parts.join(' ') : null
+  }
+  if (before.kind === 'DOCUMENTS' && next.kind === 'DOCUMENTS') {
+    return before.count === next.count ? null : `Số tài liệu đổi từ ${before.count} thành ${next.count} sau khi xác nhận.`
   }
   if (before.kind === 'TASK' && next.kind === 'TASK') {
     return before.ownerId === next.ownerId ? null : `Người làm đổi từ ${nameOf(before.ownerId)} thành ${nameOf(next.ownerId)} sau khi xác nhận.`
@@ -322,7 +366,7 @@ function driftNote(item: DbHandoverItem, next: DbHandoverSnapshot, clubId: strin
 }
 
 function resetItem(item: DbHandoverItem, status: HandoverItemStatus, note: string, snapshot: DbHandoverSnapshot) {
-  Object.assign(item, { status, note, snapshot, confirmedBy: null, confirmedAt: null, eventLead: null })
+  Object.assign(item, { status, note, snapshot, confirmedBy: null, confirmedAt: null, eventLead: null, substitute: null })
   item.version += 1
 }
 
@@ -348,7 +392,7 @@ export function syncHandoverItems(handover: DbHandover): void {
   if (handover.status !== 'OPEN') return
   const items = handoverItemsOf(handover.id)
   const known = new Set(items.map((item) => `${item.kind}|${item.refId}`))
-  for (const target of handoverTargets(handover.clubId)) {
+  for (const target of handoverTargets(handover)) {
     if (known.has(`${target.kind}|${target.refId}`)) continue
     db.handoverItems.push({
       id: newId('hi'),
@@ -360,6 +404,7 @@ export function syncHandoverItems(handover: DbHandover): void {
       confirmedBy: null,
       confirmedAt: null,
       eventLead: null,
+      substitute: null,
       version: 1,
     })
   }
@@ -368,7 +413,7 @@ export function syncHandoverItems(handover: DbHandover): void {
 
 export function handoverCounts(handoverId: string): HandoverCounts {
   const empty = (): HandoverItemCounts => ({ total: 0, pending: 0, confirmed: 0, resolved: 0 })
-  const counts: HandoverCounts = { ...empty(), byKind: { FUND: empty(), EVENT: empty(), TASK: empty() } }
+  const counts: HandoverCounts = { ...empty(), byKind: { FUND: empty(), ADVANCE: empty(), EVENT: empty(), TASK: empty(), DOCUMENTS: empty() } }
   const field = { PENDING: 'pending', CONFIRMED: 'confirmed', RESOLVED: 'resolved' } as const
   for (const item of handoverItemsOf(handoverId)) {
     for (const bucket of [counts, counts.byKind[item.kind]]) {
@@ -386,10 +431,12 @@ function itemSortKey(item: DbHandoverItem): string {
     return fund?.kind === 'GENERAL' ? '0' : `1${db.events.find((event) => event.id === fund?.eventId)?.startAt ?? ''}`
   }
   if (item.kind === 'EVENT') return db.events.find((event) => event.id === item.refId)?.startAt ?? ''
+  if (item.kind === 'ADVANCE') return db.advances.find((advance) => advance.id === item.refId)?.settleBy ?? ''
+  if (item.kind === 'DOCUMENTS') return ''
   return db.tasks.find((task) => task.id === item.refId)?.dueAt ?? ''
 }
 
-/** Theo loại (quỹ, sự kiện, công việc), trong mỗi loại mục chờ xác nhận đứng trước. */
+/** Theo loại (quỹ, tạm ứng, sự kiện, công việc, tài liệu), trong mỗi loại mục chờ xác nhận đứng trước. */
 export function compareHandoverItems(a: DbHandoverItem, b: DbHandoverItem): number {
   return KIND_ORDER[a.kind] - KIND_ORDER[b.kind] || STATUS_ORDER[a.status] - STATUS_ORDER[b.status] || itemSortKey(a).localeCompare(itemSortKey(b)) || a.id.localeCompare(b.id)
 }

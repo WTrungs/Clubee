@@ -1,6 +1,15 @@
 import { httpClient } from '@/api/httpClient'
 import type { Page } from '@/api/pagination'
-import type { CompleteHandoverRequest, ConfirmItemsRequest, Handover, HandoverItem, HandoverItemQuery, SaveAppointmentsRequest, StartHandoverRequest } from './handoverTypes'
+import type {
+  CompleteHandoverRequest,
+  ConfirmItemsRequest,
+  Handover,
+  HandoverItem,
+  HandoverItemQuery,
+  SaveAppointmentsRequest,
+  StartHandoverRequest,
+  SubstituteConfirmRequest,
+} from './handoverTypes'
 import type { CreateTermRequest, ExtendTermRequest, Term, UpdateTermRequest } from './termTypes'
 
 const club = (clubId: string) => `/clubs/${encodeURIComponent(clubId)}`
@@ -28,6 +37,9 @@ export const termRepository = {
     }),
   /** FR-TERM-05: ban chủ nhiệm mới xác nhận các mục; một mục đã cũ thì không mục nào được ghi (409). */
   confirmItems: (clubId: string, handoverId: string, request: ConfirmItemsRequest) => httpClient.post<Handover>(`${handover(clubId, handoverId)}/confirmations`, request),
+  /** FR-TERM-07: ban chủ nhiệm hiện tại xác nhận thay các mục đang chờ khi người cũ không bàn giao; bắt buộc lý do. */
+  substituteConfirm: (clubId: string, handoverId: string, request: SubstituteConfirmRequest) =>
+    httpClient.post<Handover>(`${handover(clubId, handoverId)}/substitute-confirmations`, request),
   /** FR-TERM-06: nhiệm kỳ cũ Đã đóng, chức vụ cũ hết hiệu lực, nhiệm kỳ mới Đang chạy; chưa đủ điều kiện thì 422 kèm lý do. */
   complete: (clubId: string, handoverId: string, request: CompleteHandoverRequest) => httpClient.post<Handover>(`${handover(clubId, handoverId)}/transitions`, request),
 }

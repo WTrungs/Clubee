@@ -42,12 +42,15 @@ const eventItem = (overrides: Partial<HandoverItem>): HandoverItem => ({
   status: 'PENDING',
   title: 'Đêm nhạc Mùa đông',
   fund: null,
+  advance: null,
+  documents: null,
   task: null,
   event: { status: 'REGISTRATION_OPEN', startAt: '2026-12-20T18:00:00+07:00', endAt: '2026-12-20T21:00:00+07:00', lead: { id: 'u-bao', fullName: 'Trần Quốc Bảo' }, openTaskCount: 0, needsLeadDecision: true },
   eventLead: null,
   note: null,
   confirmedBy: null,
   confirmedAt: null,
+  substitute: null,
   allowedActions: ['CONFIRM'],
   version: 1,
   ...overrides,
@@ -163,5 +166,47 @@ describe('useHandoverItemsViewModel (FR-TERM-05, NFR-REL-01, NFR-REL-03)', () =>
     if (!plain) throw new Error('Thiếu sự kiện không cần quyết định')
     act(() => result.current.confirmItem(plain))
     await waitFor(() => expect(result.current.notice?.tone).toBe('danger'))
+  })
+})
+
+describe('useHandoverItemsViewModel substitute mode (FR-TERM-07)', () => {
+  it('lets the current board pick shown pending items and confirm them with a reason', async () => {
+    const handover = await openHandover()
+    signInAs('u-anh')
+    const asBoard = await termRepository.handover('c-guitar', handover.id)
+    const { result } = await renderItems(asBoard, '/?kind=FUND')
+    expect(result.current).toMatchObject({ canSubstitute: true, substituting: false, canConfirm: false })
+
+    act(() => result.current.startSubstitute())
+    expect(result.current.substitutableCount).toBe(result.current.items.length)
+    act(() => result.current.toggleAllChosen())
+    expect(result.current.allChosen).toBe(true)
+    const [first] = result.current.items
+    if (!first) throw new Error('Thiếu mục quỹ')
+    act(() => result.current.toggleChosen(first.id))
+    expect(result.current.chosenCount).toBe(result.current.items.length - 1)
+    act(() => result.current.toggleChosen(first.id))
+    act(() => result.current.openSubstituteDialog())
+    expect(result.current.substituteOpen).toBe(true)
+
+    act(() => result.current.submitSubstitute('Thủ quỹ cũ đã rời CLB, không liên lạc được.'))
+    await waitFor(() => expect(result.current.substituting).toBe(false))
+    await waitFor(() => expect(result.current.items.every((item) => item.status === 'CONFIRMED' && item.substitute !== null)).toBe(true))
+  })
+
+  it('reloads and warns when an item changed before the substitute confirmation', async () => {
+    const handover = await openHandover()
+    signInAs('u-anh')
+    const asBoard = await termRepository.handover('c-guitar', handover.id)
+    const { result } = await renderItems(asBoard, '/?kind=FUND')
+    act(() => result.current.startSubstitute())
+    act(() => result.current.toggleAllChosen())
+    const general = db.funds.find((fund) => fund.clubId === 'c-guitar' && fund.kind === 'GENERAL')
+    const item = db.handoverItems.find((candidate) => candidate.refId === general?.id)
+    if (item) item.version += 1
+    act(() => result.current.submitSubstitute('Thủ quỹ cũ đã rời CLB, không liên lạc được.'))
+    await waitFor(() => expect(result.current.notice?.tone).toBe('warning'))
+    expect(result.current.chosenCount).toBe(0)
+    expect(result.current.substituteOpen).toBe(false)
   })
 })

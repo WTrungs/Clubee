@@ -1,7 +1,8 @@
-import { CheckCheck, CircleCheck, Info, ListChecks, TriangleAlert, UserRoundCog } from 'lucide-react'
+import { CheckCheck, CircleCheck, Info, ListChecks, TriangleAlert, UserRoundCheck, UserRoundCog } from 'lucide-react'
 import { formatEventTime, eventStatusDisplay } from '@/features/event/viewModel/eventDisplay'
+import { advanceStatusDisplay } from '@/features/finance/viewModel/advanceDisplay'
 import { taskStatusDisplay } from '@/features/task/viewModel/taskDisplay'
-import { formatDateTime } from '@/shared/format/formatDate'
+import { formatDate, formatDateTime } from '@/shared/format/formatDate'
 import { formatMoney } from '@/shared/format/formatMoney'
 import { cn } from '@/shared/lib/cn'
 import { Badge } from '@/shared/ui/Badge'
@@ -9,11 +10,12 @@ import { Button } from '@/shared/ui/Button'
 import { ConfirmDialog } from '@/shared/ui/ConfirmDialog'
 import { FilterChip, Pagination } from '@/shared/ui/ListControls'
 import { ProgressBar } from '@/shared/ui/ProgressBar'
+import { ReasonDialog } from '@/shared/ui/ReasonDialog'
 import { Skeleton } from '@/shared/ui/Skeleton'
 import { EmptyState, ErrorState } from '@/shared/ui/StateViews'
 import { Tabs, TabsBar } from '@/shared/ui/Tabs'
 import type { Handover, HandoverItem } from '../model/handoverTypes'
-import { canConfirmItem, eventLeadText, handoverItemStatusDisplay, needsDecisionDialog, progressText } from '../viewModel/handoverDisplay'
+import { canConfirmItem, canSubstituteItem, eventLeadText, handoverItemStatusDisplay, needsDecisionDialog, progressText, substituteText } from '../viewModel/handoverDisplay'
 import { useHandoverItemsViewModel, type HandoverItemsViewModel } from '../viewModel/useHandoverItemsViewModel'
 import { EventLeadDecisionDialog } from './EventLeadDecisionDialog'
 
@@ -28,6 +30,38 @@ function ItemFacts({ item }: { item: HandoverItem }) {
         ) : (
           'Không có khoản chờ'
         )}
+      </p>
+    )
+  }
+  if (item.advance) {
+    const advance = item.advance
+    return (
+      <div className="space-y-0.5 text-sm text-muted-foreground">
+        <p>
+          {advance.fundName} · {advanceStatusDisplay[advance.status].label} · Người ứng <span className="font-medium text-foreground">{advance.requester.fullName}</span>
+        </p>
+        <p>
+          Tạm ứng <span className="tabular-nums">{formatMoney(advance.amount)}</span>
+          {' · '}
+          {advance.status === 'APPROVED' ? (
+            'Chưa ứng tiền'
+          ) : (
+            <>
+              Còn phải quyết toán <span className="font-semibold text-foreground tabular-nums">{formatMoney(advance.outstanding)}</span>
+            </>
+          )}
+        </p>
+        <p>
+          Hạn quyết toán {formatDate(advance.settleBy)}
+          {advance.overdue && <span className="font-medium text-status-danger"> · Quá hạn</span>}
+        </p>
+      </div>
+    )
+  }
+  if (item.documents) {
+    return (
+      <p className="text-sm text-muted-foreground">
+        <span className="font-semibold text-foreground">{item.documents.count} tài liệu</span> gắn {item.documents.termName}, xem ở trang Tài liệu.
       </p>
     )
   }
@@ -84,40 +118,67 @@ function ItemAction({ item, vm }: { item: HandoverItem; vm: HandoverItemsViewMod
 
 function ItemRow({ item, vm }: { item: HandoverItem; vm: HandoverItemsViewModel }) {
   const status = handoverItemStatusDisplay[item.status]
+  const choosable = vm.substituting && canSubstituteItem(item)
+  const substitute = substituteText(item)
   return (
-    <li className="flex flex-col gap-3 p-4 sm:flex-row sm:items-start sm:justify-between">
-      <div className="min-w-0 flex-1 space-y-1.5">
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-          <p className="text-sm font-semibold break-words">{item.title}</p>
-          <Badge tone={status.tone} dot>
-            {status.label}
-          </Badge>
+    <li className="flex gap-3 p-4">
+      {vm.substituting && (
+        <label className="-mt-3 -ml-3 flex size-11 shrink-0 cursor-pointer items-center justify-center">
+          <input
+            type="checkbox"
+            aria-label={`Chọn để xác nhận thay: ${item.title}`}
+            className="size-5 accent-primary"
+            checked={vm.isChosen(item.id)}
+            disabled={!choosable || vm.locked}
+            onChange={() => vm.toggleChosen(item.id)}
+          />
+        </label>
+      )}
+      <div className="flex min-w-0 flex-1 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0 flex-1 space-y-1.5">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <p className="text-sm font-semibold break-words">{item.title}</p>
+            <Badge tone={status.tone} dot>
+              {status.label}
+            </Badge>
+          </div>
+          <ItemFacts item={item} />
+          {item.eventLead && (
+            <p className="text-sm font-medium">
+              {eventLeadText(item.eventLead)}
+              <span className="font-normal text-muted-foreground"> (áp dụng khi bàn giao hoàn tất)</span>
+            </p>
+          )}
+          {item.note && (
+            <p
+              className={cn(
+                'flex items-start gap-2 rounded-lg p-2.5 text-sm',
+                item.status === 'PENDING' ? 'bg-status-warning-soft font-medium text-status-warning' : 'bg-muted text-muted-foreground',
+              )}
+            >
+              {item.status === 'PENDING' ? <TriangleAlert aria-hidden className="mt-0.5 size-4 shrink-0" /> : <Info aria-hidden className="mt-0.5 size-4 shrink-0" />}
+              {item.note}
+            </p>
+          )}
+          {substitute ? (
+            <p className="flex items-start gap-2 text-xs text-muted-foreground [overflow-wrap:anywhere]">
+              <UserRoundCheck aria-hidden className="size-4 shrink-0" />
+              <span>
+                {substitute}
+                {item.confirmedAt && ` · ${formatDateTime(item.confirmedAt)}`}
+              </span>
+            </p>
+          ) : (
+            item.confirmedBy &&
+            item.confirmedAt && (
+              <p className="text-xs text-muted-foreground">
+                Xác nhận bởi {item.confirmedBy.fullName} · {formatDateTime(item.confirmedAt)}
+              </p>
+            )
+          )}
         </div>
-        <ItemFacts item={item} />
-        {item.eventLead && (
-          <p className="text-sm font-medium">
-            {eventLeadText(item.eventLead)}
-            <span className="font-normal text-muted-foreground"> (áp dụng khi bàn giao hoàn tất)</span>
-          </p>
-        )}
-        {item.note && (
-          <p
-            className={cn(
-              'flex items-start gap-2 rounded-lg p-2.5 text-sm',
-              item.status === 'PENDING' ? 'bg-status-warning-soft font-medium text-status-warning' : 'bg-muted text-muted-foreground',
-            )}
-          >
-            {item.status === 'PENDING' ? <TriangleAlert aria-hidden className="mt-0.5 size-4 shrink-0" /> : <Info aria-hidden className="mt-0.5 size-4 shrink-0" />}
-            {item.note}
-          </p>
-        )}
-        {item.confirmedBy && item.confirmedAt && (
-          <p className="text-xs text-muted-foreground">
-            Xác nhận bởi {item.confirmedBy.fullName} · {formatDateTime(item.confirmedAt)}
-          </p>
-        )}
+        {!vm.substituting && <ItemAction item={item} vm={vm} />}
       </div>
-      <ItemAction item={item} vm={vm} />
     </li>
   )
 }
@@ -162,6 +223,46 @@ function BatchBar({ vm }: { vm: HandoverItemsViewModel }) {
         <CheckCheck aria-hidden />
         Xác nhận các mục đang hiện
       </Button>
+    </div>
+  )
+}
+
+/** FR-TERM-07: ban chủ nhiệm hiện tại chọn các mục đang chờ rồi xác nhận thay, kèm lý do. */
+function SubstituteBar({ vm }: { vm: HandoverItemsViewModel }) {
+  if (!vm.canSubstitute || (!vm.substituting && !vm.hasPending)) return null
+  if (!vm.substituting) {
+    return (
+      <div className="flex flex-col gap-3 rounded-xl border border-dashed p-3 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-sm text-muted-foreground">Người được bầu không nhận được bàn giao từ người cũ? Ban chủ nhiệm hiện tại xác nhận thay các mục đang chờ, kèm lý do.</p>
+        <Button variant="outline" className="w-full shrink-0 sm:w-auto" onClick={vm.startSubstitute}>
+          <UserRoundCheck aria-hidden />
+          Xác nhận thay
+        </Button>
+      </div>
+    )
+  }
+  return (
+    <div className="space-y-3 rounded-xl bg-muted p-3">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-sm">
+          <span className="font-semibold">Đã chọn {vm.chosenCount}</span>/{vm.substitutableCount} mục đang chờ ở trang này.
+        </p>
+        {vm.substitutableCount > 0 && (
+          <label className="flex min-h-11 cursor-pointer items-center gap-2 text-sm font-semibold">
+            <input type="checkbox" className="size-4 accent-primary" checked={vm.allChosen} disabled={vm.locked} onChange={vm.toggleAllChosen} />
+            Chọn tất cả đang hiện
+          </label>
+        )}
+      </div>
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <Button className="w-full sm:w-auto" disabled={vm.chosenCount === 0 || vm.locked} onClick={vm.openSubstituteDialog}>
+          <CheckCheck aria-hidden />
+          {vm.chosenCount > 0 ? `Xác nhận thay ${vm.chosenCount} mục` : 'Xác nhận thay'}
+        </Button>
+        <Button variant="ghost" className="w-full sm:w-auto" disabled={vm.substitutePending} onClick={vm.cancelSubstitute}>
+          Thôi
+        </Button>
+      </div>
     </div>
   )
 }
@@ -216,7 +317,8 @@ export function HandoverItemsSection({ handover }: { handover: Handover }) {
         )}
       </div>
 
-      <BatchBar vm={vm} />
+      {open && <SubstituteBar vm={vm} />}
+      {!vm.substituting && <BatchBar vm={vm} />}
       <ItemList vm={vm} />
       <Pagination page={vm.page} totalPages={vm.totalPages} totalElements={vm.totalElements} pageSize={vm.pageSize} onPageChange={vm.setPage} />
 
@@ -230,6 +332,17 @@ export function HandoverItemsSection({ handover }: { handover: Handover }) {
         onConfirm={vm.confirmBatch}
       />
       <EventLeadDecisionDialog items={vm} />
+      <ReasonDialog
+        open={vm.substituteOpen}
+        onOpenChange={(next) => !next && vm.closeSubstituteDialog()}
+        title={`Xác nhận thay ${vm.chosenCount} mục`}
+        description={`Mục được ghi Đã xác nhận kèm tên bạn và lý do; sự kiện giữ Trưởng BTC hiện tại.${vm.hasNewBoard ? ' Người được bầu vào ban chủ nhiệm mới được báo.' : ''}`}
+        label="Lý do xác nhận thay"
+        placeholder="Ví dụ: Thủ quỹ cũ đã rời CLB, không liên lạc được."
+        confirmLabel="Xác nhận thay"
+        pending={vm.substitutePending}
+        onConfirm={vm.submitSubstitute}
+      />
     </section>
   )
 }
