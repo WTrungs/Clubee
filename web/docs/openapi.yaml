@@ -10013,7 +10013,7 @@ components:
         studentId: { $ref: '#/components/schemas/NullableString' }
     ApplicationSummary:
       type: object
-      required: [id, applicant, status, choices, submittedAt, currentRoundId, roundResults, totalScore, outcome, version]
+      required: [id, applicant, status, choices, submittedAt, currentRoundId, roundResults, totalScore, outcome, priorHistory, version]
       properties:
         id: { type: string }
         applicant: { $ref: '#/components/schemas/PersonRef' }
@@ -10033,13 +10033,74 @@ components:
           oneOf:
             - $ref: '#/components/schemas/ApplicationOutcome'
             - type: 'null'
+        priorHistory:
+          description: |
+            FR-REC-04: tóm tắt khi ứng viên từng nộp đơn hoặc từng là thành viên CLB này; null là ứng viên mới. `eliminated` khi
+            có đơn bị Loại hoặc không trúng tuyển, từng bị đưa ra khỏi CLB hoặc bị từ chối gia nhập.
+          oneOf:
+            - type: 'null'
+            - type: object
+              required: [applications, eliminated, formerMember]
+              properties:
+                applications: { type: integer, minimum: 0 }
+                eliminated: { type: boolean }
+                formerMember: { type: boolean }
         version: { type: integer }
+    ApplicantHistory:
+      type: object
+      description: FR-REC-04, chỉ ban chủ nhiệm xem cùng đơn.
+      required: [applications, memberships]
+      properties:
+        applications:
+          type: array
+          description: Đơn khác của cùng người ở CLB này, mới nhất trước; `eliminationNote` là nhận xét của vòng bị Loại.
+          items:
+            type: object
+            required: [id, recruitment, submittedAt, status, roundResults, totalScore, eliminationNote, outcome]
+            properties:
+              id: { type: string }
+              recruitment:
+                type: object
+                required: [id, name]
+                properties:
+                  id: { type: string }
+                  name: { type: string }
+              submittedAt: { type: string, format: date-time }
+              status: { $ref: '#/components/schemas/ApplicationStatus' }
+              roundResults:
+                type: array
+                items:
+                  type: object
+                  required: [roundName, result, score, note]
+                  properties:
+                    roundName: { type: string }
+                    result: { type: string, enum: [PASS, FAIL] }
+                    score: { type: [integer, 'null'] }
+                    note: { type: string }
+              totalScore: { type: integer }
+              eliminationNote: { $ref: '#/components/schemas/NullableString' }
+              outcome:
+                oneOf:
+                  - $ref: '#/components/schemas/ApplicationOutcome'
+                  - type: 'null'
+        memberships:
+          type: array
+          description: Các lần từng là thành viên hoặc từng xin gia nhập đã kết thúc, kèm lý do.
+          items:
+            type: object
+            required: [joinedOn, leftOn, exitKind, reason]
+            properties:
+              joinedOn: { type: [string, 'null'], format: date }
+              leftOn: { type: [string, 'null'], format: date }
+              exitKind: { type: string, enum: [REJECTED, REMOVED, RESIGNED] }
+              reason: { $ref: '#/components/schemas/NullableString' }
     ApplicationDetail:
       allOf:
         - $ref: '#/components/schemas/ApplicationSummary'
         - type: object
-          required: [answers, studentId, withdrawnAt]
+          required: [history, answers, studentId, withdrawnAt]
           properties:
+            history: { $ref: '#/components/schemas/ApplicantHistory' }
             answers:
               type: array
               items: { $ref: '#/components/schemas/ApplicationAnswer' }

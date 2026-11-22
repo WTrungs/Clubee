@@ -46,3 +46,21 @@ export function quotaUsage(
     return { ...quota, admitted, over: admitted > quota.quota }
   })
 }
+
+/** FR-REC-04: câu tóm tắt cho người xét đơn, ví dụ "Từng nộp 1 đơn, từng bị loại, từng là thành viên CLB này." */
+export function priorHistoryText(flags: { applications: number; eliminated: boolean; formerMember: boolean }): string {
+  const parts = [
+    ...(flags.applications > 0 ? [`từng nộp ${flags.applications} đơn`] : []),
+    ...(flags.eliminated ? ['từng bị loại'] : []),
+    ...(flags.formerMember ? ['từng là thành viên'] : []),
+  ]
+  const text = parts.join(', ')
+  return text ? `${text.charAt(0).toUpperCase()}${text.slice(1)} ở CLB này.` : ''
+}
+
+/** Cách tư cách cũ kết thúc. */
+export const priorExitText: Record<'REJECTED' | 'REMOVED' | 'RESIGNED', string> = {
+  REJECTED: 'Yêu cầu gia nhập bị từ chối',
+  REMOVED: 'Bị đưa ra khỏi CLB',
+  RESIGNED: 'Tự rời CLB',
+}

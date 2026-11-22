@@ -1,4 +1,4 @@
-import { Inbox } from 'lucide-react'
+import { History, Inbox } from 'lucide-react'
 import { formatDate, formatDateTime } from '@/shared/format/formatDate'
 import { Badge } from '@/shared/ui/Badge'
 import { NativeSelect } from '@/shared/ui/Input'
@@ -6,11 +6,54 @@ import { Pagination, SearchInput } from '@/shared/ui/ListControls'
 import { Sheet, SheetContent } from '@/shared/ui/Sheet'
 import { Skeleton } from '@/shared/ui/Skeleton'
 import { EmptyState, ErrorState } from '@/shared/ui/StateViews'
-import type { ApplicationStatus, RecruitmentDetail } from '../model/recruitmentTypes'
-import { applicationStatusDisplay, choicesText } from '../viewModel/recruitmentDisplay'
+import type { ApplicantHistory, ApplicationStatus, RecruitmentDetail } from '../model/recruitmentTypes'
+import { applicationStatusDisplay, choicesText, priorExitText, priorHistoryText } from '../viewModel/recruitmentDisplay'
 import { useApplicationsViewModel, type ApplicationsViewModel } from '../viewModel/useApplicationViewModels'
 
 const STATUS_FILTERS = Object.keys(applicationStatusDisplay) as ApplicationStatus[]
+
+/** FR-REC-04: đơn cũ, điểm cũ, lý do bị loại và tư cách cũ của ứng viên ở CLB này. */
+function ApplicantHistorySection({ history }: { history: ApplicantHistory }) {
+  if (history.applications.length === 0 && history.memberships.length === 0) return null
+  return (
+    <section aria-labelledby="applicant-history" className="space-y-2 rounded-xl border border-status-warning/40 bg-status-warning-soft p-3">
+      <h3 id="applicant-history" className="flex items-center gap-2 text-sm font-bold text-status-warning">
+        <History aria-hidden className="size-4" />
+        Lịch sử ở CLB
+      </h3>
+      <ul className="space-y-2 text-sm">
+        {history.applications.map((application) => (
+          <li key={application.id} className="rounded-lg bg-card p-3">
+            <p className="font-semibold [overflow-wrap:anywhere]">{application.recruitment.name}</p>
+            <p className="text-xs text-muted-foreground">
+              Nộp {formatDate(application.submittedAt)} · {applicationStatusDisplay[application.status].label}
+              {application.outcome?.departmentName ? ` · Ban ${application.outcome.departmentName}` : ''} · tổng điểm {application.totalScore}
+            </p>
+            {application.roundResults.length > 0 && (
+              <ul className="mt-1 space-y-0.5">
+                {application.roundResults.map((result) => (
+                  <li key={result.roundName} className="[overflow-wrap:anywhere]">
+                    {result.roundName}: {result.result === 'PASS' ? `Đạt · ${result.score ?? 0} điểm` : `Loại · ${result.note}`}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </li>
+        ))}
+        {history.memberships.map((membership, index) => (
+          <li key={`${membership.leftOn ?? ''}-${index}`} className="rounded-lg bg-card p-3">
+            <p className="font-semibold">{priorExitText[membership.exitKind]}</p>
+            <p className="text-xs text-muted-foreground">
+              {membership.joinedOn ? `Thành viên từ ${formatDate(membership.joinedOn)}` : 'Chưa được duyệt vào CLB'}
+              {membership.leftOn ? ` đến ${formatDate(membership.leftOn)}` : ''}
+            </p>
+            {membership.reason && <p className="[overflow-wrap:anywhere]">Lý do: {membership.reason}</p>}
+          </li>
+        ))}
+      </ul>
+    </section>
+  )
+}
 
 function ApplicationDetailSheet({ vm }: { vm: ApplicationsViewModel }) {
   const detail = vm.detail
@@ -31,6 +74,7 @@ function ApplicationDetailSheet({ vm }: { vm: ApplicationsViewModel }) {
               <p className="text-sm">
                 <span className="font-semibold">Nguyện vọng:</span> {choicesText(detail.choices)}
               </p>
+              <ApplicantHistorySection history={detail.history} />
               {detail.roundResults.length > 0 && (
                 <section aria-label="Kết quả từng vòng" className="space-y-2">
                   <h3 className="text-sm font-bold">Kết quả từng vòng · tổng điểm {detail.totalScore}</h3>
@@ -105,7 +149,14 @@ export function ApplicationsPanel({ clubId, recruitment, active }: { clubId: str
               <li key={row.id}>
                 <button type="button" onClick={() => vm.openDetail(row.id)} className="flex w-full flex-wrap items-center justify-between gap-2 px-4 py-3 text-left hover:bg-muted/60">
                   <span className="min-w-0">
-                    <span className="block font-semibold">{row.applicant.fullName}</span>
+                    <span className="flex flex-wrap items-center gap-1.5 font-semibold">
+                      {row.applicant.fullName}
+                      {row.priorHistory && (
+                        <Badge tone="warning" title={priorHistoryText(row.priorHistory)}>
+                          Ứng viên cũ
+                        </Badge>
+                      )}
+                    </span>
                     <span className="block text-xs text-muted-foreground">
                       {choicesText(row.choices)} · {formatDate(row.submittedAt)}
                     </span>

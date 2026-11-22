@@ -18,6 +18,7 @@ import { APPLICATION_ANSWER_MAX, APPLICATION_CHOICES_MAX } from '@/shared/lib/re
 import { db, type DbApplication, type DbRecruitment } from './db'
 import type { DbRoundResult } from './seed/recruitmentSeed'
 import { personRef } from './mockMembers'
+import { applicantHistoryOf, priorFlagsOf } from './mockApplicantHistory'
 import { canRespond } from './mockRecruitmentResults'
 import { recruitmentStatusOf } from './mockRecruitments'
 import { nowIso } from './mockTime'
@@ -160,6 +161,7 @@ export function toApplicationSummary(application: DbApplication): ApplicationSum
     roundResults: roundResultsOf(application, recruitment),
     totalScore: totalScoreOf(application),
     outcome: outcomeOf(application),
+    priorHistory: priorFlagsOf(application),
     version: application.version,
   }
 }
@@ -194,7 +196,7 @@ export function setRoundResult(application: DbApplication, roundId: string, inpu
 }
 
 export function toApplicationDetail(application: DbApplication): ApplicationDetail {
-  return { ...toApplicationSummary(application), answers: answersOf(application, recruitmentOf(application)), studentId: application.studentId, withdrawnAt: application.withdrawnAt }
+  return { ...toApplicationSummary(application), history: applicantHistoryOf(application), answers: answersOf(application, recruitmentOf(application)), studentId: application.studentId, withdrawnAt: application.withdrawnAt }
 }
 
 /** Kiểm đơn (400 theo ô): 1–3 nguyện vọng khác nhau trong các ban có chỉ tiêu, câu bắt buộc có trả lời, MSSV khi CLB thu thập. */
