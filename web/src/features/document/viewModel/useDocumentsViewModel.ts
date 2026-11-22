@@ -11,14 +11,14 @@ import { applyServerFieldErrors } from '@/shared/form/applyServerFieldErrors'
 import { useDebouncedValue } from '@/shared/hooks/useDebouncedValue'
 import { saveBlob } from '@/shared/lib/saveBlob'
 import { documentRepository } from '../model/documentRepository'
-import type { DocumentDetail, DocumentOwnerType, DocumentQuery, DocumentScopeOption } from '../model/documentTypes'
+import type { DocumentDetail, DocumentOwnerType, DocumentQuery, DocumentScopeOption, DocumentSummary } from '../model/documentTypes'
 import { documentFormSchema, scopeKeyOf, toUploadRequest, versionFormSchema, type DocumentFormValues, type VersionFormValues } from './documentFormSchema'
 
 export const documentQueryKeys = {
   all: ['documents'] as const,
   lists: (clubId: string) => ['documents', 'list', clubId] as const,
   list: (clubId: string, query: DocumentQuery) => ['documents', 'list', clubId, query] as const,
-  facets: (clubId: string) => ['documents', 'facets', clubId] as const,
+  facets: (clubId: string, hidden: boolean) => ['documents', 'facets', clubId, hidden] as const,
   scopes: (clubId: string) => ['documents', 'scopes', clubId] as const,
   detail: (clubId: string, documentId: string) => ['documents', 'detail', clubId, documentId] as const,
 }
@@ -27,7 +27,11 @@ const PAGE_SIZE = 50
 
 /** FR-DOC-02: tìm, lọc tài liệu người dùng được xem; tải xuống qua máy chủ để quyền được kiểm lại mỗi lần. */
 export function useDocumentsViewModel() {
-  const { clubId } = useCurrentClub()
+  const { clubId, club } = useCurrentClub()
+  const canViewHidden = club.allowedActions.includes('VIEW_HIDDEN_DOCUMENTS')
+  const [showHidden, setShowHidden] = useState(false)
+  const [hideTarget, setHideTarget] = useState<DocumentSummary | null>(null)
+  const [restoreTarget, setRestoreTarget] = useState<DocumentSummary | null>(null)
   const queryClient = useQueryClient()
   const [keyword, setKeyword] = useState('')
   const debouncedKeyword = useDebouncedValue(keyword.trim(), 300)
@@ -40,9 +44,10 @@ export function useDocumentsViewModel() {
   const [versionOpen, setVersionOpen] = useState(false)
 
   const [ownerType, ownerId] = owner ? (owner.split(':') as [DocumentOwnerType, string | undefined]) : [undefined, undefined]
-  const query: DocumentQuery = { q: debouncedKeyword || undefined, tag: tag || undefined, termId: termId || undefined, ownerType, ownerId: ownerId || undefined, page }
+  const hidden = canViewHidden && showHidden
+  const query: DocumentQuery = { q: debouncedKeyword || undefined, tag: tag || undefined, termId: termId || undefined, ownerType, ownerId: ownerId || undefined, hidden, page }
   const list = useQuery({ queryKey: documentQueryKeys.list(clubId, query), queryFn: () => documentRepository.list(clubId, query), placeholderData: keepPreviousData })
-  const facets = useQuery({ queryKey: documentQueryKeys.facets(clubId), queryFn: () => documentRepository.facets(clubId) })
+  const facets = useQuery({ queryKey: documentQueryKeys.facets(clubId, hidden), queryFn: () => documentRepository.facets(clubId, hidden) })
   const scopes = useQuery({ queryKey: documentQueryKeys.scopes(clubId), queryFn: () => documentRepository.scopes(clubId) })
   const detail = useQuery({
     queryKey: documentQueryKeys.detail(clubId, detailId ?? ''),
@@ -64,6 +69,39 @@ export function useDocumentsViewModel() {
         setDetailId(null)
         void queryClient.invalidateQueries({ queryKey: documentQueryKeys.all })
       }
+    },
+  })
+
+  // Ẩn, khôi phục thì danh sách, chi tiết, bộ lọc đều đổi; lỗi 403, 409, 422 cũng tải lại để thấy trạng thái mới.
+  const afterChange = () => queryClient.invalidateQueries({ queryKey: documentQueryKeys.all })
+  const hide = useMutation({
+    mutationFn: ({ document, reason }: { document: DocumentSummary; reason: string }) => documentRepository.hide(clubId, document.id, { reason, version: document.version }),
+    meta: { silentError: true },
+    onSuccess: async (saved) => {
+      setHideTarget(null)
+      setDetailId(null)
+      await afterChange()
+      toast.success(`Đã ẩn “${saved.title}”. Ban chủ nhiệm khôi phục được khi cần.`)
+    },
+    onError: (error) => {
+      toast.error(getErrorMessage(error))
+      setHideTarget(null)
+      void afterChange()
+    },
+  })
+  const restore = useMutation({
+    mutationFn: (document: DocumentSummary) => documentRepository.restore(clubId, document.id, document.version),
+    meta: { silentError: true },
+    onSuccess: async (saved) => {
+      setRestoreTarget(null)
+      setDetailId(null)
+      await afterChange()
+      toast.success(`Đã khôi phục “${saved.title}”.`)
+    },
+    onError: (error) => {
+      toast.error(getErrorMessage(error))
+      setRestoreTarget(null)
+      void afterChange()
     },
   })
 
@@ -116,6 +154,17 @@ export function useDocumentsViewModel() {
     downloadingVersion: download.isPending ? download.variables?.versionNumber : undefined,
     versionOpen,
     setVersionOpen,
+    canViewHidden,
+    showHidden: hidden,
+    setShowHidden: resetPage(setShowHidden),
+    hideTarget,
+    setHideTarget,
+    hide: (reason: string) => hideTarget && hide.mutate({ document: hideTarget, reason }),
+    hiding: hide.isPending,
+    restoreTarget,
+    setRestoreTarget,
+    restore: () => restoreTarget && restore.mutate(restoreTarget),
+    restoring: restore.isPending,
   }
 }
 

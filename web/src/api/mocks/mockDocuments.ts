@@ -31,10 +31,14 @@ function belongsToOwner(userId: string, document: DbDocument): boolean {
   return false
 }
 
+/** FR-DOC-04: tài liệu đã ẩn chỉ còn ban chủ nhiệm thấy. */
+export const hiddenFrom = (userId: string, document: DbDocument) => document.hidden !== null && !isBoardMember(userId, document.clubId)
+
 /** FR-DOC-02: quyền xem tính lại mỗi lần đọc; ban chủ nhiệm xem mọi tài liệu của CLB mình. */
 export function canViewDocument(userId: string, document: DbDocument): boolean {
   if (!canAccessClub(userId, document.clubId)) return false
   if (isBoardMember(userId, document.clubId)) return true
+  if (document.hidden) return false
   if (document.visibility === 'CLUB') return true
   if (document.visibility === 'OWNER') return belongsToOwner(userId, document)
   return false
@@ -71,7 +75,8 @@ export function canUploadVersion(userId: string, document: DbDocument): boolean 
 }
 
 export function documentActions(userId: string, document: DbDocument): DocumentAction[] {
-  return canUploadVersion(userId, document) ? ['UPLOAD_VERSION'] : []
+  if (document.hidden) return isBoardMember(userId, document.clubId) ? ['RESTORE'] : []
+  return [...(canUploadVersion(userId, document) ? (['UPLOAD_VERSION'] as const) : []), ...(managesDocument(userId, document) ? (['HIDE'] as const) : [])]
 }
 
 export const versionsOf = (documentId: string) =>
@@ -93,6 +98,7 @@ export function toDocumentSummary(document: DbDocument, viewerId: string): Docum
     uploadedAt: document.uploadedAt,
     currentVersion: document.currentVersion,
     allowedActions: documentActions(viewerId, document),
+    hidden: document.hidden ? { by: { ...personRef(document.hidden.by), fullName: document.hidden.byName }, at: document.hidden.at, reason: document.hidden.reason } : null,
     version: document.version,
   }
 }

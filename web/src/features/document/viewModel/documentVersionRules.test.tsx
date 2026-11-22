@@ -39,9 +39,9 @@ describe('phiên bản tài liệu (FR-DOC-03)', () => {
   })
 
   it('người tạo hoặc người quản lý nơi sở hữu được tải bản mới; thành viên thường thì không', async () => {
-    expect(await actionsOf('u-linh', 'doc-media-plan')).toEqual(['UPLOAD_VERSION'])
-    expect(await actionsOf('u-anh', 'doc-media-plan')).toEqual(['UPLOAD_VERSION'])
-    expect(await actionsOf('u-bao', 'doc-winter-budget')).toEqual(['UPLOAD_VERSION'])
+    expect(await actionsOf('u-linh', 'doc-media-plan')).toContain('UPLOAD_VERSION')
+    expect(await actionsOf('u-anh', 'doc-media-plan')).toContain('UPLOAD_VERSION')
+    expect(await actionsOf('u-bao', 'doc-winter-budget')).toContain('UPLOAD_VERSION')
     expect(await actionsOf('u-ha', 'doc-media-plan')).toEqual([])
     expect(await actionsOf('u-linh', 'doc-rules')).toEqual([])
     // Người tạo vẫn được tải bản mới khi không còn quyền Quản lý tài liệu.

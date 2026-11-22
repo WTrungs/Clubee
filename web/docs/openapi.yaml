@@ -4036,10 +4036,16 @@ paths:
       summary: Tìm tài liệu (FR-DOC-02)
       description: |
         Chỉ trả tài liệu người gọi được xem: `CLUB` mọi thành viên; `OWNER` thành viên có ban chính là ban sở hữu, hoặc BTC sự kiện sở hữu;
-        ban chủ nhiệm xem mọi tài liệu. `q` tìm theo tên, tên tệp, nhãn. Mới tải lên trước, 50 dòng một trang. Lỗi 403 `NOT_A_MEMBER`.
+        ban chủ nhiệm xem mọi tài liệu. `q` tìm theo tên, tên tệp, nhãn. Mới tải lên trước, 50 dòng một trang.
+        Tài liệu đã ẩn (FR-DOC-04) không có ở danh sách thường; ban chủ nhiệm xem riêng bằng `hidden=true`.
+        Lỗi 403 `NOT_A_MEMBER`, `FORBIDDEN` (`hidden=true` mà không phải ban chủ nhiệm).
       parameters:
         - $ref: '#/components/parameters/ClubId'
         - $ref: '#/components/parameters/Q'
+        - name: hidden
+          in: query
+          description: '`true` chỉ ban chủ nhiệm: danh sách tài liệu đã ẩn (FR-DOC-04); người khác 403.'
+          schema: { type: boolean, default: false }
         - name: tag
           in: query
           schema: { type: string }
@@ -4108,9 +4114,13 @@ paths:
       tags: [DOC]
       operationId: getDocumentFacets
       summary: Nhãn, nhiệm kỳ, nơi sở hữu để lọc (FR-DOC-02)
-      description: Chỉ tính trên tài liệu người gọi xem được. Lỗi 403 `NOT_A_MEMBER`.
+      description: Chỉ tính trên tài liệu người gọi xem được, theo danh sách đang hiện hoặc đã ẩn (`hidden`). Lỗi 403 `NOT_A_MEMBER`, `FORBIDDEN`.
       parameters:
         - $ref: '#/components/parameters/ClubId'
+        - name: hidden
+          in: query
+          description: '`true` chỉ ban chủ nhiệm: danh sách tài liệu đã ẩn (FR-DOC-04); người khác 403.'
+          schema: { type: boolean, default: false }
       responses:
         '200':
           description: Giá trị lọc.
@@ -4147,7 +4157,7 @@ paths:
       summary: Tải tài liệu xuống (FR-DOC-02)
       description: |
         Kiểm lại quyền xem mỗi lần tải. Trả nội dung tệp kèm `Content-Disposition: attachment` (`filename*` UTF-8) và `Cache-Control: no-store`.
-        Lỗi 403 `NOT_A_MEMBER`, `FORBIDDEN`; 404 `DOCUMENT_NOT_FOUND`.
+        Lỗi 403 `NOT_A_MEMBER`, `FORBIDDEN`, `DOCUMENT_HIDDEN` (đã ẩn, không phải ban chủ nhiệm); 404 `DOCUMENT_NOT_FOUND`.
       parameters:
         - $ref: '#/components/parameters/ClubId'
         - name: documentId
@@ -4230,6 +4240,84 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+  /clubs/{clubId}/documents/{documentId}/hiding:
+    post:
+      tags: [DOC]
+      operationId: hideDocument
+      summary: Ẩn tài liệu (FR-DOC-04)
+      description: |
+        Ẩn thay cho xóa (BR-DATA-01): tài liệu biến khỏi danh sách, chi tiết và tải xuống của mọi người trừ ban chủ nhiệm
+        (403 `DOCUMENT_HIDDEN`); không xóa bản ghi hay tệp. Người có `MANAGE_DOCUMENTS` ở nơi sở hữu.
+        Lỗi theo thứ tự: 403 `NOT_A_MEMBER`, `CSRF`; 404 `DOCUMENT_NOT_FOUND`; 403 `FORBIDDEN`; 409 `VERSION_CONFLICT`;
+        422 `DOCUMENT_HIDDEN`; 400 `VALIDATION` (`reason` 5–500 ký tự).
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - name: documentId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason, version]
+              properties:
+                reason: { type: string, minLength: 5, maxLength: 500 }
+                version: { type: integer }
+      responses:
+        '200':
+          description: Tài liệu sau khi ẩn.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DocumentDetail' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+  /clubs/{clubId}/documents/{documentId}/restoration:
+    post:
+      tags: [DOC]
+      operationId: restoreDocument
+      summary: Khôi phục tài liệu đã ẩn (FR-DOC-04)
+      description: |
+        Chỉ ban chủ nhiệm. Tài liệu hiện lại với những người được xem như trước khi ẩn.
+        Lỗi theo thứ tự: 403 `NOT_A_MEMBER`, `CSRF`; 404 `DOCUMENT_NOT_FOUND`; 403 `FORBIDDEN`; 409 `VERSION_CONFLICT`; 422 `DOCUMENT_NOT_HIDDEN`.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - name: documentId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [version]
+              properties:
+                version: { type: integer }
+      responses:
+        '200':
+          description: Tài liệu sau khi khôi phục.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DocumentDetail' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
   /me/club-history:
     get:
       tags: [RPT]
@@ -6886,8 +6974,8 @@ components:
         `VIEW_DUES`: thuộc ban chủ nhiệm, xem tab Đóng quỹ (FR-FIN-09). `OPEN_DUES`: ban chủ nhiệm có `RECORD_LEDGER`, mở đợt đóng quỹ.
         `VIEW_FINANCE_REPORT`: thuộc ban chủ nhiệm, xem tab Báo cáo thu chi (FR-FIN-12).
         `MANAGE_RECRUITMENT`: có quyền Quản lý thành viên, mở và quản lý đợt tuyển (FR-REC-01).
-        `VIEW_CLUB_REPORT`, `VIEW_AUDIT_LOG`: ban chủ nhiệm (FR-RPT-04, 06). `VIEW_DEPARTMENT_REPORTS`: ban chủ nhiệm, trưởng hoặc phó của một ban đang hoạt động (FR-RPT-03).
-      enum: [CREATE_EVENT, PROPOSE_EVENT, ASSIGN_TASK, MANAGE_MEMBERS, MANAGE_ORG, ASSIGN_PRESIDENCY, EDIT_CLUB, SEND_ANNOUNCEMENT, CREATE_TERM, ASSIGN_POSITION, REQUEST_PRESIDENCY_TRANSFER, VIEW_PERMISSIONS, VIEW_SHARED_EVENTS, VIEW_DUES, OPEN_DUES, VIEW_FINANCE_REPORT, MANAGE_RECRUITMENT, VIEW_CLUB_REPORT, VIEW_DEPARTMENT_REPORTS, VIEW_AUDIT_LOG]
+        `VIEW_CLUB_REPORT`, `VIEW_AUDIT_LOG`: ban chủ nhiệm (FR-RPT-04, 06). `VIEW_HIDDEN_DOCUMENTS`: ban chủ nhiệm (FR-DOC-04). `VIEW_DEPARTMENT_REPORTS`: ban chủ nhiệm, trưởng hoặc phó của một ban đang hoạt động (FR-RPT-03).
+      enum: [CREATE_EVENT, PROPOSE_EVENT, ASSIGN_TASK, MANAGE_MEMBERS, MANAGE_ORG, ASSIGN_PRESIDENCY, EDIT_CLUB, SEND_ANNOUNCEMENT, CREATE_TERM, ASSIGN_POSITION, REQUEST_PRESIDENCY_TRANSFER, VIEW_PERMISSIONS, VIEW_SHARED_EVENTS, VIEW_DUES, OPEN_DUES, VIEW_FINANCE_REPORT, MANAGE_RECRUITMENT, VIEW_CLUB_REPORT, VIEW_DEPARTMENT_REPORTS, VIEW_AUDIT_LOG, VIEW_HIDDEN_DOCUMENTS]
     TermSummary:
       type: object
       description: Nhiệm kỳ đang phụ trách CLB (Đang chạy hoặc Đang bàn giao).
@@ -9467,7 +9555,7 @@ components:
       $ref: '#/components/schemas/DocumentOwner'
     DocumentSummary:
       type: object
-      required: [id, title, fileName, fileSize, contentType, owner, term, tags, visibility, uploadedBy, uploadedAt, currentVersion, allowedActions, version]
+      required: [id, title, fileName, fileSize, contentType, owner, term, tags, visibility, uploadedBy, uploadedAt, currentVersion, allowedActions, hidden, version]
       properties:
         id: { type: string }
         title: { type: string }
@@ -9492,7 +9580,18 @@ components:
         currentVersion: { type: integer, minimum: 1, description: 'Số bản hiện hành; tệp, người tải, lúc tải ở trên là của bản này.' }
         allowedActions:
           type: array
-          items: { type: string, enum: [UPLOAD_VERSION] }
+          description: '`UPLOAD_VERSION` (FR-DOC-03); `HIDE` cho người có `MANAGE_DOCUMENTS` ở nơi sở hữu, `RESTORE` cho ban chủ nhiệm khi đã ẩn (FR-DOC-04).'
+          items: { type: string, enum: [UPLOAD_VERSION, HIDE, RESTORE] }
+        hidden:
+          description: Có khi tài liệu đã ẩn; họ tên người ẩn chụp lúc ẩn.
+          oneOf:
+            - type: 'null'
+            - type: object
+              required: [by, at, reason]
+              properties:
+                by: { $ref: '#/components/schemas/PersonRef' }
+                at: { type: string, format: date-time }
+                reason: { type: string }
         version: { type: integer }
     DocumentVersion:
       type: object

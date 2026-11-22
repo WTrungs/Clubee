@@ -25,6 +25,8 @@ export interface DbDocument {
   createdBy: string
   currentVersion: number
   version: number
+  /** FR-DOC-04: ẩn thay cho xóa; ban chủ nhiệm khôi phục được. Họ tên người ẩn chụp lúc ẩn. */
+  hidden: { by: string; byName: string; at: string; reason: string } | null
 }
 
 /** Một phiên bản của tài liệu (FR-DOC-03); mọi bản cũ được giữ. */
@@ -53,13 +55,14 @@ const XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 
 export function createDocumentSeed(): DbDocument[] {
   const doc = (
-    fields: Omit<DbDocument, 'clubId' | 'description' | 'createdBy' | 'currentVersion' | 'version'> & Partial<Pick<DbDocument, 'description' | 'currentVersion'>>,
+    fields: Omit<DbDocument, 'clubId' | 'description' | 'createdBy' | 'currentVersion' | 'version' | 'hidden'> & Partial<Pick<DbDocument, 'description' | 'currentVersion'>>,
   ): DbDocument => ({
     clubId: 'c-guitar',
     description: '',
     createdBy: fields.uploadedBy,
     currentVersion: 1,
     version: 1,
+    hidden: null,
     ...fields,
   })
   return [

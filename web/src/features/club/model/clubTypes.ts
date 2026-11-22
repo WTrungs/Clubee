@@ -35,6 +35,8 @@ export type ClubAction =
   | 'VIEW_DEPARTMENT_REPORTS'
   /** FR-RPT-06: ban chủ nhiệm xem nhật ký thao tác. */
   | 'VIEW_AUDIT_LOG'
+  /** FR-DOC-04: ban chủ nhiệm xem và khôi phục tài liệu đã ẩn. */
+  | 'VIEW_HIDDEN_DOCUMENTS'
 
 /** Nhiệm kỳ đang phụ trách CLB: Đang chạy hoặc Đang bàn giao. */
 export interface TermSummary {

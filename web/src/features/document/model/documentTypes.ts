@@ -13,8 +13,15 @@ export interface DocumentOwner {
   name: string
 }
 
-/** Thao tác máy chủ cho phép với tài liệu: tải phiên bản mới (FR-DOC-03). */
-export type DocumentAction = 'UPLOAD_VERSION'
+/** Thao tác máy chủ cho phép: tải phiên bản mới (FR-DOC-03), ẩn, khôi phục (FR-DOC-04). */
+export type DocumentAction = 'UPLOAD_VERSION' | 'HIDE' | 'RESTORE'
+
+/** Tài liệu đã ẩn: chỉ ban chủ nhiệm thấy; họ tên người ẩn chụp lúc ẩn. */
+export interface DocumentHidden {
+  by: PersonRef
+  at: string
+  reason: string
+}
 
 export interface DocumentSummary {
   id: string
@@ -32,6 +39,7 @@ export interface DocumentSummary {
   /** Số bản hiện hành; tệp, người tải, lúc tải ở trên là của bản này. */
   currentVersion: number
   allowedActions: DocumentAction[]
+  hidden: DocumentHidden | null
   version: number
 }
 
@@ -51,6 +59,11 @@ export interface DocumentDetail extends DocumentSummary {
   description: string
   /** Mọi phiên bản, mới nhất trước. */
   versions: DocumentVersion[]
+}
+
+export interface HideDocumentRequest {
+  reason: string
+  version: number
 }
 
 export interface UploadVersionRequest {
@@ -78,6 +91,8 @@ export interface DocumentQuery {
   termId?: string
   ownerType?: DocumentOwnerType
   ownerId?: string
+  /** Chỉ ban chủ nhiệm: xem danh sách tài liệu đã ẩn. */
+  hidden?: boolean
   page?: number
 }
 
