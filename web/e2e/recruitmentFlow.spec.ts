@@ -150,6 +150,8 @@ test.describe('Tuyển thành viên', () => {
   })
 
   test('ban chủ nhiệm xét đủ các vòng, qua giờ đóng thì chốt kết quả theo đề xuất', async ({ page }, testInfo) => {
+    // Luồng dài qua nhiều người dùng, dễ chạm 60 giây khi chạy song song.
+    test.slow()
     // Đồng hồ giả chạy theo giờ thật để dữ liệu mẫu dựng đúng ngày, sau đó mới nhảy qua giờ đóng nhận đơn.
     await page.clock.install()
     await loginAs(page, 'anh.nguyen@demo.test')
@@ -220,7 +222,9 @@ test.describe('Tuyển thành viên', () => {
     await relogin('Châu Minh Tú', 'anh.nguyen@demo.test')
     await openNavLink(page, 'CLB của tôi')
     await page.getByRole('button', { name: /^CLB Guitar Sinh viên .*Vào CLB$/ }).click()
+    await page.waitForURL(/\/clubs\/c-guitar$/)
     await openNavLink(page, 'Thành viên')
+    await expect(page).toHaveURL(/\/clubs\/c-guitar\/members/)
     await page.getByRole('searchbox', { name: /Tìm/ }).first().fill('Châu Minh Tú')
     // Kiểm đúng dòng của Tú, vì trang luôn có chip lọc Thử việc và các thành viên Thử việc khác.
     await expect(page.locator('li, tr').filter({ hasText: 'Châu Minh Tú' }).filter({ visible: true }).first()).toContainText('Thử việc')
