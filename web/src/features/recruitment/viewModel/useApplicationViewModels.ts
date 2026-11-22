@@ -7,15 +7,34 @@ import { toast } from 'sonner'
 import { ApiError, getErrorMessage, isConflict } from '@/api/apiError'
 import { useDebouncedValue } from '@/shared/hooks/useDebouncedValue'
 import { recruitmentRepository } from '../model/recruitmentRepository'
-import type { ApplicationQuery, ApplicationStatus, MyApplication, PublicRecruitment, RecruitmentDetail } from '../model/recruitmentTypes'
+import { sessionQueryKey } from '@/api/queryClient'
+import type { AdmissionDecision, ApplicationQuery, ApplicationStatus, MyApplication, PublicRecruitment, RecruitmentDetail } from '../model/recruitmentTypes'
 import { applicationFieldPath, applicationFormSchema, emptyApplication, toSubmitRequest, type ApplicationFormValues } from './applicationFormSchema'
 import { recruitmentQueryKeys } from './recruitmentQueryKeys'
 
-/** Rút đơn dùng chung cho trang đợt tuyển và tab Đơn của tôi; 409 hoặc 422 thì báo và tải lại. */
+/** Rút đơn, nhận hoặc từ chối kết quả, dùng chung cho trang đợt tuyển và tab Đơn của tôi; 409 hoặc 422 thì báo và tải lại. */
 function useWithdraw() {
   const queryClient = useQueryClient()
   const [target, setTarget] = useState<MyApplication | null>(null)
-  const refresh = () => queryClient.invalidateQueries({ queryKey: recruitmentQueryKeys.all })
+  const [respondTarget, setRespondTarget] = useState<{ application: MyApplication; decision: AdmissionDecision } | null>(null)
+  // Giữ lựa chọn cuối để hộp thoại đang đóng không đổi chữ sang Từ chối.
+  const [lastRespond, setLastRespond] = useState<{ application: MyApplication; decision: AdmissionDecision } | null>(null)
+  // Nhận kết quả thì có CLB mới trong danh sách CLB của tôi.
+  const refresh = () => Promise.all([queryClient.invalidateQueries({ queryKey: recruitmentQueryKeys.all }), queryClient.invalidateQueries({ queryKey: sessionQueryKey })])
+  const respond = useMutation({
+    mutationFn: ({ application, decision }: { application: MyApplication; decision: AdmissionDecision }) => recruitmentRepository.respond(application.id, { decision, version: application.version }),
+    meta: { silentError: true },
+    onSuccess: async (saved, { decision }) => {
+      await refresh()
+      toast.success(decision === 'ACCEPT' ? `Đã nhận kết quả. Bạn đã là thành viên ${saved.recruitment.clubName}.` : 'Đã từ chối nhận kết quả.')
+      setRespondTarget(null)
+    },
+    onError: (error) => {
+      toast.error(getErrorMessage(error))
+      setRespondTarget(null)
+      void refresh()
+    },
+  })
   const mutation = useMutation({
     mutationFn: (application: MyApplication) => recruitmentRepository.withdraw(application.id, application.version),
     meta: { silentError: true },
@@ -31,6 +50,15 @@ function useWithdraw() {
     },
   })
   return {
+    respondTarget,
+    askRespond: (application: MyApplication, decision: AdmissionDecision) => {
+      setRespondTarget({ application, decision })
+      setLastRespond({ application, decision })
+    },
+    lastRespond,
+    closeRespond: () => !respond.isPending && setRespondTarget(null),
+    confirmRespond: () => respondTarget && respond.mutate(respondTarget),
+    respondPending: respond.isPending,
     withdrawTarget: target,
     askWithdraw: setTarget,
     closeWithdraw: () => !mutation.isPending && setTarget(null),

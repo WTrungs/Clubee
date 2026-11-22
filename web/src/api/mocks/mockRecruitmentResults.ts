@@ -1,12 +1,16 @@
 import type { FieldError } from '@/api/apiError'
-import type { FinalDecision, FinalizeRequest, ProposalRow, ResultProposal } from '@/features/recruitment/model/recruitmentTypes'
+import type { DepartmentResult, FinalDecision, FinalizeRequest, ProposalRow, ResultProposal } from '@/features/recruitment/model/recruitmentTypes'
 import { formatDateTime } from '@/shared/format/formatDate'
 import { RESPONSE_DAYS_DEFAULT, RESPONSE_DAYS_MAX, RESPONSE_DAYS_MIN } from '@/shared/lib/recruitmentRules'
-import { db, type DbApplication, type DbRecruitment } from './db'
+import { db, type DbApplication, type DbMembership, type DbRecruitment } from './db'
+import { newId } from './mockHttp'
+import { openDepartmentStint, personRef, recordMembershipChange } from './mockMembers'
 import { currentRoundOf, passedAllRounds, toApplicationSummary, totalScoreOf } from './mockApplications'
 import { applicationTarget, notify, recruitmentTarget } from './mockNotifications'
 import { boardMembersOf } from './mockPermissions'
-import { addDays, nowIso } from './mockTime'
+import { registerJob, SYSTEM_ACTOR } from './mockSchedule'
+import { addDays, nowIso, vnToday } from './mockTime'
+import { blankMemberInfo } from './seed/memberSeed'
 
 const departmentName = (id: string) => db.departments.find((department) => department.id === id)?.name ?? 'Ban'
 const applicationsOf = (recruitment: DbRecruitment) => db.applications.filter((application) => application.recruitmentId === recruitment.id && application.status !== 'WITHDRAWN')
@@ -158,4 +162,137 @@ export function finalizeRecruitment(recruitment: DbRecruitment, body: FinalizeRe
     target: recruitmentTarget(recruitment.clubId, recruitment.id),
     actorId,
   })
+}
+
+const isPendingAdmission = (application: DbApplication) => application.status === 'ADMITTED'
+
+/** FR-REC-08: tình hình nhận kết quả theo ban; chỗ trống = chỉ tiêu − (đang chờ trả lời + đã nhận). */
+export function departmentResultsOf(recruitment: DbRecruitment): DepartmentResult[] {
+  const inRecruitment = db.applications.filter((application) => application.recruitmentId === recruitment.id)
+  return recruitment.quotas.map((quota) => {
+    const of = (status: DbApplication['status']) => inRecruitment.filter((application) => application.status === status && application.outcome?.departmentId === quota.departmentId).length
+    const pending = of('ADMITTED')
+    const accepted = of('ACCEPTED')
+    return {
+      departmentId: quota.departmentId,
+      departmentName: departmentName(quota.departmentId),
+      quota: quota.quota,
+      pending,
+      accepted,
+      declined: of('DECLINED'),
+      reserves: of('RESERVE'),
+      freeSlots: Math.max(0, quota.quota - pending - accepted),
+    }
+  })
+}
+
+/** Còn hạn nhận kết quả. */
+export const canRespond = (application: DbApplication) =>
+  isPendingAdmission(application) && application.outcome?.respondBy !== null && Date.parse(application.outcome?.respondBy ?? '') >= Date.now()
+
+/** Lý do không nhận được dù còn hạn: đang có tư cách khác ở CLB, hoặc ban trúng tuyển đã đóng. */
+export function admissionBlocker(application: DbApplication): { code: string; message: string } | null {
+  const current = db.memberships.find(
+    (membership) => membership.userId === application.userId && membership.clubId === application.clubId && ['PROBATION', 'ACTIVE', 'ON_LEAVE'].includes(membership.status),
+  )
+  if (current) return { code: 'ALREADY_MEMBER', message: 'Bạn đang là thành viên CLB này nên không nhận kết quả được nữa.' }
+  const department = db.departments.find((candidate) => candidate.id === application.outcome?.departmentId)
+  if (!department || department.status !== 'ACTIVE') return { code: 'DEPARTMENT_CLOSED', message: 'Ban trúng tuyển đã đóng; liên hệ ban chủ nhiệm CLB.' }
+  return null
+}
+
+/** Nhận: tạo tư cách (Thử việc hoặc Chính thức theo `probationStep`) với ban trúng tuyển, MSSV từ đơn; yêu cầu gia nhập Chờ duyệt thì duyệt luôn. */
+export function respondToAdmission(application: DbApplication, decision: 'ACCEPT' | 'DECLINE', actorId: string): DbMembership | null {
+  const recruitment = db.recruitments.find((candidate) => candidate.id === application.recruitmentId) as DbRecruitment
+  application.status = decision === 'ACCEPT' ? 'ACCEPTED' : 'DECLINED'
+  application.version += 1
+  const board = boardMembersOf(application.clubId)
+  const name = personRef(application.userId).fullName
+  const target = recruitmentTarget(application.clubId, recruitment.id)
+  if (decision === 'DECLINE') {
+    notify(board, { clubId: application.clubId, category: 'RECRUITMENT', title: `${name} từ chối nhận kết quả ${recruitment.name}`, body: 'Có thể gọi người dự bị kế tiếp của ban.', target, actorId })
+    return null
+  }
+  const club = db.clubs.find((candidate) => candidate.id === application.clubId)
+  const toStatus = club?.probationStep === false ? 'ACTIVE' : 'PROBATION'
+  const departmentId = application.outcome?.departmentId ?? ''
+  const pending = db.memberships.find((membership) => membership.userId === application.userId && membership.clubId === application.clubId && membership.status === 'PENDING')
+  const membership: DbMembership = pending ?? {
+    id: newId('m'),
+    userId: application.userId,
+    clubId: application.clubId,
+    status: 'PENDING',
+    departmentId: null,
+    departmentHistory: [],
+    requestedAt: nowIso(),
+    joinedOn: null,
+    leftOn: null,
+    exitKind: null,
+    leaveReason: null,
+    introduction: null,
+    studentId: null,
+    ...blankMemberInfo(),
+    history: [],
+    version: 1,
+  }
+  if (!pending) db.memberships.push(membership)
+  membership.status = toStatus
+  membership.joinedOn = vnToday()
+  if (application.studentId) membership.studentId = application.studentId
+  openDepartmentStint(membership, departmentId, vnToday(), actorId)
+  recordMembershipChange(membership, { actorId, fromStatus: pending ? 'PENDING' : null, toStatus, reason: `Trúng tuyển ${recruitment.name}.` })
+  if (pending) membership.version += 1
+  notify(board, { clubId: application.clubId, category: 'RECRUITMENT', title: `${name} đã nhận kết quả ${recruitment.name}`, body: `Vào ban ${departmentName(departmentId)}.`, target, actorId })
+  return membership
+}
+
+/** Việc theo giờ: Trúng tuyển quá hạn nhận thành Từ chối nhận, báo ứng viên và ban chủ nhiệm (FR-REC-08). */
+export function expireAdmissions(): void {
+  const now = Date.now()
+  for (const application of db.applications) {
+    if (!isPendingAdmission(application) || !application.outcome?.respondBy || Date.parse(application.outcome.respondBy) >= now) continue
+    const recruitment = db.recruitments.find((candidate) => candidate.id === application.recruitmentId)
+    if (!recruitment) continue
+    application.status = 'DECLINED'
+    application.version += 1
+    const name = personRef(application.userId).fullName
+    notify([application.userId], {
+      clubId: application.clubId,
+      category: 'RECRUITMENT',
+      title: `Đã quá hạn nhận kết quả ${recruitment.name}`,
+      body: 'Ban chủ nhiệm có thể gọi người dự bị vào suất này.',
+      target: applicationTarget(recruitment.id),
+      actorId: SYSTEM_ACTOR,
+    })
+    notify(boardMembersOf(application.clubId), {
+      clubId: application.clubId,
+      category: 'RECRUITMENT',
+      title: `${name} quá hạn nhận kết quả ${recruitment.name}`,
+      body: 'Có thể gọi người dự bị kế tiếp của ban.',
+      target: recruitmentTarget(application.clubId, recruitment.id),
+      actorId: SYSTEM_ACTOR,
+    })
+  }
+}
+registerJob('recruitmentAdmissionExpiry', expireAdmissions)
+
+/** Gọi người Dự bị có thứ tự nhỏ nhất của ban vào chỗ trống, với hạn nhận mới. */
+export function callNextReserve(recruitment: DbRecruitment, departmentId: string, actorId: string): DbApplication {
+  const next = db.applications
+    .filter((application) => application.recruitmentId === recruitment.id && application.status === 'RESERVE' && application.outcome?.departmentId === departmentId)
+    .toSorted((a, b) => (a.outcome?.reserveOrder ?? 0) - (b.outcome?.reserveOrder ?? 0))[0] as DbApplication
+  const respondBy = addDays(nowIso(), recruitment.responseDays ?? RESPONSE_DAYS_DEFAULT)
+  next.status = 'ADMITTED'
+  next.outcome = { departmentId, reserveOrder: null, respondBy }
+  next.version += 1
+  recruitment.version += 1
+  notify([next.userId], {
+    clubId: recruitment.clubId,
+    category: 'RECRUITMENT',
+    title: `${recruitment.name}: Trúng tuyển từ danh sách dự bị`,
+    body: `Bạn trúng tuyển vào ban ${departmentName(departmentId)}. Nhận kết quả trước ${formatDateTime(respondBy)}.`,
+    target: applicationTarget(recruitment.id),
+    actorId,
+  })
+  return next
 }

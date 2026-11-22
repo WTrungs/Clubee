@@ -1,6 +1,7 @@
 import { httpClient } from '@/api/httpClient'
 import type { Page } from '@/api/pagination'
 import type {
+  AdmissionResponseRequest,
   ApplicationDetail,
   ApplicationQuery,
   ApplicationSummary,
@@ -46,6 +47,13 @@ export const recruitmentRepository = {
   /** FR-REC-07: chốt kết quả; vượt chỉ tiêu 422 `QUOTA_EXCEEDED`, còn đơn chưa xét xong 422 `ROUNDS_INCOMPLETE`. */
   finalize: (clubId: string, recruitmentId: string, request: FinalizeRequest) =>
     httpClient.post<RecruitmentDetail>(`${recruitments(clubId)}/${encodeURIComponent(recruitmentId)}/finalization`, request),
+  /** FR-REC-08: gọi người dự bị kế tiếp của một ban còn chỗ trống. */
+  callReserve: (clubId: string, recruitmentId: string, departmentId: string, version: number) =>
+    httpClient.post<RecruitmentDetail>(`${recruitments(clubId)}/${encodeURIComponent(recruitmentId)}/reserve-calls`, { departmentId, version }),
+  /** FR-REC-08: đóng đợt; còn người trúng tuyển chưa trả lời thì 422 `RESPONSES_PENDING`. */
+  close: (clubId: string, recruitmentId: string, version: number) => httpClient.post<RecruitmentDetail>(`${recruitments(clubId)}/${encodeURIComponent(recruitmentId)}/closure`, { version }),
+  /** FR-REC-08: ứng viên nhận hoặc từ chối kết quả Trúng tuyển khi còn hạn. */
+  respond: (applicationId: string, request: AdmissionResponseRequest) => httpClient.post<MyApplication>(`/me/applications/${encodeURIComponent(applicationId)}/response`, request),
   /** FR-REC-02: đợt đang nhận đơn ở mọi CLB; cần đăng nhập. */
   openRecruitments: (q?: string, page = 0) => httpClient.get<Page<OpenRecruitment>>('/recruitments/open', { query: { q, page } }),
   publicRecruitment: (recruitmentId: string) => httpClient.get<PublicRecruitment>(`/recruitments/${encodeURIComponent(recruitmentId)}`),

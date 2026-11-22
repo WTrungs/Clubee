@@ -192,8 +192,38 @@ test.describe('Tuyển thành viên', () => {
     const admitted = page.getByRole('region', { name: 'Trúng tuyển' })
     await expect(admitted.getByRole('listitem')).toHaveCount(2)
     await expect(admitted).toContainText('Ban Hậu cần')
+    await expect(page.getByRole('region', { name: 'Kết quả theo ban' })).toContainText('Ban Chuyên môn')
+    await page.clock.runFor(1000)
     await expectNoHorizontalScroll(page)
     await snap(page, testInfo, 'recruitmentResults')
+
+    // Ứng viên nhận kết quả rồi thành thành viên Thử việc của ban trúng tuyển (FR-REC-08).
+    const relogin = async (currentName: string, email: string) => {
+      await page.getByRole('button', { name: `Tài khoản: ${currentName}` }).click()
+      await page.getByRole('menuitem', { name: 'Đăng xuất' }).click()
+      await page.waitForURL('**/login**')
+      await page.getByRole('textbox', { name: 'Email' }).fill(email)
+      await page.getByRole('textbox', { name: 'Mật khẩu', exact: true }).fill(crypto.randomUUID())
+      await page.getByRole('button', { name: 'Đăng nhập' }).click()
+      await page.waitForURL((url) => !url.pathname.startsWith('/login'))
+    }
+    await relogin('Nguyễn Minh Anh', 'tu.chau@demo.test')
+    await openNavLink(page, 'Tìm CLB')
+    await page.getByRole('tab', { name: 'Đơn của tôi' }).click()
+    const mine = page.getByRole('list', { name: 'Đơn của tôi' })
+    await expect(mine).toContainText('Trúng tuyển')
+    await mine.getByRole('button', { name: 'Nhận kết quả' }).click()
+    await page.getByRole('dialog', { name: 'Nhận kết quả' }).getByRole('button', { name: 'Nhận kết quả' }).click()
+    await settleToast(page, 'Đã nhận kết quả. Bạn đã là thành viên CLB Guitar Sinh viên.')
+    await expect(mine).toContainText('Đã nhận')
+
+    await relogin('Châu Minh Tú', 'anh.nguyen@demo.test')
+    await openNavLink(page, 'CLB của tôi')
+    await page.getByRole('button', { name: /^CLB Guitar Sinh viên .*Vào CLB$/ }).click()
+    await openNavLink(page, 'Thành viên')
+    await page.getByRole('searchbox', { name: /Tìm/ }).first().fill('Châu Minh Tú')
+    // Kiểm đúng dòng của Tú, vì trang luôn có chip lọc Thử việc và các thành viên Thử việc khác.
+    await expect(page.locator('li, tr').filter({ hasText: 'Châu Minh Tú' }).filter({ visible: true }).first()).toContainText('Thử việc')
   })
 
   test('thành viên CLB thấy lý do không nộp đơn được', async ({ page }) => {

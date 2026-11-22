@@ -18,6 +18,7 @@ import {
 import { matchesKeyword } from '@/shared/lib/searchText'
 import { db, type DbRecruitment } from './db'
 import { roundStatsOf } from './mockApplications'
+import { departmentResultsOf } from './mockRecruitmentResults'
 import { can } from './mockAccess'
 import { newId } from './mockHttp'
 import { membershipOf, personRef } from './mockMembers'
@@ -60,6 +61,7 @@ function recruitmentActions(recruitment: DbRecruitment, viewerId: string): Recru
     ...(isBoardMember(viewerId, recruitment.clubId) ? (['VIEW_APPLICATIONS'] as const) : []),
     ...(isBoardMember(viewerId, recruitment.clubId) && status !== 'RESULTS' && status !== 'CLOSED' ? (['REVIEW_ROUNDS'] as const) : []),
     ...(isBoardMember(viewerId, recruitment.clubId) && status === 'REVIEWING' ? (['FINALIZE'] as const) : []),
+    ...(isBoardMember(viewerId, recruitment.clubId) && status === 'RESULTS' ? (['CALL_RESERVE', 'CLOSE'] as const) : []),
   ]
 }
 
@@ -77,6 +79,8 @@ export function toRecruitmentDetail(recruitment: DbRecruitment, viewerId: string
     roundStats: isBoardMember(viewerId, recruitment.clubId) ? roundStatsOf(recruitment) : [],
     finalizedAt: recruitment.finalizedAt,
     responseDays: recruitment.responseDays,
+    departmentResults: isBoardMember(viewerId, recruitment.clubId) && recruitment.finalizedAt ? departmentResultsOf(recruitment) : [],
+    closedAt: recruitment.closedAt,
     allowedActions: recruitmentActions(recruitment, viewerId),
     version: recruitment.version,
   }

@@ -172,3 +172,53 @@ export function useResultGroupViewModel(clubId: string, recruitmentId: string, o
     setPage,
   }
 }
+
+/** FR-REC-08: gọi người dự bị kế tiếp vào chỗ trống và đóng đợt; mọi lỗi đều báo rồi tải lại để số chỗ trống luôn đúng. */
+export function useResultActionsViewModel(clubId: string, recruitment: RecruitmentDetail) {
+  const queryClient = useQueryClient()
+  const [closeOpen, setCloseOpen] = useState(false)
+  const refresh = () => queryClient.invalidateQueries({ queryKey: recruitmentQueryKeys.all })
+  const fail = (error: unknown) => {
+    toast.error(getErrorMessage(error))
+    setCloseOpen(false)
+    void refresh()
+  }
+  const call = useMutation({
+    mutationFn: (departmentId: string) => recruitmentRepository.callReserve(clubId, recruitment.id, departmentId, recruitment.version),
+    meta: { silentError: true },
+    onSuccess: async (_saved, departmentId) => {
+      await refresh()
+      toast.success(`Đã gọi người dự bị kế tiếp của ban ${recruitment.departmentResults.find((result) => result.departmentId === departmentId)?.departmentName ?? ''}.`)
+    },
+    onError: fail,
+  })
+  const close = useMutation({
+    mutationFn: () => recruitmentRepository.close(clubId, recruitment.id, recruitment.version),
+    meta: { silentError: true },
+    onSuccess: async () => {
+      await refresh()
+      toast.success('Đã đóng đợt tuyển.')
+      setCloseOpen(false)
+    },
+    onError: fail,
+  })
+  const canCall = recruitment.allowedActions.includes('CALL_RESERVE')
+  return {
+    results: recruitment.departmentResults,
+    canCallFor: (departmentId: string) => {
+      const result = recruitment.departmentResults.find((candidate) => candidate.departmentId === departmentId)
+      return canCall && result !== undefined && result.freeSlots > 0 && result.reserves > 0
+    },
+    callReserve: (departmentId: string) => call.mutate(departmentId),
+    callingId: call.isPending ? (call.variables ?? null) : null,
+    canClose: recruitment.allowedActions.includes('CLOSE'),
+    waiting: recruitment.departmentResults.reduce((total, result) => total + result.pending, 0),
+    closeOpen,
+    openClose: () => setCloseOpen(true),
+    dismissClose: () => !close.isPending && setCloseOpen(false),
+    confirmClose: () => close.mutate(),
+    closing: close.isPending,
+  }
+}
+
+export type ResultActionsViewModel = ReturnType<typeof useResultActionsViewModel>

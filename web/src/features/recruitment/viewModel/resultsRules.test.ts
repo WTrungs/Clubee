@@ -89,7 +89,7 @@ describe('finalizing results (FR-REC-07)', () => {
     signInAs('u-anh')
     const proposal = await recruitmentRepository.proposal('c-guitar', 'rec-guitar-k1')
     const saved = await recruitmentRepository.finalize('c-guitar', 'rec-guitar-k1', { decisions: decisionsOf(proposal), responseDays: 5, version: proposal.version })
-    expect(saved).toMatchObject({ status: 'RESULTS', responseDays: 5, allowedActions: ['VIEW_APPLICATIONS'] })
+    expect(saved).toMatchObject({ status: 'RESULTS', responseDays: 5, allowedActions: ['VIEW_APPLICATIONS', 'CALL_RESERVE', 'CLOSE'] })
     expect(application('ap-tu')).toMatchObject({ status: 'ADMITTED', outcome: { departmentId: 'd-music', reserveOrder: null } })
     expect(Date.parse(application('ap-tu').outcome?.respondBy ?? '') - Date.now()).toBeGreaterThan(4.9 * 86_400_000)
     expect(application('ap-tam')).toMatchObject({ status: 'RESERVE', outcome: { departmentId: 'd-music', reserveOrder: 1, respondBy: null } })

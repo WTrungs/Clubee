@@ -18,6 +18,7 @@ import { APPLICATION_ANSWER_MAX, APPLICATION_CHOICES_MAX } from '@/shared/lib/re
 import { db, type DbApplication, type DbRecruitment } from './db'
 import type { DbRoundResult } from './seed/recruitmentSeed'
 import { personRef } from './mockMembers'
+import { canRespond } from './mockRecruitmentResults'
 import { recruitmentStatusOf } from './mockRecruitments'
 import { nowIso } from './mockTime'
 
@@ -72,7 +73,7 @@ export function toMyApplication(application: DbApplication): MyApplication {
     submittedAt: application.submittedAt,
     withdrawnAt: application.withdrawnAt,
     outcome: outcomeOf(application),
-    allowedActions: application.status === 'SUBMITTED' && status === 'OPEN' ? ['WITHDRAW'] : [],
+    allowedActions: [...(application.status === 'SUBMITTED' && status === 'OPEN' ? (['WITHDRAW'] as const) : []), ...(canRespond(application) ? (['RESPOND'] as const) : [])],
     version: application.version,
   }
 }

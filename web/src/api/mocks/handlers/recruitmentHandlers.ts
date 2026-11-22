@@ -44,7 +44,17 @@ import {
   toRecruitmentDetail,
   toRecruitmentSummary,
 } from '../mockRecruitments'
-import { checkDecisions, finalizationBlockers, finalizeRecruitment, resultProposal } from '../mockRecruitmentResults'
+import {
+  admissionBlocker,
+  callNextReserve,
+  canRespond,
+  checkDecisions,
+  departmentResultsOf,
+  finalizationBlockers,
+  finalizeRecruitment,
+  respondToAdmission,
+  resultProposal,
+} from '../mockRecruitmentResults'
 import { nowIso } from '../mockTime'
 
 const notMember = () => problem(403, 'Bạn không phải thành viên của CLB này.', 'NOT_A_MEMBER')
@@ -246,6 +256,64 @@ export const recruitmentHandlers = [
     if (errors.length > 0) return problem(400, 'Kết quả chưa hợp lệ.', 'VALIDATION', errors)
     finalizeRecruitment(recruitment, body as FinalizeRequest, user.value.id)
     return HttpResponse.json(toRecruitmentDetail(recruitment, user.value.id))
+  }),
+
+  http.post(`${API}/clubs/:clubId/recruitments/:recruitmentId/reserve-calls`, async ({ request, params }) => {
+    await networkDelay()
+    const user = writer(request)
+    if (!user.ok) return user.response
+    const clubId = String(params.clubId)
+    if (!canAccessClub(user.value.id, clubId)) return notMember()
+    if (!isBoardMember(user.value.id, clubId)) return problem(403, 'Chỉ ban chủ nhiệm gọi người dự bị.', 'FORBIDDEN')
+    const recruitment = findRecruitment(clubId, params.recruitmentId)
+    if (!recruitment) return problem(404, 'Không tìm thấy đợt tuyển.', 'RECRUITMENT_NOT_FOUND')
+    const body = (await request.json()) as { departmentId?: string; version?: number }
+    if (body.version !== recruitment.version) return problem(409, 'Đợt tuyển vừa thay đổi. Tải lại để xem chỗ trống mới nhất.', 'VERSION_CONFLICT')
+    if (recruitmentStatusOf(recruitment) !== 'RESULTS') return problem(422, 'Chỉ gọi dự bị sau khi chốt kết quả và trước khi đóng đợt.', 'RECRUITMENT_NOT_FINALIZED')
+    const result = departmentResultsOf(recruitment).find((candidate) => candidate.departmentId === body.departmentId)
+    if (!result) return problem(400, 'Chọn ban có chỉ tiêu trong đợt.', 'VALIDATION', [{ field: 'departmentId', message: 'Chọn ban có chỉ tiêu trong đợt.' }])
+    if (result.freeSlots === 0) return problem(422, `Ban ${result.departmentName} không còn chỗ trống.`, 'NO_FREE_SLOT')
+    if (result.reserves === 0) return problem(422, `Ban ${result.departmentName} không còn người dự bị.`, 'NO_RESERVE')
+    callNextReserve(recruitment, result.departmentId, user.value.id)
+    return HttpResponse.json(toRecruitmentDetail(recruitment, user.value.id))
+  }),
+
+  http.post(`${API}/clubs/:clubId/recruitments/:recruitmentId/closure`, async ({ request, params }) => {
+    await networkDelay()
+    const user = writer(request)
+    if (!user.ok) return user.response
+    const clubId = String(params.clubId)
+    if (!canAccessClub(user.value.id, clubId)) return notMember()
+    if (!isBoardMember(user.value.id, clubId)) return problem(403, 'Chỉ ban chủ nhiệm đóng đợt tuyển.', 'FORBIDDEN')
+    const recruitment = findRecruitment(clubId, params.recruitmentId)
+    if (!recruitment) return problem(404, 'Không tìm thấy đợt tuyển.', 'RECRUITMENT_NOT_FOUND')
+    const body = (await request.json()) as { version?: number }
+    if (body.version !== recruitment.version) return problem(409, 'Đợt tuyển vừa thay đổi. Tải lại rồi thử lại.', 'VERSION_CONFLICT')
+    if (recruitmentStatusOf(recruitment) !== 'RESULTS') return problem(422, 'Chỉ đóng đợt sau khi đã chốt kết quả.', 'RECRUITMENT_NOT_FINALIZED')
+    const waiting = db.applications.filter((application) => application.recruitmentId === recruitment.id && application.status === 'ADMITTED').length
+    if (waiting > 0) return problem(422, `Còn ${waiting} người trúng tuyển chưa trả lời.`, 'RESPONSES_PENDING')
+    recruitment.closedAt = nowIso()
+    recruitment.version += 1
+    return HttpResponse.json(toRecruitmentDetail(recruitment, user.value.id))
+  }),
+
+  http.post(`${API}/me/applications/:applicationId/response`, async ({ request, params }) => {
+    await networkDelay()
+    const user = writer(request)
+    if (!user.ok) return user.response
+    const application = db.applications.find((candidate) => candidate.id === params.applicationId && candidate.userId === user.value.id)
+    if (!application) return problem(404, 'Không tìm thấy đơn của bạn.', 'APPLICATION_NOT_FOUND')
+    const body = (await request.json()) as { decision?: string; version?: number }
+    if (body.version !== application.version) return problem(409, 'Đơn vừa thay đổi. Tải lại để xem trạng thái mới nhất.', 'VERSION_CONFLICT')
+    if (application.status !== 'ADMITTED') return problem(422, 'Chỉ trả lời được khi đơn đang Trúng tuyển.', 'APPLICATION_NOT_ADMITTED')
+    if (!canRespond(application)) return problem(422, 'Đã quá hạn nhận kết quả.', 'RESPONSE_EXPIRED')
+    if (body.decision !== 'ACCEPT' && body.decision !== 'DECLINE') return problem(400, 'Chọn Nhận hoặc Từ chối.', 'VALIDATION', [{ field: 'decision', message: 'Chọn Nhận hoặc Từ chối.' }])
+    if (body.decision === 'ACCEPT') {
+      const blocked = admissionBlocker(application)
+      if (blocked) return problem(422, blocked.message, blocked.code)
+    }
+    respondToAdmission(application, body.decision, user.value.id)
+    return HttpResponse.json(toMyApplication(application))
   }),
 
   http.get(`${API}/recruitments/open`, async ({ request }) => {

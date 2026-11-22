@@ -3654,6 +3654,85 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
         '422': { $ref: '#/components/responses/UnprocessableEntity' }
+  /clubs/{clubId}/recruitments/{recruitmentId}/reserve-calls:
+    post:
+      tags: [REC]
+      operationId: callNextReserve
+      summary: Gọi người dự bị kế tiếp (FR-REC-08)
+      description: |
+        Chỉ ban chủ nhiệm, đợt Đã có kết quả. Ban còn chỗ trống khi (đang chờ trả lời + đã nhận) nhỏ hơn chỉ tiêu. Người Dự bị có thứ tự
+        nhỏ nhất chuyển Trúng tuyển với hạn nhận mới (`responseDays` của đợt) và được báo.
+
+        Lỗi:
+        - 400 `VALIDATION` (`departmentId` không có chỉ tiêu trong đợt).
+        - 403 `NOT_A_MEMBER`, `FORBIDDEN`.
+        - 404 `RECRUITMENT_NOT_FOUND`.
+        - 409 `VERSION_CONFLICT`.
+        - 422 `RECRUITMENT_NOT_FINALIZED`, `NO_FREE_SLOT`, `NO_RESERVE`.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - $ref: '#/components/parameters/RecruitmentId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [departmentId, version]
+              properties:
+                departmentId: { type: string }
+                version: { type: integer }
+      responses:
+        '200':
+          description: Đợt tuyển sau thao tác.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RecruitmentDetail' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+  /clubs/{clubId}/recruitments/{recruitmentId}/closure:
+    post:
+      tags: [REC]
+      operationId: closeRecruitment
+      summary: Đóng đợt tuyển (FR-REC-08)
+      description: |
+        Chỉ ban chủ nhiệm, đợt Đã có kết quả và không còn ai Trúng tuyển chưa trả lời. Đóng rồi không gọi dự bị được nữa.
+
+        Lỗi:
+        - 403 `NOT_A_MEMBER`, `FORBIDDEN`.
+        - 404 `RECRUITMENT_NOT_FOUND`.
+        - 409 `VERSION_CONFLICT`.
+        - 422 `RECRUITMENT_NOT_FINALIZED`, `RESPONSES_PENDING`.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - $ref: '#/components/parameters/RecruitmentId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/VersionOnly' }
+      responses:
+        '200':
+          description: Đợt tuyển sau thao tác.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RecruitmentDetail' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
   /recruitments/open:
     get:
       tags: [REC]
@@ -3745,6 +3824,44 @@ paths:
                 type: array
                 items: { $ref: '#/components/schemas/MyApplication' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+  /me/applications/{applicationId}/response:
+    post:
+      tags: [REC]
+      operationId: respondToAdmission
+      summary: Nhận hoặc từ chối kết quả trúng tuyển (FR-REC-08, ST-APP)
+      description: |
+        Chỉ đơn Trúng tuyển của chính mình, còn hạn (`outcome.respondBy`). Quá hạn thì việc theo giờ chuyển đơn sang Từ chối nhận và báo
+        ứng viên, ban chủ nhiệm.
+        - `ACCEPT`: tạo tư cách thành viên Thử việc hoặc Chính thức theo `probationStep`, ban chính là ban trúng tuyển, MSSV lấy từ đơn,
+          ghi lịch sử tư cách và nhật ký; đang có yêu cầu gia nhập Chờ duyệt thì duyệt luôn yêu cầu đó. Báo ban chủ nhiệm.
+        - `DECLINE`: đơn thành Từ chối nhận; báo ban chủ nhiệm để gọi dự bị.
+
+        Lỗi:
+        - 400 `VALIDATION`.
+        - 404 `APPLICATION_NOT_FOUND`.
+        - 409 `VERSION_CONFLICT`.
+        - 422 `APPLICATION_NOT_ADMITTED`, `RESPONSE_EXPIRED`, `ALREADY_MEMBER`, `DEPARTMENT_CLOSED`.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/ApplicationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AdmissionResponseRequest' }
+      responses:
+        '200':
+          description: Đơn sau khi trả lời.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MyApplication' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
   /me/applications/{applicationId}/withdrawal:
     post:
       tags: [REC]
@@ -8930,7 +9047,7 @@ components:
       allOf:
         - $ref: '#/components/schemas/RecruitmentSummary'
         - type: object
-          required: [description, quotas, rounds, questions, judges, createdBy, createdAt, structureLocked, roundStats, finalizedAt, responseDays, allowedActions, version]
+          required: [description, quotas, rounds, questions, judges, createdBy, createdAt, structureLocked, roundStats, finalizedAt, responseDays, departmentResults, closedAt, allowedActions, version]
           properties:
             description: { type: string }
             quotas:
@@ -8975,14 +9092,20 @@ components:
               oneOf:
                 - type: integer
                 - type: 'null'
+            departmentResults:
+              type: array
+              description: Tình hình nhận kết quả theo ban; chỉ ban chủ nhiệm, sau khi chốt (rỗng với người khác).
+              items: { $ref: '#/components/schemas/DepartmentResult' }
+            closedAt: { $ref: '#/components/schemas/NullableDateTime' }
             allowedActions:
               type: array
               description: |
                 `EDIT` cho người có quyền Quản lý thành viên khi đợt chưa chốt kết quả; `VIEW_APPLICATIONS` cho ban chủ nhiệm (SRS 3.5);
-                `REVIEW_ROUNDS` cho ban chủ nhiệm khi đợt chưa chốt; `FINALIZE` cho ban chủ nhiệm khi đợt Đang xét.
+                `REVIEW_ROUNDS` cho ban chủ nhiệm khi đợt chưa chốt; `FINALIZE` cho ban chủ nhiệm khi đợt Đang xét;
+                `CALL_RESERVE`, `CLOSE` cho ban chủ nhiệm khi đợt Đã có kết quả.
               items:
                 type: string
-                enum: [EDIT, VIEW_APPLICATIONS, REVIEW_ROUNDS, FINALIZE]
+                enum: [EDIT, VIEW_APPLICATIONS, REVIEW_ROUNDS, FINALIZE, CALL_RESERVE, CLOSE]
             version: { type: integer }
     RoundState:
       type: string
@@ -9169,10 +9292,10 @@ components:
             - type: 'null'
         allowedActions:
           type: array
-          description: '`WITHDRAW` khi đơn Đã nộp và đợt còn nhận đơn.'
+          description: '`WITHDRAW` khi đơn Đã nộp và đợt còn nhận đơn; `RESPOND` khi đơn Trúng tuyển và còn hạn nhận.'
           items:
             type: string
-            enum: [WITHDRAW]
+            enum: [WITHDRAW, RESPOND]
         version: { type: integer }
     PublicRecruitment:
       type: object
@@ -9336,6 +9459,24 @@ components:
                     minimum: 1
                   - type: 'null'
         responseDays: { type: integer, minimum: 1, maximum: 30 }
+        version: { type: integer }
+    DepartmentResult:
+      type: object
+      required: [departmentId, departmentName, quota, pending, accepted, declined, reserves, freeSlots]
+      properties:
+        departmentId: { type: string }
+        departmentName: { type: string }
+        quota: { type: integer }
+        pending: { type: integer, description: Trúng tuyển chưa trả lời. }
+        accepted: { type: integer }
+        declined: { type: integer }
+        reserves: { type: integer, description: Người Dự bị còn chờ. }
+        freeSlots: { type: integer, description: Chỉ tiêu trừ đang chờ và đã nhận. }
+    AdmissionResponseRequest:
+      type: object
+      required: [decision, version]
+      properties:
+        decision: { type: string, enum: [ACCEPT, DECLINE] }
         version: { type: integer }
     JudgeCandidate:
       type: object

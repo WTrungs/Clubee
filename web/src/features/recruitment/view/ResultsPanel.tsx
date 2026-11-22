@@ -1,8 +1,9 @@
-import { Gavel, Info, Trophy } from 'lucide-react'
+import { Gavel, Info, Lock, Trophy, UserPlus } from 'lucide-react'
 import { formatDateTime } from '@/shared/format/formatDate'
 import { RESPONSE_DAYS_MAX } from '@/shared/lib/recruitmentRules'
 import { Badge } from '@/shared/ui/Badge'
 import { Button } from '@/shared/ui/Button'
+import { ConfirmDialog } from '@/shared/ui/ConfirmDialog'
 import { FormAlert } from '@/shared/ui/FormAlert'
 import { FormField } from '@/shared/ui/FormField'
 import { Input, NativeSelect } from '@/shared/ui/Input'
@@ -12,7 +13,7 @@ import { Skeleton } from '@/shared/ui/Skeleton'
 import { EmptyState, ErrorState } from '@/shared/ui/StateViews'
 import type { FinalDecision, RecruitmentDetail } from '../model/recruitmentTypes'
 import { applicationStatusDisplay, choicesText, finalDecisionLabel } from '../viewModel/recruitmentDisplay'
-import { useResultGroupViewModel, useResultsViewModel, type ResultsViewModel } from '../viewModel/useResultsViewModel'
+import { useResultActionsViewModel, useResultGroupViewModel, useResultsViewModel, type ResultsViewModel } from '../viewModel/useResultsViewModel'
 
 const DECISIONS: FinalDecision[] = ['ADMITTED', 'RESERVE', 'NOT_ADMITTED']
 
@@ -156,9 +157,65 @@ function ResultGroup({ clubId, recruitmentId, outcome, title }: { clubId: string
   )
 }
 
-function FinalizedResults({ clubId, recruitmentId }: { clubId: string; recruitmentId: string }) {
+/** FR-REC-08: theo ban: chỉ tiêu, đã nhận, đang chờ, từ chối, dự bị còn lại; gọi dự bị kế tiếp khi còn chỗ; đóng đợt. */
+function DepartmentResults({ clubId, recruitment }: { clubId: string; recruitment: RecruitmentDetail }) {
+  const vm = useResultActionsViewModel(clubId, recruitment)
+  if (vm.results.length === 0) return null
+  return (
+    <section aria-label="Kết quả theo ban" className="space-y-3">
+      <ul className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+        {vm.results.map((result) => (
+          <li key={result.departmentId} className="space-y-3 rounded-2xl border bg-card p-4 shadow-sm">
+            <p className="font-semibold">Ban {result.departmentName}</p>
+            <dl className="grid grid-cols-3 gap-2 text-center text-xs">
+              {[
+                ['Đã nhận', `${result.accepted}/${result.quota}`],
+                ['Đang chờ', String(result.pending)],
+                ['Từ chối', String(result.declined)],
+              ].map(([label, value]) => (
+                <div key={label} className="rounded-lg bg-muted/60 p-2">
+                  <dt className="text-muted-foreground">{label}</dt>
+                  <dd className="text-sm font-bold tabular-nums">{value}</dd>
+                </div>
+              ))}
+            </dl>
+            <p className="text-xs text-muted-foreground">
+              {result.freeSlots} chỗ trống · {result.reserves} người dự bị
+            </p>
+            {vm.canCallFor(result.departmentId) && (
+              <Button size="sm" variant="outline" className="w-full" loading={vm.callingId === result.departmentId} disabled={vm.callingId !== null} onClick={() => vm.callReserve(result.departmentId)} aria-label={`Gọi dự bị kế tiếp ban ${result.departmentName}`}>
+                <UserPlus aria-hidden />
+                Gọi dự bị kế tiếp
+              </Button>
+            )}
+          </li>
+        ))}
+      </ul>
+      {vm.canClose && vm.waiting > 0 && <p className="text-sm text-muted-foreground">Còn {vm.waiting} người trúng tuyển chưa trả lời; đóng đợt được khi mọi người đã trả lời hoặc quá hạn.</p>}
+      {vm.canClose && vm.waiting === 0 && (
+        <Button variant="outline" className="w-full sm:w-auto" onClick={vm.openClose}>
+          <Lock aria-hidden />
+          Đóng đợt tuyển
+        </Button>
+      )}
+      <ConfirmDialog
+        open={vm.closeOpen}
+        onOpenChange={(open) => !open && vm.dismissClose()}
+        title="Đóng đợt tuyển"
+        description="Đóng đợt thì không gọi dự bị được nữa; người dự bị còn lại giữ nguyên kết quả Dự bị."
+        confirmLabel="Đóng đợt"
+        pending={vm.closing}
+        onConfirm={vm.confirmClose}
+      />
+    </section>
+  )
+}
+
+function FinalizedResults({ clubId, recruitment }: { clubId: string; recruitment: RecruitmentDetail }) {
+  const recruitmentId = recruitment.id
   return (
     <div className="space-y-5">
+      <DepartmentResults clubId={clubId} recruitment={recruitment} />
       <ResultGroup clubId={clubId} recruitmentId={recruitmentId} outcome="ADMITTED" title="Trúng tuyển" />
       <ResultGroup clubId={clubId} recruitmentId={recruitmentId} outcome="RESERVE" title="Dự bị" />
       <ResultGroup clubId={clubId} recruitmentId={recruitmentId} outcome="NOT_ADMITTED" title="Không trúng tuyển" />
@@ -171,7 +228,7 @@ export function ResultsPanel({ clubId, recruitment, active }: { clubId: string; 
   const vm = useResultsViewModel(clubId, recruitment, active)
   if (vm.loading) return <Skeleton role="status" aria-label="Đang tải kết quả" className="h-40 rounded-2xl" />
   if (vm.error) return <ErrorState error={vm.error} onRetry={vm.refetch} />
-  if (vm.finalized) return <FinalizedResults clubId={clubId} recruitmentId={recruitment.id} />
+  if (vm.finalized) return <FinalizedResults clubId={clubId} recruitment={recruitment} />
   return (
     <div className="space-y-4">
       {!vm.canFinalize && (

@@ -4,7 +4,7 @@ import type { PersonRef } from '@/api/commonTypes'
 export type RecruitmentStatus = 'UPCOMING' | 'OPEN' | 'REVIEWING' | 'RESULTS' | 'CLOSED'
 
 /** `EDIT`: sửa đợt chưa chốt; `VIEW_APPLICATIONS`: ban chủ nhiệm xem đơn (SRS 3.5); `REVIEW_ROUNDS`: xét vòng khi chưa chốt; `FINALIZE`: chốt kết quả sau giờ đóng. */
-export type RecruitmentAction = 'EDIT' | 'VIEW_APPLICATIONS' | 'REVIEW_ROUNDS' | 'FINALIZE'
+export type RecruitmentAction = 'EDIT' | 'VIEW_APPLICATIONS' | 'REVIEW_ROUNDS' | 'FINALIZE' | 'CALL_RESERVE' | 'CLOSE'
 
 export interface RecruitmentQuota {
   departmentId: string
@@ -49,6 +49,9 @@ export interface RecruitmentDetail extends RecruitmentSummary {
   finalizedAt: string | null
   /** Số ngày ứng viên trúng tuyển được nhận kết quả, đặt khi chốt. */
   responseDays: number | null
+  /** FR-REC-08: tình hình nhận kết quả theo ban; chỉ ban chủ nhiệm, sau khi chốt. */
+  departmentResults: DepartmentResult[]
+  closedAt: string | null
   allowedActions: RecruitmentAction[]
   version: number
 }
@@ -76,8 +79,8 @@ export interface JudgeCandidate {
 /** ST-APP: Đã nộp → qua từng vòng (Bị loại) → Trúng tuyển / Dự bị / Trượt → Đã nhận / Từ chối nhận; Đã nộp → Đã rút. */
 export type ApplicationStatus = 'SUBMITTED' | 'WITHDRAWN' | 'ELIMINATED' | 'ADMITTED' | 'RESERVE' | 'NOT_ADMITTED' | 'ACCEPTED' | 'DECLINED'
 
-/** `WITHDRAW`: ứng viên rút đơn Đã nộp khi đợt còn nhận đơn. */
-export type ApplicationAction = 'WITHDRAW'
+/** `WITHDRAW`: rút đơn Đã nộp khi đợt còn nhận đơn; `RESPOND`: nhận hoặc từ chối kết quả Trúng tuyển khi còn hạn (FR-REC-08). */
+export type ApplicationAction = 'WITHDRAW' | 'RESPOND'
 
 export interface DepartmentChoice {
   departmentId: string
@@ -238,5 +241,24 @@ export interface ResultProposal {
 export interface FinalizeRequest {
   decisions: Array<{ applicationId: string; decision: FinalDecision; departmentId: string | null; reserveOrder: number | null }>
   responseDays: number
+  version: number
+}
+
+/** Chỗ trống = chỉ tiêu − (đang chờ trả lời + đã nhận). */
+export interface DepartmentResult {
+  departmentId: string
+  departmentName: string
+  quota: number
+  pending: number
+  accepted: number
+  declined: number
+  reserves: number
+  freeSlots: number
+}
+
+export type AdmissionDecision = 'ACCEPT' | 'DECLINE'
+
+export interface AdmissionResponseRequest {
+  decision: AdmissionDecision
   version: number
 }
