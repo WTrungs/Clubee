@@ -59,6 +59,11 @@ export function isBoardMember(userId: string, clubId: string): boolean {
   return positionsIn(userId, clubId).some((position) => BOARD_ROLES.includes(position.role))
 }
 
+/** Người đang ở ban chủ nhiệm của CLB (Chủ nhiệm, Phó chủ nhiệm, Thủ quỹ còn hiệu lực). */
+export function boardMembersOf(clubId: string): string[] {
+  return [...new Set(db.positions.filter((position) => position.clubId === clubId && BOARD_ROLES.includes(position.role) && isPositionEffective(position)).map((position) => position.userId))]
+}
+
 export const PRESIDENCY_ROLES: PositionRole[] = ['PRESIDENT', 'VICE_PRESIDENT']
 
 /** Mốc xa nhất để so ngày dạng yyyy-mm-dd; chức vụ chưa có hạn coi như kéo tới đây. */

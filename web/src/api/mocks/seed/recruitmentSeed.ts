@@ -16,6 +16,8 @@ export interface DbRecruitment {
   createdBy: string
   createdAt: string
   finalizedAt: string | null
+  /** Số ngày được nhận kết quả, đặt khi chốt (FR-REC-07). */
+  responseDays: number | null
   closedAt: string | null
   version: number
 }
@@ -47,6 +49,7 @@ export function createRecruitmentSeed(): DbRecruitment[] {
       createdBy: 'u-anh',
       createdAt: vnDayAt(-8, 20),
       finalizedAt: null,
+      responseDays: null,
       closedAt: null,
       version: 1,
     },
@@ -68,6 +71,8 @@ export interface DbApplication {
   withdrawnAt: string | null
   /** FR-REC-03: kết quả từng vòng theo thứ tự vòng; Đạt kèm điểm 0–100, Loại kèm nhận xét. */
   roundResults: DbRoundResult[]
+  /** FR-REC-07: ban trúng tuyển hoặc dự bị, thứ tự dự bị, hạn nhận kết quả. */
+  outcome: { departmentId: string | null; reserveOrder: number | null; respondBy: string | null } | null
   version: number
 }
 
@@ -93,6 +98,7 @@ export function createApplicationSeed(): DbApplication[] {
     submittedAt: vnDayAt(-daysAgo, 20),
     withdrawnAt: null,
     roundResults: [],
+    outcome: null,
     version: 1,
   })
   return [

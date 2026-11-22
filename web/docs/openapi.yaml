@@ -3510,6 +3510,10 @@ paths:
         - name: roundState
           in: query
           schema: { $ref: '#/components/schemas/RoundState' }
+        - name: outcome
+          in: query
+          description: FR-REC-07, nhóm kết quả sau khi chốt (Trúng tuyển gồm cả người đã nhận hoặc từ chối nhận); xếp theo ban rồi thứ tự dự bị.
+          schema: { $ref: '#/components/schemas/FinalDecision' }
         - $ref: '#/components/parameters/Q'
         - $ref: '#/components/parameters/Page'
       responses:
@@ -3581,6 +3585,69 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ApplicationDetail' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+  /clubs/{clubId}/recruitments/{recruitmentId}/result-proposal:
+    get:
+      tags: [REC]
+      operationId: getRecruitmentResultProposal
+      summary: Đề xuất kết quả tuyển (FR-REC-07)
+      description: |
+        Chỉ ban chủ nhiệm. Đơn qua mọi vòng xếp theo tổng điểm (bằng điểm thì nộp trước đứng trước); lần lượt xếp mỗi đơn vào nguyện vọng
+        đầu tiên còn chỉ tiêu (Trúng tuyển); hết chỉ tiêu ở mọi nguyện vọng thì Dự bị của nguyện vọng 1, tối đa bằng chỉ tiêu ban đó; còn lại
+        và đơn bị loại là Trượt. Còn đơn chưa xét xong các vòng thì `blockers` nêu lý do.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - $ref: '#/components/parameters/RecruitmentId'
+      responses:
+        '200':
+          description: Đề xuất.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ResultProposal' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /clubs/{clubId}/recruitments/{recruitmentId}/finalization:
+    post:
+      tags: [REC]
+      operationId: finalizeRecruitment
+      summary: Chốt kết quả tuyển (FR-REC-07)
+      description: |
+        Chỉ ban chủ nhiệm, sau giờ đóng nhận đơn. Cần quyết định cho mọi đơn chưa rút; ban Trúng tuyển, Dự bị phải nằm trong nguyện vọng;
+        thứ tự dự bị không trùng trong một ban; đơn chưa đạt mọi vòng chỉ có thể Trượt. `responseDays` 1–30 (mặc định đề xuất 7) là hạn nhận
+        kết quả của người Trúng tuyển. Báo từng ứng viên (đích `APPLICATION`) và ban chủ nhiệm (đích `RECRUITMENT`).
+
+        Lỗi:
+        - 400 `VALIDATION` (`decisions` thiếu đơn chưa rút, `decisions[i].applicationId`, `decisions[i].decision`, `decisions[i].departmentId`,
+          `decisions[i].reserveOrder`, `responseDays`).
+        - 403 `NOT_A_MEMBER`, `FORBIDDEN`.
+        - 404 `RECRUITMENT_NOT_FOUND`.
+        - 409 `VERSION_CONFLICT`.
+        - 422 `RECRUITMENT_STILL_OPEN`, `RECRUITMENT_FINALIZED`, `ROUNDS_INCOMPLETE`, `QUOTA_EXCEEDED`.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - $ref: '#/components/parameters/RecruitmentId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/FinalizeRequest' }
+      responses:
+        '200':
+          description: Đợt tuyển sau khi chốt.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RecruitmentDetail' }
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
@@ -8053,8 +8120,8 @@ components:
       enum: [SYSTEM, MANUAL]
     NotificationCategory:
       type: string
-      description: Gia nhập, chức vụ, công việc, sự kiện, buổi sinh hoạt, tài chính, nhiệm kỳ và bàn giao, thông báo của CLB.
-      enum: [MEMBERSHIP, POSITION, TASK, EVENT, SESSION, FINANCE, TERM, ANNOUNCEMENT]
+      description: Gia nhập, chức vụ, công việc, sự kiện, buổi sinh hoạt, tài chính, nhiệm kỳ và bàn giao, thông báo của CLB, tuyển thành viên.
+      enum: [MEMBERSHIP, POSITION, TASK, EVENT, SESSION, FINANCE, TERM, ANNOUNCEMENT, RECRUITMENT]
     NotificationTarget:
       type: object
       description: |
@@ -8066,7 +8133,7 @@ components:
         type:
           type: string
           description: '`MEMBERS` mở trang Thành viên; `id` là tab cần mở (ví dụ `leave`), `null` là tab mặc định. `INVITATION` mở trang lời mời; `id` là mã lời mời.'
-          enum: [CLUB, STRUCTURE, MEMBERS, TASK, EVENT, EVENT_SHARED, SESSION, FINANCE, ADVANCE, DUES, TERM, HANDOVER, DIRECTORY, INVITATION]
+          enum: [CLUB, STRUCTURE, MEMBERS, TASK, EVENT, EVENT_SHARED, SESSION, FINANCE, ADVANCE, DUES, TERM, HANDOVER, DIRECTORY, INVITATION, APPLICATION, RECRUITMENT]
         clubId: { $ref: '#/components/schemas/NullableString' }
         id: { $ref: '#/components/schemas/NullableString' }
     NotificationSummary:
@@ -8863,7 +8930,7 @@ components:
       allOf:
         - $ref: '#/components/schemas/RecruitmentSummary'
         - type: object
-          required: [description, quotas, rounds, questions, judges, createdBy, createdAt, structureLocked, allowedActions, version]
+          required: [description, quotas, rounds, questions, judges, createdBy, createdAt, structureLocked, roundStats, finalizedAt, responseDays, allowedActions, version]
           properties:
             description: { type: string }
             quotas:
@@ -8902,14 +8969,20 @@ components:
               type: array
               description: Số đơn chờ xét, Đạt, Loại theo vòng; chỉ ban chủ nhiệm, người khác nhận mảng rỗng.
               items: { $ref: '#/components/schemas/RoundStat' }
+            finalizedAt: { $ref: '#/components/schemas/NullableDateTime' }
+            responseDays:
+              description: Số ngày nhận kết quả, đặt khi chốt.
+              oneOf:
+                - type: integer
+                - type: 'null'
             allowedActions:
               type: array
               description: |
                 `EDIT` cho người có quyền Quản lý thành viên khi đợt chưa chốt kết quả; `VIEW_APPLICATIONS` cho ban chủ nhiệm (SRS 3.5);
-                `REVIEW_ROUNDS` cho ban chủ nhiệm khi đợt chưa chốt.
+                `REVIEW_ROUNDS` cho ban chủ nhiệm khi đợt chưa chốt; `FINALIZE` cho ban chủ nhiệm khi đợt Đang xét.
               items:
                 type: string
-                enum: [EDIT, VIEW_APPLICATIONS, REVIEW_ROUNDS]
+                enum: [EDIT, VIEW_APPLICATIONS, REVIEW_ROUNDS, FINALIZE]
             version: { type: integer }
     RoundState:
       type: string
@@ -9067,7 +9140,7 @@ components:
               items: { $ref: '#/components/schemas/OpenRecruitment' }
     MyApplication:
       type: object
-      required: [id, recruitment, status, choices, answers, studentId, submittedAt, withdrawnAt, allowedActions, version]
+      required: [id, recruitment, status, choices, answers, studentId, submittedAt, withdrawnAt, outcome, allowedActions, version]
       properties:
         id: { type: string }
         recruitment:
@@ -9090,6 +9163,10 @@ components:
         studentId: { $ref: '#/components/schemas/NullableString' }
         submittedAt: { type: string, format: date-time }
         withdrawnAt: { $ref: '#/components/schemas/NullableDateTime' }
+        outcome:
+          oneOf:
+            - $ref: '#/components/schemas/ApplicationOutcome'
+            - type: 'null'
         allowedActions:
           type: array
           description: '`WITHDRAW` khi đơn Đã nộp và đợt còn nhận đơn.'
@@ -9148,7 +9225,7 @@ components:
         studentId: { $ref: '#/components/schemas/NullableString' }
     ApplicationSummary:
       type: object
-      required: [id, applicant, status, choices, submittedAt, currentRoundId, roundResults, totalScore, version]
+      required: [id, applicant, status, choices, submittedAt, currentRoundId, roundResults, totalScore, outcome, version]
       properties:
         id: { type: string }
         applicant: { $ref: '#/components/schemas/PersonRef' }
@@ -9164,6 +9241,10 @@ components:
           type: array
           items: { $ref: '#/components/schemas/RoundResult' }
         totalScore: { type: integer, description: Tổng điểm các vòng Đạt. }
+        outcome:
+          oneOf:
+            - $ref: '#/components/schemas/ApplicationOutcome'
+            - type: 'null'
         version: { type: integer }
     ApplicationDetail:
       allOf:
@@ -9185,6 +9266,77 @@ components:
             content:
               type: array
               items: { $ref: '#/components/schemas/ApplicationSummary' }
+    ApplicationOutcome:
+      type: object
+      required: [departmentId, departmentName, reserveOrder, respondBy]
+      properties:
+        departmentId: { $ref: '#/components/schemas/NullableString' }
+        departmentName: { $ref: '#/components/schemas/NullableString' }
+        reserveOrder:
+          oneOf:
+            - type: integer
+            - type: 'null'
+        respondBy: { $ref: '#/components/schemas/NullableDateTime' }
+    FinalDecision:
+      type: string
+      enum: [ADMITTED, RESERVE, NOT_ADMITTED]
+    ProposalRow:
+      type: object
+      required: [application, rank, decision, departmentId, reserveOrder]
+      properties:
+        application: { $ref: '#/components/schemas/ApplicationSummary' }
+        rank:
+          description: Hạng theo tổng điểm; null với đơn chưa đạt mọi vòng.
+          oneOf:
+            - type: integer
+            - type: 'null'
+        decision: { $ref: '#/components/schemas/FinalDecision' }
+        departmentId: { $ref: '#/components/schemas/NullableString' }
+        reserveOrder:
+          oneOf:
+            - type: integer
+            - type: 'null'
+    ResultProposal:
+      type: object
+      required: [blockers, quotas, rows, defaultResponseDays, version]
+      properties:
+        blockers:
+          type: array
+          items: { type: string }
+        quotas:
+          type: array
+          items:
+            type: object
+            required: [departmentId, departmentName, quota]
+            properties:
+              departmentId: { type: string }
+              departmentName: { type: string }
+              quota: { type: integer }
+        rows:
+          type: array
+          items: { $ref: '#/components/schemas/ProposalRow' }
+        defaultResponseDays: { type: integer }
+        version: { type: integer, description: Version của đợt tuyển, gửi lại khi chốt. }
+    FinalizeRequest:
+      type: object
+      required: [decisions, responseDays, version]
+      properties:
+        decisions:
+          type: array
+          items:
+            type: object
+            required: [applicationId, decision, departmentId, reserveOrder]
+            properties:
+              applicationId: { type: string }
+              decision: { $ref: '#/components/schemas/FinalDecision' }
+              departmentId: { $ref: '#/components/schemas/NullableString' }
+              reserveOrder:
+                oneOf:
+                  - type: integer
+                    minimum: 1
+                  - type: 'null'
+        responseDays: { type: integer, minimum: 1, maximum: 30 }
+        version: { type: integer }
     JudgeCandidate:
       type: object
       required: [id, fullName, departmentName]

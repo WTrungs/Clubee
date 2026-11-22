@@ -4,6 +4,7 @@ import type {
   ApplicationDetail,
   ApplicationQuery,
   ApplicationSummary,
+  FinalizeRequest,
   JudgeCandidate,
   MyApplication,
   OpenRecruitment,
@@ -11,6 +12,7 @@ import type {
   RecruitmentDetail,
   RecruitmentRequest,
   RecruitmentSummary,
+  ResultProposal,
   RoundResultRequest,
   SubmitApplicationRequest,
   UpdateRecruitmentRequest,
@@ -29,7 +31,7 @@ export const recruitmentRepository = {
   /** FR-REC-02: ban chủ nhiệm xem đơn của đợt (SRS 3.5). */
   applications: (clubId: string, recruitmentId: string, query: ApplicationQuery) =>
     httpClient.get<Page<ApplicationSummary>>(`${recruitments(clubId)}/${encodeURIComponent(recruitmentId)}/applications`, {
-      query: { status: query.status, departmentId: query.departmentId, roundId: query.roundId, roundState: query.roundState, q: query.q, page: query.page },
+      query: { status: query.status, departmentId: query.departmentId, roundId: query.roundId, roundState: query.roundState, outcome: query.outcome, q: query.q, page: query.page },
     }),
   application: (clubId: string, recruitmentId: string, applicationId: string) =>
     httpClient.get<ApplicationDetail>(`${recruitments(clubId)}/${encodeURIComponent(recruitmentId)}/applications/${encodeURIComponent(applicationId)}`),
@@ -39,6 +41,11 @@ export const recruitmentRepository = {
       `${recruitments(clubId)}/${encodeURIComponent(recruitmentId)}/applications/${encodeURIComponent(applicationId)}/rounds/${encodeURIComponent(roundId)}`,
       request,
     ),
+  /** FR-REC-07: đề xuất kết quả theo điểm, nguyện vọng, chỉ tiêu. */
+  proposal: (clubId: string, recruitmentId: string) => httpClient.get<ResultProposal>(`${recruitments(clubId)}/${encodeURIComponent(recruitmentId)}/result-proposal`),
+  /** FR-REC-07: chốt kết quả; vượt chỉ tiêu 422 `QUOTA_EXCEEDED`, còn đơn chưa xét xong 422 `ROUNDS_INCOMPLETE`. */
+  finalize: (clubId: string, recruitmentId: string, request: FinalizeRequest) =>
+    httpClient.post<RecruitmentDetail>(`${recruitments(clubId)}/${encodeURIComponent(recruitmentId)}/finalization`, request),
   /** FR-REC-02: đợt đang nhận đơn ở mọi CLB; cần đăng nhập. */
   openRecruitments: (q?: string, page = 0) => httpClient.get<Page<OpenRecruitment>>('/recruitments/open', { query: { q, page } }),
   publicRecruitment: (recruitmentId: string) => httpClient.get<PublicRecruitment>(`/recruitments/${encodeURIComponent(recruitmentId)}`),

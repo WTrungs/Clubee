@@ -59,6 +59,7 @@ function recruitmentActions(recruitment: DbRecruitment, viewerId: string): Recru
     ...(canManageRecruitment(viewerId, recruitment.clubId) && status !== 'RESULTS' && status !== 'CLOSED' ? (['EDIT'] as const) : []),
     ...(isBoardMember(viewerId, recruitment.clubId) ? (['VIEW_APPLICATIONS'] as const) : []),
     ...(isBoardMember(viewerId, recruitment.clubId) && status !== 'RESULTS' && status !== 'CLOSED' ? (['REVIEW_ROUNDS'] as const) : []),
+    ...(isBoardMember(viewerId, recruitment.clubId) && status === 'REVIEWING' ? (['FINALIZE'] as const) : []),
   ]
 }
 
@@ -74,6 +75,8 @@ export function toRecruitmentDetail(recruitment: DbRecruitment, viewerId: string
     createdAt: recruitment.createdAt,
     structureLocked: structureLocked(recruitment),
     roundStats: isBoardMember(viewerId, recruitment.clubId) ? roundStatsOf(recruitment) : [],
+    finalizedAt: recruitment.finalizedAt,
+    responseDays: recruitment.responseDays,
     allowedActions: recruitmentActions(recruitment, viewerId),
     version: recruitment.version,
   }

@@ -3,8 +3,8 @@ import type { PersonRef } from '@/api/commonTypes'
 /** Suy ra từ giờ mở, giờ đóng và thao tác: Sắp mở, Đang nhận đơn, Đang xét, Đã có kết quả, Đã đóng. */
 export type RecruitmentStatus = 'UPCOMING' | 'OPEN' | 'REVIEWING' | 'RESULTS' | 'CLOSED'
 
-/** `EDIT`: sửa đợt chưa chốt; `VIEW_APPLICATIONS`: ban chủ nhiệm xem đơn (SRS 3.5); `REVIEW_ROUNDS`: ban chủ nhiệm xét vòng khi chưa chốt. */
-export type RecruitmentAction = 'EDIT' | 'VIEW_APPLICATIONS' | 'REVIEW_ROUNDS'
+/** `EDIT`: sửa đợt chưa chốt; `VIEW_APPLICATIONS`: ban chủ nhiệm xem đơn (SRS 3.5); `REVIEW_ROUNDS`: xét vòng khi chưa chốt; `FINALIZE`: chốt kết quả sau giờ đóng. */
+export type RecruitmentAction = 'EDIT' | 'VIEW_APPLICATIONS' | 'REVIEW_ROUNDS' | 'FINALIZE'
 
 export interface RecruitmentQuota {
   departmentId: string
@@ -46,6 +46,9 @@ export interface RecruitmentDetail extends RecruitmentSummary {
   structureLocked: boolean
   /** Số đơn theo vòng; chỉ ban chủ nhiệm (rỗng với người khác). */
   roundStats: RoundStat[]
+  finalizedAt: string | null
+  /** Số ngày ứng viên trúng tuyển được nhận kết quả, đặt khi chốt. */
+  responseDays: number | null
   allowedActions: RecruitmentAction[]
   version: number
 }
@@ -96,6 +99,16 @@ export interface OpenRecruitment {
   departments: Array<{ id: string; name: string; quota: number }>
 }
 
+/** FR-REC-07: kết quả cuối của đơn; có sau khi chốt. */
+export interface ApplicationOutcome {
+  departmentId: string | null
+  departmentName: string | null
+  /** Thứ tự dự bị trong ban; chỉ đơn Dự bị. */
+  reserveOrder: number | null
+  /** Hạn nhận kết quả; chỉ đơn Trúng tuyển. */
+  respondBy: string | null
+}
+
 /** Đơn của chính người xem. */
 export interface MyApplication {
   id: string
@@ -106,6 +119,7 @@ export interface MyApplication {
   studentId: string | null
   submittedAt: string
   withdrawnAt: string | null
+  outcome: ApplicationOutcome | null
   allowedActions: ApplicationAction[]
   version: number
 }
@@ -161,6 +175,7 @@ export interface ApplicationSummary {
   roundResults: RoundResult[]
   /** Tổng điểm các vòng Đạt. */
   totalScore: number
+  outcome: ApplicationOutcome | null
   version: number
 }
 
@@ -194,6 +209,34 @@ export interface ApplicationQuery {
   /** Lọc theo vòng, cùng `roundState`. */
   roundId?: string
   roundState?: RoundState
+  /** FR-REC-07: nhóm kết quả sau khi chốt; Trúng tuyển gồm cả người đã nhận hoặc từ chối nhận. */
+  outcome?: FinalDecision
   q?: string
   page?: number
+}
+
+export type FinalDecision = 'ADMITTED' | 'RESERVE' | 'NOT_ADMITTED'
+
+/** Một dòng đề xuất: hạng theo tổng điểm, kết quả và ban đề xuất. */
+export interface ProposalRow {
+  application: ApplicationSummary
+  rank: number | null
+  decision: FinalDecision
+  departmentId: string | null
+  reserveOrder: number | null
+}
+
+/** FR-REC-07: đề xuất kết quả theo điểm, nguyện vọng và chỉ tiêu; còn đơn chưa xét xong thì `blockers` có lý do. */
+export interface ResultProposal {
+  blockers: string[]
+  quotas: Array<{ departmentId: string; departmentName: string; quota: number }>
+  rows: ProposalRow[]
+  defaultResponseDays: number
+  version: number
+}
+
+export interface FinalizeRequest {
+  decisions: Array<{ applicationId: string; decision: FinalDecision; departmentId: string | null; reserveOrder: number | null }>
+  responseDays: number
+  version: number
 }

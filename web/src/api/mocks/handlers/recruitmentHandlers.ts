@@ -1,5 +1,13 @@
 import { http, HttpResponse } from 'msw'
-import type { ApplicationStatus, RecruitmentRequest, RoundResultRequest, RoundState, SubmitApplicationRequest, UpdateRecruitmentRequest } from '@/features/recruitment/model/recruitmentTypes'
+import type {
+  ApplicationStatus,
+  FinalizeRequest,
+  RecruitmentRequest,
+  RoundResultRequest,
+  RoundState,
+  SubmitApplicationRequest,
+  UpdateRecruitmentRequest,
+} from '@/features/recruitment/model/recruitmentTypes'
 import { REASON_MAX, REASON_MIN } from '@/shared/lib/reasonRules'
 import { ROUND_NOTE_MAX, ROUND_SCORE_MAX, ROUND_SCORE_MIN } from '@/shared/lib/recruitmentRules'
 import { matchesKeyword } from '@/shared/lib/searchText'
@@ -12,7 +20,9 @@ import {
   canSeePublicRecruitment,
   currentRoundOf,
   hasCurrentMembership,
+  compareOutcome,
   matchesRound,
+  outcomeGroupOf,
   roundEditable,
   setRoundResult,
   parseApplication,
@@ -34,6 +44,7 @@ import {
   toRecruitmentDetail,
   toRecruitmentSummary,
 } from '../mockRecruitments'
+import { checkDecisions, finalizationBlockers, finalizeRecruitment, resultProposal } from '../mockRecruitmentResults'
 import { nowIso } from '../mockTime'
 
 const notMember = () => problem(403, 'Bạn không phải thành viên của CLB này.', 'NOT_A_MEMBER')
@@ -69,7 +80,7 @@ export const recruitmentHandlers = [
     const body = (await request.json()) as Partial<RecruitmentRequest>
     const { value, errors } = parseRecruitment(clubId, body)
     if (errors.length > 0) return problem(400, 'Thông tin đợt tuyển chưa hợp lệ.', 'VALIDATION', errors)
-    const recruitment: DbRecruitment = { id: newId('rec'), clubId, ...value, createdBy: user.value.id, createdAt: nowIso(), finalizedAt: null, closedAt: null, version: 1 }
+    const recruitment: DbRecruitment = { id: newId('rec'), clubId, ...value, createdBy: user.value.id, createdAt: nowIso(), finalizedAt: null, responseDays: null, closedAt: null, version: 1 }
     db.recruitments.push(recruitment)
     return HttpResponse.json(toRecruitmentDetail(recruitment, user.value.id), { status: 201 })
   }),
@@ -133,6 +144,8 @@ export const recruitmentHandlers = [
     const departmentId = url.searchParams.get('departmentId')
     const roundId = url.searchParams.get('roundId')
     const roundState = url.searchParams.get('roundState')
+    const outcome = url.searchParams.get('outcome')
+    if (outcome !== null && !['ADMITTED', 'RESERVE', 'NOT_ADMITTED'].includes(outcome)) return problem(400, 'Nhóm kết quả không hợp lệ.', 'VALIDATION')
     if (status !== null && !APPLICATION_STATUSES.includes(status as ApplicationStatus)) return problem(400, 'Trạng thái đơn không hợp lệ.', 'VALIDATION')
     const badRound = roundId !== null && !recruitment.rounds.some((round) => round.id === roundId)
     // `roundState` chỉ có nghĩa khi đi cùng `roundId`.
@@ -144,8 +157,10 @@ export const recruitmentHandlers = [
       .filter((application) => status === null || application.status === status)
       .filter((application) => !departmentId || application.choices.includes(departmentId))
       .filter((application) => roundId === null || matchesRound(application, roundId, roundState as RoundState | null))
+      .filter((application) => outcome === null || outcomeGroupOf(application) === outcome)
       .filter((application) => matchesKeyword(personRef(application.userId).fullName, url.searchParams.get('q')))
-      .toSorted((a, b) => a.submittedAt.localeCompare(b.submittedAt))
+      // Nhóm kết quả xếp theo ban rồi thứ tự dự bị; còn lại theo thời điểm nộp.
+      .toSorted((a, b) => (outcome === null ? 0 : compareOutcome(a, b)) || a.submittedAt.localeCompare(b.submittedAt))
       .map(toApplicationSummary)
     return HttpResponse.json(paginate(rows, url, 50))
   }),
@@ -198,6 +213,41 @@ export const recruitmentHandlers = [
     return HttpResponse.json(toApplicationDetail(application))
   }),
 
+  http.get(`${API}/clubs/:clubId/recruitments/:recruitmentId/result-proposal`, async ({ params }) => {
+    await networkDelay()
+    const user = currentUser()
+    if (!user.ok) return user.response
+    const clubId = String(params.clubId)
+    if (!canAccessClub(user.value.id, clubId)) return notMember()
+    if (!isBoardMember(user.value.id, clubId)) return problem(403, 'Chỉ ban chủ nhiệm chốt kết quả tuyển.', 'FORBIDDEN')
+    const recruitment = findRecruitment(clubId, params.recruitmentId)
+    if (!recruitment) return problem(404, 'Không tìm thấy đợt tuyển.', 'RECRUITMENT_NOT_FOUND')
+    return HttpResponse.json(resultProposal(recruitment))
+  }),
+
+  http.post(`${API}/clubs/:clubId/recruitments/:recruitmentId/finalization`, async ({ request, params }) => {
+    await networkDelay()
+    const user = writer(request)
+    if (!user.ok) return user.response
+    const clubId = String(params.clubId)
+    if (!canAccessClub(user.value.id, clubId)) return notMember()
+    if (!isBoardMember(user.value.id, clubId)) return problem(403, 'Chỉ ban chủ nhiệm chốt kết quả tuyển.', 'FORBIDDEN')
+    const recruitment = findRecruitment(clubId, params.recruitmentId)
+    if (!recruitment) return problem(404, 'Không tìm thấy đợt tuyển.', 'RECRUITMENT_NOT_FOUND')
+    const body = (await request.json()) as Partial<FinalizeRequest>
+    if (body.version !== recruitment.version) return problem(409, 'Đợt tuyển vừa thay đổi. Tải lại đề xuất rồi chốt lại.', 'VERSION_CONFLICT')
+    const status = recruitmentStatusOf(recruitment)
+    if (status === 'RESULTS' || status === 'CLOSED') return problem(422, 'Đợt tuyển đã chốt kết quả.', 'RECRUITMENT_FINALIZED')
+    if (status !== 'REVIEWING') return problem(422, 'Chỉ chốt kết quả sau giờ đóng nhận đơn.', 'RECRUITMENT_STILL_OPEN')
+    const blockers = finalizationBlockers(recruitment)
+    if (blockers.length > 0) return problem(422, blockers.join(' '), 'ROUNDS_INCOMPLETE')
+    const { errors, overQuota } = checkDecisions(recruitment, body)
+    if (overQuota.length > 0) return problem(422, `Số trúng tuyển vượt chỉ tiêu ở ban ${overQuota.join(', ')}.`, 'QUOTA_EXCEEDED')
+    if (errors.length > 0) return problem(400, 'Kết quả chưa hợp lệ.', 'VALIDATION', errors)
+    finalizeRecruitment(recruitment, body as FinalizeRequest, user.value.id)
+    return HttpResponse.json(toRecruitmentDetail(recruitment, user.value.id))
+  }),
+
   http.get(`${API}/recruitments/open`, async ({ request }) => {
     await networkDelay()
     const user = currentUser()
@@ -244,6 +294,7 @@ export const recruitmentHandlers = [
       submittedAt: nowIso(),
       withdrawnAt: null,
       roundResults: [],
+      outcome: null,
       version: 1,
     }
     db.applications.push(application)

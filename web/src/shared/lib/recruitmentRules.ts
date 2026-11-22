@@ -17,3 +17,6 @@ export const APPLICATION_ANSWER_MAX = 2000
 export const ROUND_SCORE_MIN = 0
 export const ROUND_SCORE_MAX = 100
 export const ROUND_NOTE_MAX = 1000
+export const RESPONSE_DAYS_MIN = 1
+export const RESPONSE_DAYS_MAX = 30
+export const RESPONSE_DAYS_DEFAULT = 7

@@ -8,7 +8,7 @@ import { isInAudience } from '../mockAnnouncements'
 import { canAccessClub, personRef } from '../mockMembers'
 import { nowIso } from '../mockTime'
 
-const CATEGORIES: NotificationCategory[] = ['MEMBERSHIP', 'POSITION', 'TASK', 'EVENT', 'SESSION', 'FINANCE', 'TERM', 'ANNOUNCEMENT']
+const CATEGORIES: NotificationCategory[] = ['MEMBERSHIP', 'POSITION', 'TASK', 'EVENT', 'SESSION', 'FINANCE', 'TERM', 'ANNOUNCEMENT', 'RECRUITMENT']
 
 const clubNameOf = (clubId: string | null) => (clubId ? (db.clubs.find((club) => club.id === clubId)?.name ?? null) : null)
 

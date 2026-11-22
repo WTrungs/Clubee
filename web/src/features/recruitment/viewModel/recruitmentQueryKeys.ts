@@ -9,4 +9,6 @@ export const recruitmentQueryKeys = {
   open: (q: string, page: number) => ['recruitments', 'open', q, page] as const,
   public: (recruitmentId: string) => ['recruitments', 'public', recruitmentId] as const,
   mine: ['recruitments', 'mine'] as const,
+  proposal: (clubId: string, recruitmentId: string) => ['recruitments', 'proposal', clubId, recruitmentId] as const,
+  results: (clubId: string, recruitmentId: string, outcome: string, page: number) => ['recruitments', 'applications', clubId, recruitmentId, 'results', outcome, page] as const,
 }

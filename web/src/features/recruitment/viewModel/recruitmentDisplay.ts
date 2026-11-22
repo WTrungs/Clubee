@@ -1,6 +1,6 @@
 import { formatDateTime } from '@/shared/format/formatDate'
 import type { Tone } from '@/shared/ui/tone'
-import type { ApplicationStatus, DepartmentChoice, RecruitmentStatus } from '../model/recruitmentTypes'
+import type { ApplicationStatus, DepartmentChoice, FinalDecision, RecruitmentStatus } from '../model/recruitmentTypes'
 
 export const recruitmentStatusDisplay: Record<RecruitmentStatus, { label: string; tone: Tone }> = {
   UPCOMING: { label: 'Sắp mở', tone: 'info' },
@@ -25,3 +25,24 @@ export const applicationStatusDisplay: Record<ApplicationStatus, { label: string
 
 /** "1. Chuyên môn · 2. Truyền thông". */
 export const choicesText = (choices: DepartmentChoice[]) => choices.map((choice, index) => `${index + 1}. ${choice.departmentName}`).join(' · ')
+
+export const finalDecisionLabel: Record<FinalDecision, string> = { ADMITTED: 'Trúng tuyển', RESERVE: 'Dự bị', NOT_ADMITTED: 'Trượt' }
+
+export interface QuotaUsage {
+  departmentId: string
+  departmentName: string
+  quota: number
+  admitted: number
+  over: boolean
+}
+
+/** Bộ đếm chỉ tiêu theo quyết định đang soạn; vượt chỉ tiêu thì máy chủ trả 422 `QUOTA_EXCEEDED`. */
+export function quotaUsage(
+  quotas: Array<{ departmentId: string; departmentName: string; quota: number }>,
+  decisions: Array<{ decision: FinalDecision; departmentId: string | null }>,
+): QuotaUsage[] {
+  return quotas.map((quota) => {
+    const admitted = decisions.filter((row) => row.decision === 'ADMITTED' && row.departmentId === quota.departmentId).length
+    return { ...quota, admitted, over: admitted > quota.quota }
+  })
+}

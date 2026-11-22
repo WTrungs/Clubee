@@ -149,6 +149,53 @@ test.describe('Tuyển thành viên', () => {
     await snap(page, testInfo, 'recruitmentRounds')
   })
 
+  test('ban chủ nhiệm xét đủ các vòng, qua giờ đóng thì chốt kết quả theo đề xuất', async ({ page }, testInfo) => {
+    // Đồng hồ giả chạy theo giờ thật để dữ liệu mẫu dựng đúng ngày, sau đó mới nhảy qua giờ đóng nhận đơn.
+    await page.clock.install()
+    await loginAs(page, 'anh.nguyen@demo.test')
+    await page.goto('/clubs/c-guitar/recruitments/rec-guitar-k1?tab=rounds')
+    const list = page.getByRole('list', { name: 'Đơn theo vòng' })
+    const review = async (name: string, score: string) => {
+      await list.getByRole('button', { name: `Đạt: ${name}` }).click()
+      const dialog = page.getByRole('dialog', { name: `Xét vòng: ${name}` })
+      await dialog.getByRole('textbox', { name: /^Điểm/ }).fill(score)
+      await dialog.getByRole('button', { name: 'Ghi Đạt' }).click()
+      await expect(dialog).toHaveCount(0)
+    }
+    await review('Hồ Tấn Đạt', '75')
+    await page.getByRole('group', { name: 'Chọn vòng' }).getByRole('button', { name: /Vòng 2/ }).click()
+    await review('Châu Minh Tú', '85')
+    await review('Hồ Tấn Đạt', '80')
+
+    await page.clock.setSystemTime(Date.now() + 12 * 86_400_000)
+    await openNavLink(page, 'Tuyển thành viên')
+    await page.getByRole('list', { name: 'Đợt tuyển' }).getByRole('link').first().click()
+    await expect(page.getByText('Đang xét', { exact: true })).toBeVisible()
+    await page.getByRole('tab', { name: 'Kết quả' }).click()
+    const music = page.getByRole('region', { name: 'Đề xuất Ban Chuyên môn' })
+    await expect(music.getByRole('listitem').first()).toContainText('Châu Minh Tú')
+    await expect(music.getByRole('listitem').first()).toContainText('Trúng tuyển')
+    await expect(page.getByRole('region', { name: 'Đề xuất Ban Hậu cần' })).toContainText('Hồ Tấn Đạt')
+    await expectNoHorizontalScroll(page)
+    // Đồng hồ giả: chạy thêm cho hiệu ứng chuyển trang xong rồi mới chụp.
+    await page.clock.runFor(1000)
+    await snap(page, testInfo, 'recruitmentProposal')
+    await page.getByRole('button', { name: 'Chốt kết quả' }).click()
+    const sheet = page.getByRole('dialog', { name: 'Chốt kết quả' })
+    await expect(sheet.getByRole('list', { name: 'Chỉ tiêu theo ban' })).toContainText('Chuyên môn: 1/5')
+    await expect(sheet.getByRole('region', { name: 'Ban Chuyên môn' })).toContainText('Châu Minh Tú')
+    await expectNoHorizontalScroll(page)
+    await snap(page, testInfo, 'recruitmentFinalizeSheet')
+    await sheet.getByRole('button', { name: 'Chốt kết quả' }).click()
+    await settleToast(page, 'Đã chốt kết quả và gửi thông báo cho từng ứng viên.')
+    await expect(page.getByText('Đã có kết quả', { exact: true })).toBeVisible()
+    const admitted = page.getByRole('region', { name: 'Trúng tuyển' })
+    await expect(admitted.getByRole('listitem')).toHaveCount(2)
+    await expect(admitted).toContainText('Ban Hậu cần')
+    await expectNoHorizontalScroll(page)
+    await snap(page, testInfo, 'recruitmentResults')
+  })
+
   test('thành viên CLB thấy lý do không nộp đơn được', async ({ page }) => {
     await loginAs(page, 'ha.le@demo.test')
     await page.goto('/recruitments/rec-guitar-k1')

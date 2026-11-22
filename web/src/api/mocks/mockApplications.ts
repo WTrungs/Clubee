@@ -1,6 +1,7 @@
 import type { FieldError } from '@/api/apiError'
 import type {
   ApplicationAnswer,
+  ApplicationOutcome,
   ApplicationDetail,
   ApplicationSummary,
   DepartmentChoice,
@@ -22,6 +23,23 @@ import { nowIso } from './mockTime'
 
 const departmentName = (id: string) => db.departments.find((department) => department.id === id)?.name ?? 'Ban'
 const clubOf = (clubId: string) => db.clubs.find((club) => club.id === clubId)
+/** Kết quả cuối kèm tên ban; null khi chưa chốt. */
+export function outcomeOf(application: DbApplication): ApplicationOutcome | null {
+  if (!application.outcome) return null
+  const departmentId = application.outcome.departmentId
+  return { ...application.outcome, departmentName: departmentId ? departmentName(departmentId) : null }
+}
+
+/** Nhóm kết quả sau khi chốt; đơn chưa chốt hoặc đã rút thì null. */
+export function outcomeGroupOf(application: DbApplication): 'ADMITTED' | 'RESERVE' | 'NOT_ADMITTED' | null {
+  if (!application.outcome) return null
+  if (application.outcome.reserveOrder !== null) return 'RESERVE'
+  return application.outcome.departmentId ? 'ADMITTED' : 'NOT_ADMITTED'
+}
+
+export const compareOutcome = (a: DbApplication, b: DbApplication) =>
+  departmentName(a.outcome?.departmentId ?? '').localeCompare(departmentName(b.outcome?.departmentId ?? ''), 'vi') || (a.outcome?.reserveOrder ?? 0) - (b.outcome?.reserveOrder ?? 0)
+
 const choicesOf = (application: DbApplication): DepartmentChoice[] => application.choices.map((id) => ({ departmentId: id, departmentName: departmentName(id) }))
 
 /** Tư cách còn hiệu lực (kể cả Chờ duyệt) thì không nộp đơn được; Đã rời, Bị từ chối thì được. */
@@ -53,6 +71,7 @@ export function toMyApplication(application: DbApplication): MyApplication {
     studentId: application.studentId,
     submittedAt: application.submittedAt,
     withdrawnAt: application.withdrawnAt,
+    outcome: outcomeOf(application),
     allowedActions: application.status === 'SUBMITTED' && status === 'OPEN' ? ['WITHDRAW'] : [],
     version: application.version,
   }
@@ -139,6 +158,7 @@ export function toApplicationSummary(application: DbApplication): ApplicationSum
     currentRoundId: currentRoundOf(application, recruitment),
     roundResults: roundResultsOf(application, recruitment),
     totalScore: totalScoreOf(application),
+    outcome: outcomeOf(application),
     version: application.version,
   }
 }

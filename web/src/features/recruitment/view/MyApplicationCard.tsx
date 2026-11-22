@@ -22,6 +22,13 @@ export function MyApplicationCard({ application, vm, showRecruitment = false }: 
       <p className="text-sm">
         <span className="font-semibold">Nguyện vọng:</span> {choicesText(application.choices)}
       </p>
+      {application.outcome?.departmentName && (
+        <p className="rounded-lg bg-muted p-2.5 text-sm font-medium">
+          {application.outcome.reserveOrder !== null
+            ? `Dự bị ban ${application.outcome.departmentName}, thứ tự ${application.outcome.reserveOrder}.`
+            : `Ban ${application.outcome.departmentName}${application.outcome.respondBy ? `, nhận kết quả trước ${formatDateTime(application.outcome.respondBy)}` : ''}.`}
+        </p>
+      )}
       <p className="text-xs text-muted-foreground">
         Nộp lúc {formatDateTime(application.submittedAt)}
         {application.withdrawnAt && ` · rút lúc ${formatDateTime(application.withdrawnAt)}`}

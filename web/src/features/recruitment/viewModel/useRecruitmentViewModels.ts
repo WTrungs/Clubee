@@ -55,7 +55,12 @@ export function useRecruitmentDetailViewModel() {
   const [editOpen, setEditOpen] = useState(false)
   const detail = useQuery({ queryKey: recruitmentQueryKeys.detail(clubId, recruitmentId), queryFn: () => recruitmentRepository.get(clubId, recruitmentId) })
   const canViewApplications = detail.data?.allowedActions.includes('VIEW_APPLICATIONS') ?? false
-  const tabs = [{ value: 'info', label: 'Thông tin' }, ...(canViewApplications ? [{ value: 'applications', label: 'Đơn ứng tuyển' }, { value: 'rounds', label: 'Lọc theo vòng' }] : [])]
+  const boardTabs = [
+    { value: 'applications', label: 'Đơn ứng tuyển' },
+    { value: 'rounds', label: 'Lọc theo vòng' },
+    { value: 'results', label: 'Kết quả' },
+  ]
+  const tabs = [{ value: 'info', label: 'Thông tin' }, ...(canViewApplications ? boardTabs : [])]
   const tab = tabs.find((candidate) => candidate.value === searchParams.get('tab'))?.value ?? 'info'
   return {
     tabs,
