@@ -2015,6 +2015,36 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
         '422': { $ref: '#/components/responses/UnprocessableEntity' }
+  /clubs/{clubId}/terms/{termId}/overview:
+    get:
+      tags: [TERM]
+      operationId: getTermOverview
+      summary: Tra cứu một nhiệm kỳ (FR-TERM-08, BR-DATA-02)
+      description: |
+        Mọi thành viên CLB. Nhiệm kỳ đã đóng: các ban theo tên lúc đóng (`closedDepartments`); nhiệm kỳ đang chạy: các ban
+        đang hoạt động. Ban chủ nhiệm và trưởng, phó ban là chức vụ thường trực có hiệu lực ở một thời điểm trong nhiệm kỳ
+        (kể cả chức bị thu hồi sớm, người đã rời CLB). Quỹ chung tính theo ngày phát sinh của giao dịch Đã ghi sổ, gồm cả chuyển quỹ.
+        Sự kiện xem bằng `GET /clubs/{clubId}/events?termId=`, sổ quỹ bằng `GET /clubs/{clubId}/transactions?fundId&from&to`.
+
+        Lỗi:
+        - 403 `NOT_A_MEMBER`.
+        - 404 `TERM_NOT_FOUND`.
+        - 422 `TERM_NOT_STARTED` (nhiệm kỳ Chuẩn bị).
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - $ref: '#/components/parameters/TermId'
+      responses:
+        '200':
+          description: Tổng quan nhiệm kỳ.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TermOverview' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
   /clubs/{clubId}/terms/{termId}/extensions:
     post:
       tags: [TERM]
@@ -2598,9 +2628,13 @@ paths:
       description: |
         Sự kiện người gọi được xem. Dự thảo chỉ người đề xuất xem, và ban chủ nhiệm khi đề xuất đã bị từ chối;
         Chờ duyệt thì người đề xuất và ban chủ nhiệm. Khách của sự kiện (`viewerRole: EVENT_GUEST`) chỉ thấy các sự kiện
-        mình đang làm BTC. Lỗi 403 `NOT_A_MEMBER`.
+        mình đang làm BTC. Lỗi 403 `NOT_A_MEMBER`; `termId` không thuộc CLB thì 400.
       parameters:
         - $ref: '#/components/parameters/ClubId'
+        - name: termId
+          in: query
+          description: FR-TERM-08, chỉ sự kiện bắt đầu trong khoảng ngày của nhiệm kỳ.
+          schema: { type: string }
         - name: status
           in: query
           description: Lặp lại tham số để lọc nhiều trạng thái.
@@ -2620,6 +2654,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/EventPage' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
     post:
@@ -6924,6 +6959,54 @@ components:
             type: string
             enum: [EDIT, START_HANDOVER, EXTEND, VIEW_HANDOVER]
         version: { type: integer }
+    TermPositionHolder:
+      type: object
+      required: [id, role, person, startOn, endOn, revoked]
+      properties:
+        id: { type: string }
+        role: { $ref: '#/components/schemas/StandingRole' }
+        person: { $ref: '#/components/schemas/PersonRef' }
+        startOn: { type: string, format: date }
+        endOn:
+          description: null là chức vụ hết hạn cùng nhiệm kỳ chưa đóng, giữ tới khi bàn giao xong.
+          oneOf:
+            - type: string
+              format: date
+            - type: 'null'
+        revoked: { type: boolean }
+    TermDepartmentOverview:
+      type: object
+      required: [id, name, holders]
+      properties:
+        id: { type: string }
+        name: { type: string, description: Tên ban lúc nhiệm kỳ đóng. }
+        holders:
+          type: array
+          items: { $ref: '#/components/schemas/TermPositionHolder' }
+    TermFundSummary:
+      type: object
+      required: [fundId, openingBalance, income, expense, closingBalance]
+      properties:
+        fundId: { type: string }
+        openingBalance: { type: integer }
+        income: { type: integer }
+        expense: { type: integer }
+        closingBalance: { type: integer }
+    TermOverview:
+      type: object
+      required: [term, board, departments, generalFund]
+      properties:
+        term: { $ref: '#/components/schemas/TermSummary' }
+        board:
+          type: array
+          items: { $ref: '#/components/schemas/TermPositionHolder' }
+        departments:
+          type: array
+          items: { $ref: '#/components/schemas/TermDepartmentOverview' }
+        generalFund:
+          oneOf:
+            - $ref: '#/components/schemas/TermFundSummary'
+            - type: 'null'
     TermExtension:
       type: object
       required: [fromEndOn, toEndOn, reason, extendedBy, extendedAt, movedPositions]

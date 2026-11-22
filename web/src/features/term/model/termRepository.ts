@@ -10,7 +10,7 @@ import type {
   StartHandoverRequest,
   SubstituteConfirmRequest,
 } from './handoverTypes'
-import type { CreateTermRequest, ExtendTermRequest, Term, UpdateTermRequest } from './termTypes'
+import type { CreateTermRequest, ExtendTermRequest, Term, TermOverview, UpdateTermRequest } from './termTypes'
 
 const club = (clubId: string) => `/clubs/${encodeURIComponent(clubId)}`
 const terms = (clubId: string) => `${club(clubId)}/terms`
@@ -22,6 +22,8 @@ export const termRepository = {
   /** FR-TERM-01. */
   create: (clubId: string, request: CreateTermRequest) => httpClient.post<Term>(terms(clubId), request),
   update: (clubId: string, termId: string, request: UpdateTermRequest) => httpClient.patch<Term>(`${terms(clubId)}/${encodeURIComponent(termId)}`, request),
+  /** FR-TERM-08: cơ cấu, ban chủ nhiệm, trưởng phó ban và Quỹ chung của một nhiệm kỳ đã bắt đầu; mọi thành viên xem được. */
+  overview: (clubId: string, termId: string) => httpClient.get<TermOverview>(`${terms(clubId)}/${encodeURIComponent(termId)}/overview`),
   /** FR-TERM-02: chức vụ thường trực hết hạn cùng nhiệm kỳ được dời theo ngày mới. */
   extend: (clubId: string, termId: string, request: ExtendTermRequest) => httpClient.post<Term>(`${terms(clubId)}/${encodeURIComponent(termId)}/extensions`, request),
   /** FR-TERM-03: nhiệm kỳ đang chạy chuyển Đang bàn giao, tạo phiên bàn giao. */

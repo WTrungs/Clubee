@@ -1,4 +1,6 @@
 import type { PersonRef } from '@/api/commonTypes'
+import type { TermSummary } from '@/features/club/model/clubTypes'
+import type { StandingRole } from '@/features/org/model/orgTypes'
 import type { HandoverProgress } from './handoverTypes'
 
 /** ST-TERM: Chuẩn bị → Đang chạy → Đang bàn giao → Đã đóng. */
@@ -84,4 +86,38 @@ export interface ExtendTermRequest {
   endOn: string
   reason: string
   version: number
+}
+
+/** Một người giữ chức thường trực trong nhiệm kỳ; `endOn` null là còn giữ tới khi bàn giao xong. */
+export interface TermPositionHolder {
+  id: string
+  role: StandingRole
+  person: PersonRef
+  startOn: string
+  endOn: string | null
+  revoked: boolean
+}
+
+/** Ban theo tên lúc nhiệm kỳ đóng (BR-DATA-02), kèm trưởng, phó ban trong nhiệm kỳ đó. */
+export interface TermDepartmentOverview {
+  id: string
+  name: string
+  holders: TermPositionHolder[]
+}
+
+/** Quỹ chung trong khoảng nhiệm kỳ, tính theo ngày phát sinh của giao dịch Đã ghi sổ. */
+export interface TermFundSummary {
+  fundId: string
+  openingBalance: number
+  income: number
+  expense: number
+  closingBalance: number
+}
+
+/** FR-TERM-08: tra cứu một nhiệm kỳ đã qua (hoặc đang chạy). */
+export interface TermOverview {
+  term: TermSummary
+  board: TermPositionHolder[]
+  departments: TermDepartmentOverview[]
+  generalFund: TermFundSummary | null
 }

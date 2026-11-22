@@ -14,7 +14,7 @@ import type {
   StandingRole,
   UpdateDepartmentRequest,
 } from '@/features/org/model/orgTypes'
-import { db, type DbDepartment, type DbPosition, type DbTerm, type PositionRole } from '../db'
+import { db, type DbDepartment, type DbPosition, type PositionRole } from '../db'
 import { can, forbidden } from '../mockAccess'
 import { API, currentUser, matchesKeyword, newId, networkDelay, paginate, problem, writer } from '../mockHttp'
 import { canAccessClub, departmentMemberCount, eligibleMembers, personRef } from '../mockMembers'
@@ -39,7 +39,7 @@ import {
 import { notify, structureTarget } from '../mockNotifications'
 import { isTaskActive, isTaskOverdue } from '../mockScopes'
 import { isDueSoon } from '../mockTaskJobs'
-import { canAssignStanding, isTermOverdue, lastPresidentHint, openHandoverOf } from '../mockTerms'
+import { canAssignStanding, heldDuringTerm, isTermOverdue, lastPresidentHint, openHandoverOf } from '../mockTerms'
 import { nowIso, shiftDate, vnToday } from '../mockTime'
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
@@ -91,13 +91,6 @@ function toPosition(position: DbPosition, viewerId: string, departmentNames?: Re
 const ROLE_ORDER: PositionRole[] = [...STANDING_ROLES, 'EVENT_LEAD', 'SUBCOMMITTEE_LEAD']
 const roleOrder = (position: DbPosition) => ROLE_ORDER.indexOf(position.role)
 const SCOPE_TYPES: PositionScopeType[] = ['CLUB', 'DEPARTMENT', 'EVENT', 'SUBCOMMITTEE']
-
-/** Chức vụ thường trực từng có hiệu lực trong khoảng nhiệm kỳ; bỏ chức vụ bị hủy trước khi bắt đầu. */
-function heldDuring(position: DbPosition, term: DbTerm): boolean {
-  if (position.clubId !== term.clubId || !STANDING_ROLES.includes(position.role)) return false
-  const end = position.endOn ?? NO_END
-  return end >= position.startOn && position.startOn <= term.endOn && end >= term.startOn
-}
 
 /** Số việc đang mở của ban; quá hạn và sắp đến hạn tính như ở trang Công việc (BR-TASK-03, FR-TASK-06). */
 function taskCounts(departmentId: string) {
@@ -279,7 +272,7 @@ export const orgHandlers = [
     const closedTerm = term?.status === 'CLOSED' ? term : undefined
     const departmentNames = new Map((closedTerm?.closedDepartments ?? []).map((department) => [department.id, department.name]))
     const rows = db.positions
-      .filter((position) => (closedTerm ? heldDuring(position, closedTerm) : position.clubId === clubId && isPositionListed(position)))
+      .filter((position) => (closedTerm ? heldDuringTerm(position, closedTerm) : position.clubId === clubId && isPositionListed(position)))
       .map((position) => ({ position, dto: toPosition(position, user.value.id, departmentNames) }))
       .filter(({ position, dto }) => (!scopeId || position.scopeId === scopeId) && (!userId || position.userId === userId) && (!scopeType || dto.scope.type === scopeType))
       .filter(({ dto }) => matchesKeyword(`${dto.holder.fullName} ${dto.scope.name}`, keyword))

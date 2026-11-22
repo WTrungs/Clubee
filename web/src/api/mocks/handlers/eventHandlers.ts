@@ -1,5 +1,5 @@
 import { http, HttpResponse } from 'msw'
-import { formatDateTime, formatTimeRange } from '@/shared/format/formatDate'
+import { formatDateTime, formatTimeRange, toVnDateKey } from '@/shared/format/formatDate'
 import { REASON_MAX, REASON_MIN } from '@/shared/lib/reasonRules'
 import type {
   CreateEventRequest,
@@ -349,8 +349,13 @@ export const eventHandlers = [
     const url = new URL(request.url)
     const statuses = url.searchParams.getAll('status')
     const keyword = url.searchParams.get('q')
+    // FR-TERM-08: sự kiện bắt đầu trong khoảng nhiệm kỳ.
+    const termId = url.searchParams.get('termId')
+    const term = termId === null ? undefined : db.terms.find((candidate) => candidate.id === termId && candidate.clubId === clubId)
+    if (termId !== null && !term) return problem(400, 'Nhiệm kỳ không hợp lệ.', 'VALIDATION', [{ field: 'termId', message: 'Chọn nhiệm kỳ của CLB này.' }])
     const visible = db.events
       .filter((event) => event.clubId === clubId && canViewEvent(user.value.id, event))
+      .filter((event) => !term || (toVnDateKey(event.startAt) >= term.startOn && toVnDateKey(event.startAt) <= term.endOn))
       .filter((event) => statuses.length === 0 || statuses.includes(event.status))
       .filter((event) => matchesKeyword(`${event.name} ${event.location ?? ''}`, keyword))
     const page = paginate(sortForList(visible), url, 12)

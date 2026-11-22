@@ -55,6 +55,7 @@ import {
   preparingTermOf,
   resolvedPlan,
   syncHandoverItems,
+  termOverview,
   toPlanEntries,
 } from '../mockTerms'
 import { isRealDate, nowIso, vnToday } from '../mockTime'
@@ -482,6 +483,18 @@ export const termHandlers = [
     if (planned) term.departmentPlan = planned.plan
     term.version += 1
     return HttpResponse.json(toTerm(term, user.value.id))
+  }),
+
+  http.get(`${API}/clubs/:clubId/terms/:termId/overview`, async ({ params }) => {
+    await networkDelay()
+    const user = currentUser()
+    if (!user.ok) return user.response
+    const clubId = String(params.clubId)
+    if (!canAccessClub(user.value.id, clubId)) return notMember()
+    const term = db.terms.find((candidate) => candidate.id === params.termId && candidate.clubId === clubId)
+    if (!term) return problem(404, 'Không tìm thấy nhiệm kỳ.', 'TERM_NOT_FOUND')
+    if (term.status === 'PREPARING') return problem(422, 'Nhiệm kỳ chưa bắt đầu nên chưa có gì để tra cứu.', 'TERM_NOT_STARTED')
+    return HttpResponse.json(termOverview(term))
   }),
 
   http.post(`${API}/clubs/:clubId/terms/:termId/extensions`, async ({ request, params }) => {

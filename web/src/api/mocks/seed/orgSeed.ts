@@ -167,10 +167,12 @@ export function createDepartmentSeed(): DbDepartment[] {
     createdAt: vnDayAt(-64, 9),
     version: 1,
   })
+  // Ba ban có từ nhiệm kỳ 2025–2026 (có trước chức vụ của nhiệm kỳ đó, FR-TERM-08).
+  const fromLastTerm = (fields: DbDepartment): DbDepartment => ({ ...fields, termId: 't-guitar-2025', createdAt: vnDayAt(-430, 9) })
   return [
-    department('d-media', 'c-guitar', 't-guitar-2026', 'Truyền thông', 'Fanpage, poster, ảnh và video của CLB.'),
-    department('d-logistics', 'c-guitar', 't-guitar-2026', 'Hậu cần', 'Phòng tập, nhạc cụ, âm thanh và đi lại.'),
-    department('d-music', 'c-guitar', 't-guitar-2026', 'Chuyên môn', 'Dạy đàn, phối khí và tiết mục biểu diễn.'),
+    fromLastTerm(department('d-media', 'c-guitar', 't-guitar-2026', 'Truyền thông', 'Fanpage, poster, ảnh và video của CLB.')),
+    fromLastTerm(department('d-logistics', 'c-guitar', 't-guitar-2026', 'Hậu cần', 'Phòng tập, nhạc cụ, âm thanh và đi lại.')),
+    fromLastTerm(department('d-music', 'c-guitar', 't-guitar-2026', 'Chuyên môn', 'Dạy đàn, phối khí và tiết mục biểu diễn.')),
     department('d-external', 'c-guitar', 't-guitar-2026', 'Đối ngoại', 'Liên hệ nhà tài trợ, CLB bạn và đơn vị đồng hành.'),
     department('d-design', 'c-guitar', 't-guitar-2026', 'Thiết kế', 'Nhận diện, ấn phẩm in và trang trí sân khấu.'),
     {
@@ -179,8 +181,8 @@ export function createDepartmentSeed(): DbDepartment[] {
       closedOn: vnDate(-30),
       closeReason: 'Gộp vào ban Truyền thông cho gọn đầu mối.',
     },
-    department('d-en-content', 'c-english', 't-english-2026', 'Nội dung', 'Chủ đề sinh hoạt, tài liệu luyện nói.'),
-    department('d-vol-field', 'c-volunteer', 't-volunteer-2025', 'Hiện trường', 'Tổ chức các chiến dịch tại địa phương.'),
+    { ...department('d-en-content', 'c-english', 't-english-2026', 'Nội dung', 'Chủ đề sinh hoạt, tài liệu luyện nói.'), createdAt: vnDayAt(-300, 9) },
+    { ...department('d-vol-field', 'c-volunteer', 't-volunteer-2025', 'Hiện trường', 'Tổ chức các chiến dịch tại địa phương.'), createdAt: vnDayAt(-400, 9) },
   ]
 }
 

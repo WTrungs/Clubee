@@ -27,7 +27,7 @@ const subcommittee = (clubId: string, eventId: string, subcommitteeId: string) =
 
 export const eventRepository = {
   list: (clubId: string, query: EventQuery) =>
-    httpClient.get<Page<EventSummary>>(events(clubId), { query: { status: query.status, q: query.q, page: query.page, size: query.size } }),
+    httpClient.get<Page<EventSummary>>(events(clubId), { query: { status: query.status, q: query.q, termId: query.termId, page: query.page, size: query.size } }),
   get: (clubId: string, eventId: string) => httpClient.get<EventDetail>(event(clubId, eventId)),
   create: (clubId: string, request: CreateEventRequest) => httpClient.post<EventDetail>(events(clubId), request),
   transition: (clubId: string, eventId: string, request: EventTransitionRequest) =>

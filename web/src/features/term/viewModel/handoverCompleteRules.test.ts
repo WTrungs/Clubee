@@ -172,7 +172,7 @@ describe('completing the handover: effects (FR-TERM-06, BR-TERM-02, BR-TERM-04, 
     expect(positionHolderOf('DEPARTMENT_HEAD', 'd-logistics')).toBeNull()
 
     const media = db.departments.find((department) => department.id === 'd-media')
-    expect(media).toMatchObject({ name: 'Truyền thông số', status: 'ACTIVE', termId: 't-guitar-2026' })
+    expect(media).toMatchObject({ name: 'Truyền thông số', status: 'ACTIVE', termId: 't-guitar-2025' })
     expect(db.departments.find((department) => department.id === 'd-design')).toMatchObject({ status: 'CLOSED', closedOn: vnDate(0) })
     expect(db.departments.find((department) => department.name === 'Sự kiện')).toMatchObject({ status: 'ACTIVE', termId: handover.toTerm.id })
 

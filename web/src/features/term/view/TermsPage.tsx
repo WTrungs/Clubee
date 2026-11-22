@@ -216,7 +216,7 @@ function PreparingTermCard({ term, canEdit, canStartHandover, onEdit, onEditPlan
   )
 }
 
-function PastTerms({ terms, positionsPath }: { terms: Term[]; positionsPath: (term: Term) => string }) {
+function PastTerms({ terms, detailPath }: { terms: Term[]; detailPath: (term: Term) => string }) {
   return (
     <section aria-labelledby="past-terms-title" className="space-y-3">
       <h2 id="past-terms-title" className="text-base font-bold">
@@ -236,11 +236,11 @@ function PastTerms({ terms, positionsPath }: { terms: Term[]; positionsPath: (te
                 <StatusBadge term={term} />
               </div>
               <Link
-                to={positionsPath(term)}
-                aria-label={`Xem chức vụ ${term.name}`}
-                className="inline-flex items-center gap-1 text-sm font-semibold text-primary hover:underline"
+                to={detailPath(term)}
+                aria-label={`Xem ${term.name}`}
+                className="inline-flex min-h-11 items-center gap-1 text-sm font-semibold text-primary hover:underline"
               >
-                Xem chức vụ
+                Xem nhiệm kỳ
                 <ArrowRight aria-hidden className="size-4" />
               </Link>
             </motion.li>
@@ -307,7 +307,7 @@ export function TermsPage() {
               {vm.current && ` Nhiệm kỳ hiện tại kết thúc ngày ${formatDate(vm.current.endOn)}.`}
             </p>
           )}
-          <PastTerms terms={vm.past} positionsPath={vm.positionsPath} />
+          <PastTerms terms={vm.past} detailPath={vm.detailPath} />
         </motion.div>
       )}
 

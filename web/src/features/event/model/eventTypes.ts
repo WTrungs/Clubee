@@ -269,6 +269,8 @@ export interface CreateSubcommitteeRequest {
 export interface EventQuery {
   status?: EventStatus[]
   q?: string
+  /** FR-TERM-08: sự kiện bắt đầu trong khoảng nhiệm kỳ. */
+  termId?: string
   page?: number
   size?: number
 }

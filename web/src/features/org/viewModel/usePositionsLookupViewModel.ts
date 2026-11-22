@@ -16,11 +16,11 @@ const isScopeType = (value: string | null): value is PositionScopeType => POSITI
 /** Nhiệm kỳ đã đóng chỉ có chức vụ thường trực nên hai loại phạm vi sự kiện luôn rỗng. */
 const STANDING_SCOPES: Array<PositionScopeType | ''> = ['', 'CLUB', 'DEPARTMENT']
 
-/** FR-ORG-06: tra cứu chức vụ hiện tại hoặc của nhiệm kỳ đã đóng; nhiệm kỳ, phạm vi trên URL để trang Nhiệm kỳ mở thẳng tới. */
-export function usePositionsLookupViewModel(enabled: boolean) {
+/** FR-ORG-06: chức vụ hiện tại hoặc của nhiệm kỳ đã đóng (tham số `term` trên URL); `fixedTermId` cố định nhiệm kỳ (FR-TERM-08). */
+export function usePositionsLookupViewModel(enabled: boolean, fixedTermId?: string) {
   const { clubId, club } = useCurrentClub()
   const [searchParams, setSearchParams] = useSearchParams()
-  const termId = searchParams.get('term') ?? ''
+  const termId = fixedTermId ?? searchParams.get('term') ?? ''
   const viewingPast = (value: string) => value !== '' && value !== club.currentTerm?.id
   const scopeFilters = viewingPast(termId) ? POSITION_SCOPE_FILTERS.filter((filter) => STANDING_SCOPES.includes(filter.value)) : POSITION_SCOPE_FILTERS
   // Bộ lọc trên URL không có chip tương ứng (ví dụ liên kết cũ) thì bỏ qua, để danh sách không rỗng mà không chip nào được chọn.
@@ -54,6 +54,7 @@ export function usePositionsLookupViewModel(enabled: boolean) {
 
   return {
     termId,
+    termFixed: fixedTermId !== undefined,
     termOptions: [
       { value: '', label: club.currentTerm ? `Hiện tại · ${club.currentTerm.name}` : 'Hiện tại' },
       ...closedTerms.map((term) => ({ value: term.id, label: `${term.name} (đã đóng)` })),

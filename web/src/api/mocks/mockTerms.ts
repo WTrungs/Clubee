@@ -2,7 +2,8 @@ import type { EventStatus } from '@/features/event/model/eventTypes'
 import type { AdvanceStatus } from '@/features/finance/model/advanceTypes'
 import type { TaskStatus } from '@/features/task/model/taskTypes'
 import type { DepartmentOption, HandoverCompletionPreview, HandoverCounts, HandoverItemCounts, HandoverItemKind, HandoverItemStatus } from '@/features/term/model/handoverTypes'
-import type { DepartmentPlanEntry } from '@/features/term/model/termTypes'
+import type { StandingRole } from '@/features/org/model/orgTypes'
+import type { DepartmentPlanEntry, TermFundSummary, TermOverview, TermPositionHolder } from '@/features/term/model/termTypes'
 import { formatDate } from '@/shared/format/formatDate'
 import { formatMoney } from '@/shared/format/formatMoney'
 import { db, type DbAppointment, type DbDepartment, type DbHandover, type DbHandoverItem, type DbHandoverSnapshot, type DbPlanEntry, type DbPosition, type DbTerm } from './db'
@@ -16,11 +17,13 @@ import { notify, structureTarget, termsTarget } from './mockNotifications'
 import {
   BOARD_ROLES,
   currentTermOf,
+  effectiveEndOf,
   endPositions,
   EVENT_STAFF_ACTIVE,
   grantPosition,
   isBoardMember,
   isPositionOpen,
+  NO_END,
   positionHolderOf,
   positionTitleOf,
   positionTitles,
@@ -185,6 +188,60 @@ export function handoverBlockers(handover: DbHandover): string[] {
 export function isTermOverdue(clubId: string): boolean {
   const term = currentTermOf(clubId)
   return term?.status === 'RUNNING' && vnToday() > term.endOn
+}
+
+/** Chức vụ thường trực có hiệu lực ở một thời điểm nào đó trong nhiệm kỳ (FR-ORG-06, FR-TERM-08). */
+export function heldDuringTerm(position: DbPosition, term: DbTerm): boolean {
+  if (position.clubId !== term.clubId || !STANDING_ROLES.includes(position.role)) return false
+  const end = position.endOn ?? NO_END
+  return end >= position.startOn && position.startOn <= term.endOn && end >= term.startOn
+}
+
+const holderOf = (position: DbPosition): TermPositionHolder => ({
+  id: position.id,
+  role: position.role as StandingRole,
+  person: personRef(position.userId),
+  startOn: position.startOn,
+  endOn: effectiveEndOf(position),
+  revoked: position.revokedAt !== null,
+})
+
+/** Quỹ chung trong khoảng nhiệm kỳ: số dư đầu kỳ, tiền vào, tiền ra (cả chuyển quỹ) theo ngày phát sinh của giao dịch Đã ghi sổ. */
+function generalFundSummary(term: DbTerm): TermFundSummary | null {
+  const fund = db.funds.find((candidate) => candidate.clubId === term.clubId && candidate.kind === 'GENERAL')
+  if (!fund) return null
+  let opening = 0
+  let income = 0
+  let expense = 0
+  for (const transaction of db.transactions) {
+    if (transaction.status !== 'POSTED' || transaction.occurredOn === null) continue
+    const flow = transaction.targetFundId === fund.id ? 'IN' : transaction.fundId === fund.id ? transaction.direction : null
+    if (flow === null) continue
+    const signed = flow === 'IN' ? transaction.amount : -transaction.amount
+    if (transaction.occurredOn < term.startOn) opening += signed
+    else if (transaction.occurredOn <= term.endOn) {
+      if (flow === 'IN') income += transaction.amount
+      else expense += transaction.amount
+    }
+  }
+  return { fundId: fund.id, openingBalance: opening, income, expense, closingBalance: opening + income - expense }
+}
+
+/** FR-TERM-08: ban theo tên lúc nhiệm kỳ đóng (BR-DATA-02), ban chủ nhiệm, trưởng phó ban và Quỹ chung của nhiệm kỳ. */
+export function termOverview(term: DbTerm): TermOverview {
+  const held = db.positions.filter((position) => heldDuringTerm(position, term)).toSorted((a, b) => a.startOn.localeCompare(b.startOn))
+  const departments =
+    term.status === 'CLOSED' ? (term.closedDepartments ?? []) : activeDepartmentsOf(term.clubId).map((department) => ({ id: department.id, name: department.name }))
+  return {
+    term: { id: term.id, name: term.name, startOn: term.startOn, endOn: term.endOn, status: term.status },
+    board: BOARD_ROLES.flatMap((role) => held.filter((position) => position.role === role).map(holderOf)),
+    departments: departments.map((department) => ({
+      id: department.id,
+      name: department.name,
+      holders: held.filter((position) => position.scopeId === department.id).toSorted((a, b) => Number(a.role !== 'DEPARTMENT_HEAD') - Number(b.role !== 'DEPARTMENT_HEAD')).map(holderOf),
+    })),
+    generalFund: generalFundSummary(term),
+  }
 }
 
 /** FR-TERM-02: chức vụ thường trực chưa kết thúc, hết hạn đúng ngày cuối nhiệm kỳ; chức vụ có hạn ngắn hơn hoặc đã thu hồi giữ nguyên. */

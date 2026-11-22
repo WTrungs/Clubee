@@ -80,8 +80,8 @@ export function useTermsPageViewModel() {
     confirmStart: () => {
       if (current && preparing) start.mutate({ fromTermId: current.id, toTermId: preparing.id })
     },
-    /** FR-ORG-06: chức vụ thường trực của nhiệm kỳ đã đóng, ở tab Chức vụ trang Cơ cấu. */
-    positionsPath: (term: Term) => `/clubs/${encodeURIComponent(clubId)}/structure?tab=positions&term=${encodeURIComponent(term.id)}`,
+    /** FR-TERM-08: trang tra cứu nhiệm kỳ (cơ cấu, chức vụ, sự kiện, sổ quỹ). */
+    detailPath: (term: Term) => `/clubs/${encodeURIComponent(clubId)}/terms/${encodeURIComponent(term.id)}`,
     handoverPath: (term: Term) =>
       term.handoverId && term.allowedActions.includes('VIEW_HANDOVER') ? `/clubs/${encodeURIComponent(clubId)}/handovers/${encodeURIComponent(term.handoverId)}` : null,
   }

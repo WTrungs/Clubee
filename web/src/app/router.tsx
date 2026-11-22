@@ -83,6 +83,10 @@ export const router = createBrowserRouter([
                       { path: 'structure', lazy: () => import('@/features/org/view/OrgStructurePage').then((module) => ({ Component: module.OrgStructurePage })) },
                       { path: 'terms', lazy: () => import('@/features/term/view/TermsPage').then((module) => ({ Component: module.TermsPage })) },
                       {
+                        path: 'terms/:termId',
+                        lazy: () => import('@/features/term/view/TermDetailPage').then((module) => ({ Component: module.TermDetailPage })),
+                      },
+                      {
                         path: 'handovers/:handoverId',
                         lazy: () => import('@/features/term/view/HandoverPage').then((module) => ({ Component: module.HandoverPage })),
                       },

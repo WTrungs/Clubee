@@ -118,14 +118,13 @@ test.describe('Nhiệm kỳ', () => {
     await expect(page.getByRole('button', { name: 'Khai báo nhiệm kỳ mới' })).toHaveCount(0)
     await snap(page, testInfo, 'termsMemberView')
 
-    // FR-ORG-06: từ nhiệm kỳ đã qua mở thẳng tab Chức vụ của nhiệm kỳ đó.
+    // FR-TERM-08: từ nhiệm kỳ đã qua mở trang tra cứu nhiệm kỳ đó.
     const past = page.getByRole('region', { name: 'Nhiệm kỳ đã qua' })
     await expect(past.getByText('Nhiệm kỳ 2025–2026')).toBeVisible()
-    await past.getByRole('link', { name: 'Xem chức vụ Nhiệm kỳ 2025–2026' }).click()
-    await expect(page.getByRole('tab', { name: 'Chức vụ', selected: true })).toBeVisible()
-    await expect(page.getByRole('combobox', { name: 'Nhiệm kỳ' })).toHaveValue('t-guitar-2025')
+    await past.getByRole('link', { name: 'Xem Nhiệm kỳ 2025–2026' }).click()
+    await expect(page.getByRole('heading', { name: 'Nhiệm kỳ 2025–2026' })).toBeVisible()
     await expect(page.getByText('Tên ban theo lúc nhiệm kỳ đóng', { exact: false })).toBeVisible()
-    await expect(page.getByText('Truyền thông và Sự kiện').first()).toBeVisible()
+    await expect(page.getByText('Ban Truyền thông và Sự kiện')).toBeVisible()
   })
 
   test('giao diện tối', async ({ page }, testInfo) => {

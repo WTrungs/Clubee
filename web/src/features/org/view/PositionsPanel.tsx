@@ -105,22 +105,24 @@ function Controls({ vm }: { vm: PositionsLookupViewModel }) {
   const termSelectId = useId()
   return (
     <div className="space-y-3">
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,20rem)_minmax(0,1fr)] sm:items-end">
-        <div className="space-y-1.5">
-          <label htmlFor={termSelectId} className="text-sm font-semibold">
-            Nhiệm kỳ
-          </label>
-          <NativeSelect id={termSelectId} value={vm.termId} onChange={(event) => vm.setTermId(event.target.value)}>
-            {vm.termOptions.map((option) => (
-              <option key={option.value || 'current'} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </NativeSelect>
-        </div>
+      <div className={vm.termFixed ? 'grid grid-cols-1' : 'grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,20rem)_minmax(0,1fr)] sm:items-end'}>
+        {!vm.termFixed && (
+          <div className="space-y-1.5">
+            <label htmlFor={termSelectId} className="text-sm font-semibold">
+              Nhiệm kỳ
+            </label>
+            <NativeSelect id={termSelectId} value={vm.termId} onChange={(event) => vm.setTermId(event.target.value)}>
+              {vm.termOptions.map((option) => (
+                <option key={option.value || 'current'} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </NativeSelect>
+          </div>
+        )}
         <SearchInput label="Tìm theo tên người, ban hoặc sự kiện" placeholder="Tìm theo tên người, ban, sự kiện…" value={vm.keyword} onValueChange={vm.setKeyword} />
       </div>
-      {vm.termsError !== null && (
+      {vm.termsError !== null && !vm.termFixed && (
         <div role="alert" className="flex flex-wrap items-center gap-2 text-sm text-destructive">
           <span>Chưa tải được danh sách nhiệm kỳ đã đóng. {getErrorMessage(vm.termsError)}</span>
           <Button size="sm" variant="outline" onClick={vm.retryTerms}>
@@ -138,8 +140,8 @@ function Controls({ vm }: { vm: PositionsLookupViewModel }) {
 }
 
 /** FR-ORG-06: ai đang giữ chức gì; chọn nhiệm kỳ đã đóng để xem chức vụ thường trực của nhiệm kỳ đó. */
-export function PositionsPanel({ active }: { active: boolean }) {
-  const vm = usePositionsLookupViewModel(active)
+export function PositionsPanel({ active, termId }: { active: boolean; termId?: string }) {
+  const vm = usePositionsLookupViewModel(active, termId)
   const wide = useMediaQuery('(min-width: 768px)')
   return (
     <div className="space-y-4">
