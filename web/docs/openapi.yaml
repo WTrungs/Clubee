@@ -3486,6 +3486,179 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
         '422': { $ref: '#/components/responses/UnprocessableEntity' }
+  /clubs/{clubId}/recruitments/{recruitmentId}/applications:
+    get:
+      tags: [REC]
+      operationId: listApplications
+      summary: Đơn ứng tuyển của đợt (FR-REC-02)
+      description: Chỉ ban chủ nhiệm (SRS 3.5). Lọc `status`, `departmentId` (một trong các nguyện vọng), `q` theo tên; nộp trước đứng trước; 50 dòng một trang.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - $ref: '#/components/parameters/RecruitmentId'
+        - name: status
+          in: query
+          schema: { $ref: '#/components/schemas/ApplicationStatus' }
+        - name: departmentId
+          in: query
+          schema: { type: string }
+        - $ref: '#/components/parameters/Q'
+        - $ref: '#/components/parameters/Page'
+      responses:
+        '200':
+          description: Trang đơn.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApplicationPage' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /clubs/{clubId}/recruitments/{recruitmentId}/applications/{applicationId}:
+    get:
+      tags: [REC]
+      operationId: getApplication
+      summary: Chi tiết đơn ứng tuyển (FR-REC-02)
+      description: Chỉ ban chủ nhiệm. Câu trả lời theo thứ tự câu hỏi của đợt. Lỗi 403; 404 `APPLICATION_NOT_FOUND`.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - $ref: '#/components/parameters/RecruitmentId'
+        - $ref: '#/components/parameters/ApplicationId'
+      responses:
+        '200':
+          description: Đơn.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApplicationDetail' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /recruitments/open:
+    get:
+      tags: [REC]
+      operationId: listOpenRecruitments
+      summary: Đợt tuyển đang nhận đơn ở mọi CLB (FR-REC-02)
+      description: Cần đăng nhập (khách xem ở trang công khai, FR-CLB-07). Sắp hết hạn trước.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/Q'
+        - $ref: '#/components/parameters/Page'
+      responses:
+        '200':
+          description: Trang đợt tuyển.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OpenRecruitmentPage' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /recruitments/{recruitmentId}:
+    get:
+      tags: [REC]
+      operationId: getPublicRecruitment
+      summary: Đợt tuyển phía ứng viên (FR-REC-02)
+      description: |
+        Thông tin công khai của đợt kèm đơn của người gọi (`myApplication`) và lý do chưa nộp được (`applyBlocker`).
+        Đợt không ở thời gian nhận đơn chỉ thành viên CLB và người có đơn thấy (SRS 3.5); người khác nhận 404 `RECRUITMENT_NOT_FOUND`.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RecruitmentId'
+      responses:
+        '200':
+          description: Đợt tuyển.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PublicRecruitment' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /recruitments/{recruitmentId}/applications:
+    post:
+      tags: [REC]
+      operationId: submitApplication
+      summary: Nộp đơn (FR-REC-02, ST-APP)
+      description: |
+        Cần đăng nhập. Mỗi đợt một đơn, tính cả đơn đã rút.
+        - 1–3 nguyện vọng khác nhau trong các ban có chỉ tiêu (`choices`), câu hỏi bắt buộc phải trả lời (tối đa 2000 ký tự),
+          MSSV 5–20 chữ hoặc số khi CLB thu thập MSSV (`studentId`). Lỗi câu trả lời dạng `answers[i].text` theo thứ tự câu hỏi.
+
+        Lỗi:
+        - 400 `VALIDATION`.
+        - 404 `RECRUITMENT_NOT_FOUND`.
+        - 409 `ALREADY_APPLIED`.
+        - 422 `ALREADY_MEMBER` (đang có tư cách ở CLB, kể cả Chờ duyệt), `RECRUITMENT_NOT_OPEN`.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/RecruitmentId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SubmitApplicationRequest' }
+      responses:
+        '201':
+          description: Đơn vừa nộp.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MyApplication' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+  /me/applications:
+    get:
+      tags: [REC]
+      operationId: listMyApplications
+      summary: Đơn ứng tuyển của tôi (FR-REC-02)
+      description: Mọi đơn của người gọi, mới nhất trước.
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Danh sách đơn.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/MyApplication' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /me/applications/{applicationId}/withdrawal:
+    post:
+      tags: [REC]
+      operationId: withdrawApplication
+      summary: Rút đơn (FR-REC-02, ST-APP)
+      description: |
+        Chỉ đơn Đã nộp của chính mình khi đợt còn nhận đơn; rút rồi không nộp lại được cho đợt đó.
+
+        Lỗi:
+        - 404 `APPLICATION_NOT_FOUND`.
+        - 409 `VERSION_CONFLICT`.
+        - 422 `APPLICATION_NOT_WITHDRAWABLE`.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/ApplicationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/VersionOnly' }
+      responses:
+        '200':
+          description: Đơn sau khi rút.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MyApplication' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
   /clubs/{clubId}/recruitment-judge-candidates:
     get:
       tags: [REC]
@@ -5542,6 +5715,11 @@ components:
       schema: { type: string }
     RecruitmentId:
       name: recruitmentId
+      in: path
+      required: true
+      schema: { type: string }
+    ApplicationId:
+      name: applicationId
       in: path
       required: true
       schema: { type: string }
@@ -8671,10 +8849,10 @@ components:
             structureLocked: { type: boolean, description: Đã tới giờ mở; giờ mở, vòng, câu hỏi không đổi được. }
             allowedActions:
               type: array
-              description: '`EDIT` cho người có quyền Quản lý thành viên khi đợt chưa chốt kết quả.'
+              description: '`EDIT` cho người có quyền Quản lý thành viên khi đợt chưa chốt kết quả; `VIEW_APPLICATIONS` cho ban chủ nhiệm (SRS 3.5).'
               items:
                 type: string
-                enum: [EDIT]
+                enum: [EDIT, VIEW_APPLICATIONS]
             version: { type: integer }
     RecruitmentRequest:
       type: object
@@ -8741,6 +8919,169 @@ components:
             content:
               type: array
               items: { $ref: '#/components/schemas/RecruitmentSummary' }
+    ApplicationStatus:
+      type: string
+      description: ST-APP. Đã nộp, Đã rút, Bị loại ở một vòng, Trúng tuyển, Dự bị, Trượt, Đã nhận, Từ chối nhận.
+      enum: [SUBMITTED, WITHDRAWN, ELIMINATED, ADMITTED, RESERVE, NOT_ADMITTED, ACCEPTED, DECLINED]
+    DepartmentChoice:
+      type: object
+      required: [departmentId, departmentName]
+      properties:
+        departmentId: { type: string }
+        departmentName: { type: string }
+    ApplicationAnswer:
+      type: object
+      required: [questionId, question, text]
+      properties:
+        questionId: { type: string }
+        question: { type: string }
+        text: { type: string }
+    RecruitmentDepartment:
+      type: object
+      required: [id, name, quota]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        quota: { type: integer }
+    OpenRecruitment:
+      type: object
+      required: [id, club, name, closesAt, departments]
+      properties:
+        id: { type: string }
+        club: { $ref: '#/components/schemas/RecruitmentClubRef' }
+        name: { type: string }
+        closesAt: { type: string, format: date-time }
+        departments:
+          type: array
+          items: { $ref: '#/components/schemas/RecruitmentDepartment' }
+    RecruitmentClubRef:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: string }
+        name: { type: string }
+    OpenRecruitmentPage:
+      allOf:
+        - $ref: '#/components/schemas/PageMeta'
+        - type: object
+          required: [content]
+          properties:
+            content:
+              type: array
+              items: { $ref: '#/components/schemas/OpenRecruitment' }
+    MyApplication:
+      type: object
+      required: [id, recruitment, status, choices, answers, studentId, submittedAt, withdrawnAt, allowedActions, version]
+      properties:
+        id: { type: string }
+        recruitment:
+          type: object
+          required: [id, name, clubId, clubName, closesAt, status]
+          properties:
+            id: { type: string }
+            name: { type: string }
+            clubId: { type: string }
+            clubName: { type: string }
+            closesAt: { type: string, format: date-time }
+            status: { $ref: '#/components/schemas/RecruitmentStatus' }
+        status: { $ref: '#/components/schemas/ApplicationStatus' }
+        choices:
+          type: array
+          items: { $ref: '#/components/schemas/DepartmentChoice' }
+        answers:
+          type: array
+          items: { $ref: '#/components/schemas/ApplicationAnswer' }
+        studentId: { $ref: '#/components/schemas/NullableString' }
+        submittedAt: { type: string, format: date-time }
+        withdrawnAt: { $ref: '#/components/schemas/NullableDateTime' }
+        allowedActions:
+          type: array
+          description: '`WITHDRAW` khi đơn Đã nộp và đợt còn nhận đơn.'
+          items:
+            type: string
+            enum: [WITHDRAW]
+        version: { type: integer }
+    PublicRecruitment:
+      type: object
+      required: [id, club, name, description, opensAt, closesAt, status, departments, questions, collectsStudentId, myApplication, applyBlocker]
+      properties:
+        id: { type: string }
+        club: { $ref: '#/components/schemas/RecruitmentClubRef' }
+        name: { type: string }
+        description: { type: string }
+        opensAt: { type: string, format: date-time }
+        closesAt: { type: string, format: date-time }
+        status: { $ref: '#/components/schemas/RecruitmentStatus' }
+        departments:
+          type: array
+          items: { $ref: '#/components/schemas/RecruitmentDepartment' }
+        questions:
+          type: array
+          items:
+            type: object
+            required: [id, text, required]
+            properties:
+              id: { type: string }
+              text: { type: string }
+              required: { type: boolean }
+        collectsStudentId: { type: boolean }
+        myApplication:
+          oneOf:
+            - $ref: '#/components/schemas/MyApplication'
+            - type: 'null'
+        applyBlocker:
+          allOf: [{ $ref: '#/components/schemas/NullableString' }]
+          description: Vì sao chưa nộp được; null là nộp được hoặc đã có đơn.
+    SubmitApplicationRequest:
+      type: object
+      required: [choices, answers]
+      properties:
+        choices:
+          type: array
+          minItems: 1
+          maxItems: 3
+          items: { type: string }
+        answers:
+          type: array
+          items:
+            type: object
+            required: [questionId, text]
+            properties:
+              questionId: { type: string }
+              text: { type: string, maxLength: 2000 }
+        studentId: { $ref: '#/components/schemas/NullableString' }
+    ApplicationSummary:
+      type: object
+      required: [id, applicant, status, choices, submittedAt]
+      properties:
+        id: { type: string }
+        applicant: { $ref: '#/components/schemas/PersonRef' }
+        status: { $ref: '#/components/schemas/ApplicationStatus' }
+        choices:
+          type: array
+          items: { $ref: '#/components/schemas/DepartmentChoice' }
+        submittedAt: { type: string, format: date-time }
+    ApplicationDetail:
+      allOf:
+        - $ref: '#/components/schemas/ApplicationSummary'
+        - type: object
+          required: [answers, studentId, withdrawnAt, version]
+          properties:
+            answers:
+              type: array
+              items: { $ref: '#/components/schemas/ApplicationAnswer' }
+            studentId: { $ref: '#/components/schemas/NullableString' }
+            withdrawnAt: { $ref: '#/components/schemas/NullableDateTime' }
+            version: { type: integer }
+    ApplicationPage:
+      allOf:
+        - $ref: '#/components/schemas/PageMeta'
+        - type: object
+          required: [content]
+          properties:
+            content:
+              type: array
+              items: { $ref: '#/components/schemas/ApplicationSummary' }
     JudgeCandidate:
       type: object
       required: [id, fullName, departmentName]

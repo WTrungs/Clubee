@@ -2,7 +2,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { useFieldArray, useForm, type Path } from 'react-hook-form'
-import { useNavigate, useParams } from 'react-router'
+import { useNavigate, useParams, useSearchParams } from 'react-router'
 import { toast } from 'sonner'
 import { ApiError, getErrorMessage, isConflict, isForbidden } from '@/api/apiError'
 import { useCurrentClub } from '@/features/club/viewModel/clubContext'
@@ -51,9 +51,16 @@ export function useRecruitmentsViewModel() {
 export function useRecruitmentDetailViewModel() {
   const { clubId, club } = useCurrentClub()
   const { recruitmentId = '' } = useParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [editOpen, setEditOpen] = useState(false)
   const detail = useQuery({ queryKey: recruitmentQueryKeys.detail(clubId, recruitmentId), queryFn: () => recruitmentRepository.get(clubId, recruitmentId) })
+  const canViewApplications = detail.data?.allowedActions.includes('VIEW_APPLICATIONS') ?? false
+  const tabs = [{ value: 'info', label: 'Thông tin' }, ...(canViewApplications ? [{ value: 'applications', label: 'Đơn ứng tuyển' }] : [])]
+  const tab = tabs.find((candidate) => candidate.value === searchParams.get('tab'))?.value ?? 'info'
   return {
+    tabs,
+    tab,
+    setTab: (value: string) => setSearchParams(value === 'info' ? {} : { tab: value }, { replace: true }),
     clubId,
     clubName: club.name,
     recruitment: detail.data ?? null,

@@ -20,6 +20,7 @@ import { db, type DbRecruitment } from './db'
 import { can } from './mockAccess'
 import { newId } from './mockHttp'
 import { membershipOf, personRef } from './mockMembers'
+import { isBoardMember } from './mockPermissions'
 import { activeDepartmentsOf } from './mockTerms'
 
 const isTimestamp = (value: unknown): value is string => typeof value === 'string' && !Number.isNaN(Date.parse(value))
@@ -47,14 +48,16 @@ export function toRecruitmentSummary(recruitment: DbRecruitment): RecruitmentSum
     status: recruitmentStatusOf(recruitment),
     quotaTotal: recruitment.quotas.reduce((total, quota) => total + quota.quota, 0),
     roundCount: recruitment.rounds.length,
-    // Đơn ứng tuyển có từ FR-REC-02.
-    applicationCount: 0,
+    applicationCount: db.applications.filter((application) => application.recruitmentId === recruitment.id && application.status !== 'WITHDRAWN').length,
   }
 }
 
 function recruitmentActions(recruitment: DbRecruitment, viewerId: string): RecruitmentAction[] {
   const status = recruitmentStatusOf(recruitment)
-  return canManageRecruitment(viewerId, recruitment.clubId) && status !== 'RESULTS' && status !== 'CLOSED' ? ['EDIT'] : []
+  return [
+    ...(canManageRecruitment(viewerId, recruitment.clubId) && status !== 'RESULTS' && status !== 'CLOSED' ? (['EDIT'] as const) : []),
+    ...(isBoardMember(viewerId, recruitment.clubId) ? (['VIEW_APPLICATIONS'] as const) : []),
+  ]
 }
 
 export function toRecruitmentDetail(recruitment: DbRecruitment, viewerId: string): RecruitmentDetail {

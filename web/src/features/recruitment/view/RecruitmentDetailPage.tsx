@@ -7,9 +7,11 @@ import { Button } from '@/shared/ui/Button'
 import { PageHeader } from '@/shared/ui/PageHeader'
 import { Skeleton } from '@/shared/ui/Skeleton'
 import { ErrorState } from '@/shared/ui/StateViews'
+import { Tabs, TabsBar, TabsContent } from '@/shared/ui/Tabs'
 import type { RecruitmentDetail } from '../model/recruitmentTypes'
 import { recruitmentPeriod, recruitmentStatusDisplay } from '../viewModel/recruitmentDisplay'
 import { useRecruitmentDetailViewModel } from '../viewModel/useRecruitmentViewModels'
+import { ApplicationsPanel } from './ApplicationsPanel'
 import { RecruitmentFormSheet } from './RecruitmentFormSheet'
 
 function InfoCard({ title, children }: { title: string; children: ReactNode }) {
@@ -115,7 +117,17 @@ export function RecruitmentDetailPage() {
       />
       {vm.loading && <Skeleton role="status" aria-label="Đang tải đợt tuyển" className="h-64 rounded-2xl" />}
       {vm.error && <ErrorState error={vm.error} onRetry={vm.refetch} />}
-      {recruitment && <RecruitmentInfo recruitment={recruitment} />}
+      {recruitment && (
+        <Tabs value={vm.tab} onValueChange={vm.setTab}>
+          <TabsBar aria-label="Đợt tuyển" active={vm.tab} items={vm.tabs} />
+          <TabsContent value="info" className="pt-5">
+            <RecruitmentInfo recruitment={recruitment} />
+          </TabsContent>
+          <TabsContent value="applications" className="pt-5">
+            <ApplicationsPanel clubId={vm.clubId} recruitment={recruitment} active={vm.tab === 'applications'} />
+          </TabsContent>
+        </Tabs>
+      )}
       {recruitment && vm.canEdit && <RecruitmentFormSheet open={vm.editOpen} editing={recruitment} onClose={vm.closeEdit} />}
     </div>
   )

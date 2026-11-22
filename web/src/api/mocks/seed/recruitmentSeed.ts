@@ -1,3 +1,4 @@
+import type { ApplicationStatus } from '@/features/recruitment/model/recruitmentTypes'
 import { vnDayAt } from '../mockTime'
 
 /** Đợt tuyển (FR-REC-01); trạng thái suy ra từ giờ mở, giờ đóng, `finalizedAt`, `closedAt`. Dữ liệu tổng hợp. */
@@ -49,5 +50,41 @@ export function createRecruitmentSeed(): DbRecruitment[] {
       closedAt: null,
       version: 1,
     },
+  ]
+}
+
+/** Đơn ứng tuyển (FR-REC-02, ST-APP); mỗi người một đơn mỗi đợt, tính cả đơn đã rút. */
+export interface DbApplication {
+  id: string
+  recruitmentId: string
+  clubId: string
+  userId: string
+  /** Mã ban theo thứ tự nguyện vọng. */
+  choices: string[]
+  answers: Array<{ questionId: string; text: string }>
+  studentId: string | null
+  status: ApplicationStatus
+  submittedAt: string
+  withdrawnAt: string | null
+  version: number
+}
+
+export function createApplicationSeed(): DbApplication[] {
+  const application = (id: string, userId: string, choices: string[], answers: string[], daysAgo: number, studentId: string | null): DbApplication => ({
+    id,
+    recruitmentId: 'rec-guitar-k1',
+    clubId: 'c-guitar',
+    userId,
+    choices,
+    answers: answers.map((text, index) => ({ questionId: ['rq-k1-why', 'rq-k1-instrument', 'rq-k1-time'][index] ?? '', text })),
+    studentId,
+    status: 'SUBMITTED',
+    submittedAt: vnDayAt(-daysAgo, 20),
+    withdrawnAt: null,
+    version: 1,
+  })
+  return [
+    application('ap-tu', 'u-tu', ['d-music', 'd-media'], ['Mình muốn học đệm hát cho CLB tiếng Anh.', 'Chơi ukulele 1 năm.', '2 buổi'], 4, '22520001'),
+    application('ap-dat', 'u-dat', ['d-logistics', 'd-music'], ['Muốn quay lại CLB sau một năm nghỉ.', 'Guitar 3 năm.', '3 buổi'], 2, '21520099'),
   ]
 }
