@@ -4,6 +4,7 @@ import {
   CalendarDays,
   CalendarRange,
   ChartNoAxesColumn,
+  ChartPie,
   Compass,
   FolderOpen,
   Gauge,
@@ -22,6 +23,9 @@ import {
 } from 'lucide-react'
 import type { AccountType } from '@/features/account/model/accountTypes'
 import type { ClubAction, ClubViewerRole } from '@/features/club/model/clubTypes'
+
+/** Có một trong các quyền này thì hiện mục Báo cáo (FR-RPT-03, 04, 06). */
+const REPORT_ACTIONS: ClubAction[] = ['VIEW_CLUB_REPORT', 'VIEW_DEPARTMENT_REPORTS', 'VIEW_AUDIT_LOG']
 
 export interface NavItem {
   to: string
@@ -85,6 +89,7 @@ export function buildNavigation(
         { to: `/clubs/${clubId}/documents`, label: 'Tài liệu', icon: FolderOpen },
         { to: `/clubs/${clubId}/finance`, label: 'Tài chính', icon: Wallet },
         // Mục quản lý chỉ hiện khi máy chủ cho phép; trang vẫn tự kiểm quyền.
+        ...(clubActions.some((action) => REPORT_ACTIONS.includes(action)) ? [{ to: `/clubs/${clubId}/reports`, label: 'Báo cáo', icon: ChartPie }] : []),
         ...(clubActions.includes('MANAGE_RECRUITMENT') ? [{ to: `/clubs/${clubId}/recruitments`, label: 'Tuyển thành viên', icon: UserPlus }] : []),
       ],
     })

@@ -14,23 +14,10 @@ import { PageHeader } from '@/shared/ui/PageHeader'
 import { Skeleton } from '@/shared/ui/Skeleton'
 import { EmptyState, ErrorState } from '@/shared/ui/StateViews'
 import { Tabs, TabsBar, TabsContent } from '@/shared/ui/Tabs'
-import type { AttendanceTally, MyReport } from '../model/myReportTypes'
-import { rateLabel } from '../viewModel/reportDisplay'
+import type { MyReport } from '../model/myReportTypes'
 import { useMyActivityViewModel, type MyActivityViewModel } from '../viewModel/useMyActivityViewModel'
-import { ReportSection as Section, Stat } from './ReportBlocks'
+import { AttendanceStats, ReportSection as Section, Stat } from './ReportBlocks'
 import { ReportPeriodPicker } from './ReportPeriodPicker'
-
-function AttendanceStats({ tally }: { tally: AttendanceTally }) {
-  return (
-    <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
-      <Stat label="Tỷ lệ chuyên cần" value={rateLabel(tally.rate)} />
-      <Stat label="Có mặt" value={tally.present} />
-      <Stat label="Đi muộn" value={tally.late} />
-      <Stat label="Vắng có phép" value={tally.excused} />
-      <Stat label="Vắng không phép" value={tally.absent} tone={tally.absent > 0 ? 'danger' : undefined} />
-    </div>
-  )
-}
 
 function ReportTab({ report }: { report: MyReport }) {
   return (

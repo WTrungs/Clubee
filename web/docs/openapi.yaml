@@ -5579,6 +5579,99 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
         '422': { $ref: '#/components/responses/UnprocessableEntity' }
+  /clubs/{clubId}/report-periods:
+    get:
+      tags: [RPT]
+      operationId: listClubReportPeriods
+      summary: Các kỳ chọn được cho báo cáo CLB, báo cáo ban (FR-RPT-03, 04)
+      description: |
+        Ban chủ nhiệm, hoặc trưởng, phó của một ban đang hoạt động. Cùng cách tính kỳ với `/finance-report/periods`.
+        Lỗi: 403 `NOT_A_MEMBER`, `FORBIDDEN`; 404 `CLUB_NOT_FOUND`.
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+      responses:
+        '200':
+          description: Các kỳ.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReportPeriods' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /clubs/{clubId}/report-departments:
+    get:
+      tags: [RPT]
+      operationId: listReportDepartments
+      summary: Các ban người dùng xem được báo cáo (FR-RPT-03)
+      description: |
+        Ban chủ nhiệm nhận mọi ban đang hoạt động; trưởng, phó ban nhận ban mình; người khác nhận danh sách rỗng. Sắp theo tên.
+        Lỗi: 403 `NOT_A_MEMBER`; 404 `CLUB_NOT_FOUND`.
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+      responses:
+        '200':
+          description: Các ban.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ReportDepartmentOption' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /clubs/{clubId}/club-report:
+    get:
+      tags: [RPT]
+      operationId: getClubReport
+      summary: Báo cáo CLB theo kỳ (FR-RPT-04)
+      description: |
+        Chỉ ban chủ nhiệm. Sĩ số hiện tại theo trạng thái, số gia nhập và số rời trong kỳ (không tính yêu cầu bị từ chối);
+        chuyên cần từng buổi sinh hoạt đã bắt đầu trong kỳ (bỏ buổi đã hủy) và tỷ lệ chung; số sự kiện bắt đầu trong kỳ theo trạng thái
+        (bỏ Dự thảo); thu chi trong kỳ như báo cáo thu chi (FR-FIN-12) và số dư hiện tại của Quỹ chung, các quỹ sự kiện.
+        Lỗi: 400 `VALIDATION` (`period`, `key`, `from`, `to`); 403 `NOT_A_MEMBER`, `FORBIDDEN`; 404 `CLUB_NOT_FOUND`.
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - { name: period, in: query, required: true, schema: { type: string, enum: [MONTH, SEMESTER, TERM, CUSTOM] } }
+        - { name: key, in: query, schema: { type: string } }
+        - { name: from, in: query, schema: { type: string, format: date } }
+        - { name: to, in: query, schema: { type: string, format: date } }
+      responses:
+        '200':
+          description: Báo cáo CLB.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ClubReport' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /clubs/{clubId}/departments/{departmentId}/report:
+    get:
+      tags: [RPT]
+      operationId: getDepartmentReport
+      summary: Báo cáo ban theo kỳ (FR-RPT-03, phần ban)
+      description: |
+        Ban chủ nhiệm, hoặc trưởng, phó của chính ban đó. Mỗi thành viên hiện thuộc ban (Thử việc, Chính thức, Tạm nghỉ): việc
+        làm chính xong trong kỳ (đúng hạn, trễ hạn), đang mở và đang quá hạn tính tới hiện tại; chuyên cần trong kỳ ở CLB.
+        Trưởng ban, Phó ban trước rồi theo tên.
+        Lỗi: 400 `VALIDATION` (`period`, `key`, `from`, `to`); 403 `NOT_A_MEMBER`, `FORBIDDEN`; 404 `CLUB_NOT_FOUND`, `DEPARTMENT_NOT_FOUND`.
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - $ref: '#/components/parameters/DepartmentId'
+        - { name: period, in: query, required: true, schema: { type: string, enum: [MONTH, SEMESTER, TERM, CUSTOM] } }
+        - { name: key, in: query, schema: { type: string } }
+        - { name: from, in: query, schema: { type: string, format: date } }
+        - { name: to, in: query, schema: { type: string, format: date } }
+      responses:
+        '200':
+          description: Báo cáo ban.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DepartmentReport' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
   /clubs/{clubId}/finance-report/periods:
     get:
       tags: [FIN]
@@ -6531,7 +6624,8 @@ components:
         `VIEW_DUES`: thuộc ban chủ nhiệm, xem tab Đóng quỹ (FR-FIN-09). `OPEN_DUES`: ban chủ nhiệm có `RECORD_LEDGER`, mở đợt đóng quỹ.
         `VIEW_FINANCE_REPORT`: thuộc ban chủ nhiệm, xem tab Báo cáo thu chi (FR-FIN-12).
         `MANAGE_RECRUITMENT`: có quyền Quản lý thành viên, mở và quản lý đợt tuyển (FR-REC-01).
-      enum: [CREATE_EVENT, PROPOSE_EVENT, ASSIGN_TASK, MANAGE_MEMBERS, MANAGE_ORG, ASSIGN_PRESIDENCY, EDIT_CLUB, SEND_ANNOUNCEMENT, CREATE_TERM, ASSIGN_POSITION, REQUEST_PRESIDENCY_TRANSFER, VIEW_PERMISSIONS, VIEW_SHARED_EVENTS, VIEW_DUES, OPEN_DUES, VIEW_FINANCE_REPORT, MANAGE_RECRUITMENT]
+        `VIEW_CLUB_REPORT`, `VIEW_AUDIT_LOG`: ban chủ nhiệm (FR-RPT-04, 06). `VIEW_DEPARTMENT_REPORTS`: ban chủ nhiệm, trưởng hoặc phó của một ban đang hoạt động (FR-RPT-03).
+      enum: [CREATE_EVENT, PROPOSE_EVENT, ASSIGN_TASK, MANAGE_MEMBERS, MANAGE_ORG, ASSIGN_PRESIDENCY, EDIT_CLUB, SEND_ANNOUNCEMENT, CREATE_TERM, ASSIGN_POSITION, REQUEST_PRESIDENCY_TRANSFER, VIEW_PERMISSIONS, VIEW_SHARED_EVENTS, VIEW_DUES, OPEN_DUES, VIEW_FINANCE_REPORT, MANAGE_RECRUITMENT, VIEW_CLUB_REPORT, VIEW_DEPARTMENT_REPORTS, VIEW_AUDIT_LOG]
     TermSummary:
       type: object
       description: Nhiệm kỳ đang phụ trách CLB (Đang chạy hoặc Đang bàn giao).
@@ -9631,6 +9725,96 @@ components:
                   status: { $ref: '#/components/schemas/AttendanceStatus' }
                   method: { type: string, enum: [MANUAL, QR] }
                   edited: { type: boolean }
+    TaskTally:
+      type: object
+      required: [doneOnTime, doneLate, open, overdue]
+      properties:
+        doneOnTime: { type: integer }
+        doneLate: { type: integer }
+        open: { type: integer }
+        overdue: { type: integer }
+    ReportDepartmentOption:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: string }
+        name: { type: string }
+    ClubReport:
+      type: object
+      required: [club, range, members, attendance, events, finance]
+      properties:
+        club:
+          type: object
+          required: [id, name]
+          properties:
+            id: { type: string }
+            name: { type: string }
+        range: { $ref: '#/components/schemas/ReportRange' }
+        members:
+          type: object
+          required: [probation, active, onLeave, joined, left]
+          properties:
+            probation: { type: integer }
+            active: { type: integer }
+            onLeave: { type: integer }
+            joined: { type: integer, description: Gia nhập trong kỳ. }
+            left: { type: integer, description: Rời trong kỳ, không tính yêu cầu bị từ chối. }
+        attendance:
+          type: object
+          required: [overall, sessions]
+          properties:
+            overall: { $ref: '#/components/schemas/AttendanceTally' }
+            sessions:
+              type: array
+              items:
+                type: object
+                required: [sessionId, title, date, departmentName, closed, tally]
+                properties:
+                  sessionId: { type: string }
+                  title: { type: string }
+                  date: { type: string, format: date }
+                  departmentName: { type: [string, 'null'] }
+                  closed: { type: boolean }
+                  tally: { $ref: '#/components/schemas/AttendanceTally' }
+        events:
+          type: object
+          required: [total, byStatus]
+          properties:
+            total: { type: integer }
+            byStatus:
+              type: array
+              items:
+                type: object
+                required: [status, count]
+                properties:
+                  status: { $ref: '#/components/schemas/EventStatus' }
+                  count: { type: integer }
+        finance:
+          type: object
+          required: [income, expense, net, generalBalance, eventFundsBalance]
+          properties:
+            income: { type: integer }
+            expense: { type: integer }
+            net: { type: integer }
+            generalBalance: { type: integer, description: Số dư hiện tại. }
+            eventFundsBalance: { type: integer, description: Tổng số dư hiện tại của các quỹ sự kiện. }
+    DepartmentReport:
+      type: object
+      required: [department, range, rows]
+      properties:
+        department: { $ref: '#/components/schemas/ReportDepartmentOption' }
+        range: { $ref: '#/components/schemas/ReportRange' }
+        rows:
+          type: array
+          items:
+            type: object
+            required: [person, status, positionTitle, tasks, attendance]
+            properties:
+              person: { $ref: '#/components/schemas/PersonRef' }
+              status: { $ref: '#/components/schemas/MemberStatus' }
+              positionTitle: { type: [string, 'null'] }
+              tasks: { $ref: '#/components/schemas/TaskTally' }
+              attendance: { $ref: '#/components/schemas/AttendanceTally' }
     MyReport:
       type: object
       required: [club, range, attendance, tasks, dues]

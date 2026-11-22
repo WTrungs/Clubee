@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react'
 import { cn } from '@/shared/lib/cn'
+import type { AttendanceTally } from '../model/myReportTypes'
+import { rateLabel } from '../viewModel/reportDisplay'
 
 /** Ô số liệu của các trang báo cáo. */
 export function Stat({ label, value, hint, tone }: { label: string; value: ReactNode; hint?: ReactNode; tone?: 'success' | 'danger' | 'warning' }) {
@@ -34,5 +36,18 @@ export function ReportSection({ title, icon, description, children }: { title: s
       </div>
       {children}
     </section>
+  )
+}
+
+/** Tỷ lệ chuyên cần và số đếm từng trạng thái. */
+export function AttendanceStats({ tally }: { tally: AttendanceTally }) {
+  return (
+    <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+      <Stat label="Tỷ lệ chuyên cần" value={rateLabel(tally.rate)} />
+      <Stat label="Có mặt" value={tally.present} />
+      <Stat label="Đi muộn" value={tally.late} />
+      <Stat label="Vắng có phép" value={tally.excused} />
+      <Stat label="Vắng không phép" value={tally.absent} tone={tally.absent > 0 ? 'danger' : undefined} />
+    </div>
   )
 }

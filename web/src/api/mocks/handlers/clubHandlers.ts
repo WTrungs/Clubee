@@ -28,6 +28,7 @@ import { isEventGuest } from '../mockStaffEvents'
 import { canAssignStanding, canCreateTerm } from '../mockTerms'
 import { nowIso, vnToday } from '../mockTime'
 import { canRequestTransfer } from '../mockTransfers'
+import { reportDepartmentsOf } from '../mockClubReport'
 
 
 function clubActionsFor(userId: string, clubId: string): ClubAction[] {
@@ -49,6 +50,8 @@ function clubActionsFor(userId: string, clubId: string): ClubAction[] {
   if (canRequestTransfer(userId, clubId)) actions.push('REQUEST_PRESIDENCY_TRANSFER')
   if (isBoardMember(userId, clubId)) actions.push('VIEW_PERMISSIONS', 'VIEW_SHARED_EVENTS', 'VIEW_DUES', 'VIEW_FINANCE_REPORT')
   if (isBoardMember(userId, clubId) && keepsLedger(userId, clubId)) actions.push('OPEN_DUES')
+  if (isBoardMember(userId, clubId)) actions.push('VIEW_CLUB_REPORT', 'VIEW_AUDIT_LOG')
+  if (reportDepartmentsOf(userId, clubId).length > 0) actions.push('VIEW_DEPARTMENT_REPORTS')
   return actions
 }
 

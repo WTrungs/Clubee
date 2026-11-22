@@ -119,6 +119,7 @@ export const router = createBrowserRouter([
                         lazy: () => import('@/features/recruitment/view/RecruitmentDetailPage').then((module) => ({ Component: module.RecruitmentDetailPage })),
                       },
                       { path: 'finance', lazy: () => import('@/features/finance/view/FinancePage').then((module) => ({ Component: module.FinancePage })) },
+                      { path: 'reports', lazy: () => import('@/features/report/view/ClubReportsPage').then((module) => ({ Component: module.ClubReportsPage })) },
                     ],
                   },
                 ],

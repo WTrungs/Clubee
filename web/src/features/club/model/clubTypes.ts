@@ -29,6 +29,12 @@ export type ClubAction =
   | 'VIEW_FINANCE_REPORT'
   /** FR-REC-01: mở và quản lý đợt tuyển (quyền Quản lý thành viên). */
   | 'MANAGE_RECRUITMENT'
+  /** FR-RPT-04: ban chủ nhiệm xem báo cáo CLB. */
+  | 'VIEW_CLUB_REPORT'
+  /** FR-RPT-03: ban chủ nhiệm, trưởng và phó ban xem báo cáo ban. */
+  | 'VIEW_DEPARTMENT_REPORTS'
+  /** FR-RPT-06: ban chủ nhiệm xem nhật ký thao tác. */
+  | 'VIEW_AUDIT_LOG'
 
 /** Nhiệm kỳ đang phụ trách CLB: Đang chạy hoặc Đang bàn giao. */
 export interface TermSummary {

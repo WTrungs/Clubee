@@ -1,8 +1,8 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import { useSearchParams } from 'react-router'
-import { ApiError, getErrorMessage } from '@/api/apiError'
 import { myReportRepository } from '../model/myReportRepository'
+import { periodErrorReasons } from './reportDisplay'
 import { useReportPeriodParams } from './useReportPeriodParams'
 
 export const myReportQueryKeys = {
@@ -15,12 +15,6 @@ export const myReportQueryKeys = {
 
 export type MyActivityTab = 'report' | 'history'
 const PAGE_SIZE = 20
-
-/** Lỗi 400 của kỳ: nêu lý do theo từng tham số thay vì mời thử lại. */
-function invalidReasons(error: unknown): string[] | null {
-  if (!(error instanceof ApiError) || error.status !== 400) return null
-  return error.fieldErrors.length > 0 ? error.fieldErrors.map((fieldError) => fieldError.message) : [getErrorMessage(error)]
-}
 
 /** FR-ATT-10, FR-RPT-02: báo cáo và lịch sử tham gia của chính mình theo CLB và kỳ; CLB, kỳ, tab nằm trên URL. */
 export function useMyActivityViewModel() {
@@ -62,7 +56,7 @@ export function useMyActivityViewModel() {
     setSearchParams(next, { replace: true })
   }
   const active = tab === 'report' ? report : attendance
-  const reasons = invalidReasons(active.error)
+  const reasons = periodErrorReasons(active.error)
 
   return {
     clubs,
