@@ -29,11 +29,13 @@ export function currentUser(): Guarded<DbUser> {
   return { ok: true, value: user }
 }
 
+export const csrfRejected = () => problem(403, 'Phiên làm việc không hợp lệ (thiếu token CSRF). Tải lại trang rồi thử lại.', 'CSRF')
+
 /** Kiểm tra đăng nhập và token CSRF cho request ghi. */
 export function writer(request: Request): Guarded<DbUser> {
   const user = currentUser()
   if (!user.ok) return user
-  if (!hasValidCsrf(request)) return { ok: false, response: problem(403, 'Phiên làm việc không hợp lệ (thiếu token CSRF). Tải lại trang rồi thử lại.', 'CSRF') }
+  if (!hasValidCsrf(request)) return { ok: false, response: csrfRejected() }
   return user
 }
 

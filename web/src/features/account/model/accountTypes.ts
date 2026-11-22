@@ -82,3 +82,17 @@ export interface ChangePasswordRequest {
   currentPassword: string
   newPassword: string
 }
+
+/** FR-ACC-03: liên kết dùng một lần; đã dùng hoặc đã có liên kết mới hơn thì là `USED`. */
+export type PasswordResetLinkStatus = 'VALID' | 'EXPIRED' | 'USED'
+
+export interface PasswordResetLink {
+  status: PasswordResetLinkStatus
+  /** Email đã che bớt, ví dụ `an***@demo.test`. */
+  emailHint: string
+  expiresAt: string
+}
+
+export interface CompletePasswordResetRequest {
+  newPassword: string
+}

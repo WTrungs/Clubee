@@ -26,6 +26,18 @@ export type RegisterValues = z.infer<typeof registerSchema>
 export const forgotPasswordSchema = z.object({ email })
 export type ForgotPasswordValues = z.infer<typeof forgotPasswordSchema>
 
+/** FR-ACC-03: mật khẩu mới đặt qua liên kết trong email. */
+export const resetPasswordSchema = z
+  .object({
+    newPassword,
+    confirmPassword: z.string().min(1, 'Vui lòng nhập lại mật khẩu mới.'),
+  })
+  .refine((values) => values.newPassword === values.confirmPassword, {
+    path: ['confirmPassword'],
+    message: 'Mật khẩu nhập lại không khớp.',
+  })
+export type ResetPasswordValues = z.infer<typeof resetPasswordSchema>
+
 /** Độ mạnh mật khẩu 0–4 để hiện thanh gợi ý; chỉ mang tính hướng dẫn, máy chủ mới quyết định. */
 export function passwordStrength(password: string): 0 | 1 | 2 | 3 | 4 {
   if (password.length === 0) return 0

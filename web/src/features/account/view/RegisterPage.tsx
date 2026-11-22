@@ -1,7 +1,6 @@
 import { motion } from 'motion/react'
 import { MailCheck } from 'lucide-react'
 import { Link } from 'react-router'
-import { cn } from '@/shared/lib/cn'
 import { spring } from '@/shared/motion/presets'
 import { Button } from '@/shared/ui/Button'
 import { FormAlert } from '@/shared/ui/FormAlert'
@@ -9,9 +8,7 @@ import { FormField } from '@/shared/ui/FormField'
 import { Input } from '@/shared/ui/Input'
 import { useRegisterViewModel } from '../viewModel/useRegisterViewModel'
 import { PasswordInput } from './PasswordInput'
-
-const strengthLabels = ['', 'Yếu', 'Tạm được', 'Khá', 'Mạnh'] as const
-const strengthColors = ['bg-muted', 'bg-status-danger', 'bg-status-warning', 'bg-status-info', 'bg-status-success'] as const
+import { PasswordStrengthMeter } from './PasswordStrengthMeter'
 
 export function RegisterPage() {
   const vm = useRegisterViewModel()
@@ -59,25 +56,7 @@ export function RegisterPage() {
         <FormField label="Mật khẩu" required error={formState.errors.password?.message} hint="Ít nhất 8 ký tự; nên có chữ hoa, số và ký hiệu.">
           <PasswordInput autoComplete="new-password" {...register('password')} />
         </FormField>
-        <div aria-live="polite" className="-mt-1 flex items-center gap-2">
-          <div className="grid flex-1 grid-cols-4 gap-1.5" aria-hidden>
-            {[1, 2, 3, 4].map((level) => (
-              <span key={level} className="h-1.5 overflow-hidden rounded-full bg-muted">
-                <motion.span
-                  className={cn('block h-full rounded-full', strengthColors[vm.strength])}
-                  initial={false}
-                  animate={{ scaleX: vm.strength >= level ? 1 : 0 }}
-                  style={{ originX: 0 }}
-                  transition={spring}
-                />
-              </span>
-            ))}
-          </div>
-          <span className="w-16 text-right text-xs font-semibold text-muted-foreground">
-            {vm.strength > 0 && <span className="sr-only">Độ mạnh mật khẩu: </span>}
-            {strengthLabels[vm.strength]}
-          </span>
-        </div>
+        <PasswordStrengthMeter strength={vm.strength} />
         <FormField label="Nhập lại mật khẩu" required error={formState.errors.confirmPassword?.message}>
           <PasswordInput autoComplete="new-password" {...register('confirmPassword')} />
         </FormField>

@@ -113,7 +113,9 @@ paths:
       tags: [ACC]
       operationId: requestPasswordReset
       summary: Quên mật khẩu (FR-ACC-03)
-      description: Trả 202 với mọi email để không lộ email nào đã đăng ký. Liên kết dùng một lần, hết hạn sau 30 phút (SRS 9.2).
+      description: |
+        Trả 202 với mọi email để không lộ email nào đã đăng ký. Chỉ tài khoản Hoạt động được gửi liên kết (IF-03).
+        Liên kết dùng một lần, hết hạn sau 30 phút (SRS 9.2); liên kết mới làm liên kết chưa dùng trước đó mất hiệu lực.
       security:
         - csrfHeader: []
       requestBody:
@@ -125,6 +127,56 @@ paths:
         '202':
           description: Đã nhận yêu cầu.
         '403': { $ref: '#/components/responses/Forbidden' }
+  /auth/password-resets/{token}:
+    get:
+      tags: [ACC]
+      operationId: getPasswordResetLink
+      summary: Kiểm liên kết đặt lại mật khẩu (FR-ACC-03)
+      description: |
+        Không cần đăng nhập. Hết hạn hoặc đã dùng (kể cả đã có liên kết mới hơn) vẫn trả 200 kèm `status` để trang nêu lý do.
+        Email đã che bớt. Lỗi: 404 `RESET_LINK_NOT_FOUND`.
+      security: []
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Trạng thái liên kết.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PasswordResetLink' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /auth/password-resets/{token}/completion:
+    post:
+      tags: [ACC]
+      operationId: completePasswordReset
+      summary: Đặt mật khẩu mới qua liên kết (FR-ACC-03)
+      description: |
+        Không cần đăng nhập. Thành công thì liên kết thành đã dùng, các liên kết khác của tài khoản mất hiệu lực và mọi phiên
+        của tài khoản bị thu hồi (NFR-SEC-01).
+        Lỗi theo thứ tự: 403 `CSRF`; 404 `RESET_LINK_NOT_FOUND`; 422 `RESET_LINK_USED`, `RESET_LINK_EXPIRED`, `ACCOUNT_LOCKED`;
+        400 `VALIDATION` (`newPassword` 8–72 ký tự).
+      security:
+        - csrfHeader: []
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CompletePasswordResetRequest' }
+      responses:
+        '204':
+          description: Đã đặt mật khẩu mới.
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
   /me:
     get:
       tags: [ACC]
@@ -223,7 +275,7 @@ paths:
       operationId: sendPasswordResetLink
       summary: Gửi lại liên kết đặt mật khẩu (FR-ACC-09)
       description: |
-        Chỉ tài khoản Admin, chỉ tài khoản Hoạt động. Máy chủ gửi thư (IF-03) và ghi nhật ký.
+        Chỉ tài khoản Admin, chỉ tài khoản Hoạt động. Tạo liên kết như Quên mật khẩu (FR-ACC-03), máy chủ gửi thư (IF-03) và ghi nhật ký.
         Lỗi: 403 `ADMIN_ONLY`; 404 `ACCOUNT_NOT_FOUND`; 422 `ACCOUNT_LOCKED`, `INVALID_TRANSITION` (chưa xác thực).
       security:
         - sessionCookie: []
@@ -6614,6 +6666,19 @@ components:
       required: [email]
       properties:
         email: { type: string, format: email }
+    PasswordResetLink:
+      type: object
+      description: Liên kết đặt lại mật khẩu (FR-ACC-03); `USED` gồm cả liên kết đã bị thay bằng liên kết mới hơn.
+      required: [status, emailHint, expiresAt]
+      properties:
+        status: { type: string, enum: [VALID, EXPIRED, USED] }
+        emailHint: { type: string, description: 'Email đã che bớt, ví dụ `an***@demo.test`.' }
+        expiresAt: { type: string, format: date-time }
+    CompletePasswordResetRequest:
+      type: object
+      required: [newPassword]
+      properties:
+        newPassword: { type: string, minLength: 8, maxLength: 72 }
     Profile:
       type: object
       description: Hồ sơ cá nhân dùng chung cho mọi CLB (FR-ACC-05).

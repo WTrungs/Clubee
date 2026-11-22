@@ -30,6 +30,16 @@ export const router = createBrowserRouter([
         ],
       },
       {
+        // Liên kết trong email mở được cả khi đang đăng nhập (FR-ACC-03).
+        element: <AuthLayout />,
+        children: [
+          {
+            path: '/reset-password',
+            lazy: () => import('@/features/account/view/ResetPasswordPage').then((module) => ({ Component: module.ResetPasswordPage })),
+          },
+        ],
+      },
+      {
         element: <RequireAuth />,
         children: [
           {

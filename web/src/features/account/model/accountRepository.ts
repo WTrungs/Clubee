@@ -1,10 +1,12 @@
 import { httpClient } from '@/api/httpClient'
 import type {
   ChangePasswordRequest,
+  CompletePasswordResetRequest,
   CurrentUser,
   EmailChangeReceipt,
   EmailChangeRequest,
   LoginRequest,
+  PasswordResetLink,
   Profile,
   RegisterRequest,
   RegisterResponse,
@@ -17,6 +19,10 @@ export const accountRepository = {
   logout: () => httpClient.post<void>('/auth/logout'),
   register: (request: RegisterRequest) => httpClient.post<RegisterResponse>('/auth/register', request),
   requestPasswordReset: (email: string) => httpClient.post<void>('/auth/password-reset-requests', { email }),
+  /** FR-ACC-03: kiểm liên kết trong email trước khi cho nhập mật khẩu mới. */
+  getPasswordResetLink: (token: string) => httpClient.get<PasswordResetLink>(`/auth/password-resets/${encodeURIComponent(token)}`),
+  completePasswordReset: (token: string, request: CompletePasswordResetRequest) =>
+    httpClient.post<void>(`/auth/password-resets/${encodeURIComponent(token)}/completion`, request),
   /** FR-ACC-05. */
   getProfile: () => httpClient.get<Profile>('/me/profile'),
   updateProfile: (request: UpdateProfileRequest) => httpClient.patch<Profile>('/me/profile', request),

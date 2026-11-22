@@ -9,6 +9,7 @@ import { audit } from '../mockAudit'
 import { API, currentUser, networkDelay, paginate, problem, writer, type Guarded } from '../mockHttp'
 import { departmentNameOf, membershipOf, personRef, ROSTER_STATUSES } from '../mockMembers'
 import { notify, structureTarget } from '../mockNotifications'
+import { issueResetLink } from '../mockPasswordResets'
 import { endPositions, grantPosition, hasPosition, isPositionOpen } from '../mockPermissions'
 import { nowIso } from '../mockTime'
 import { boardCheck, toAdminTransferRequest } from '../mockTransfers'
@@ -145,7 +146,8 @@ export const adminHandlers = [
     if (!target) return problem(404, 'Không tìm thấy tài khoản.', 'ACCOUNT_NOT_FOUND')
     if (target.status === 'LOCKED') return problem(422, 'Tài khoản đang bị khóa. Mở khóa trước khi gửi liên kết đặt mật khẩu.', 'ACCOUNT_LOCKED')
     if (target.status === 'PENDING_VERIFICATION') return problem(422, 'Tài khoản chưa xác thực email nên chưa đặt lại mật khẩu được.', 'INVALID_TRANSITION')
-    // Mock không gửi thư (IF-03 thuộc máy chủ); chỉ ghi nhật ký.
+    // Cùng loại liên kết với Quên mật khẩu (FR-ACC-03); thư thật do máy chủ gửi (IF-03).
+    issueResetLink(target)
     audit({ actorId: user.value.id, clubId: null, action: 'SEND_PASSWORD_RESET', objectType: 'ACCOUNT', objectId: target.id, objectLabel: accountLabel(target), before: null, after: null, reason: null })
     return new HttpResponse(null, { status: 202 })
   }),

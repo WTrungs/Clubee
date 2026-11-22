@@ -1,6 +1,7 @@
 import { http, HttpResponse } from 'msw'
 import type {
   ChangePasswordRequest,
+  CompletePasswordResetRequest,
   CurrentUser,
   EmailChangeRequest,
   LoginRequest,
@@ -8,12 +9,14 @@ import type {
   RegisterRequest,
   UpdateProfileRequest,
 } from '@/features/account/model/accountTypes'
+import { PASSWORD_RESET_MINUTES } from '@/shared/lib/accountRules'
 import { imageContentType, validateImageFile } from '@/shared/lib/validateImageFile'
 import { db, type DbUser } from '../db'
-import { API, currentUser, fileToDataUrl, networkDelay, newId, problem, writer } from '../mockHttp'
+import { API, csrfRejected, currentUser, fileToDataUrl, networkDelay, newId, problem, writer } from '../mockHttp'
 import { departmentNameOf, memberCountOf } from '../mockMembers'
+import { completeReset, findResetLink, issueResetLink, resetLinkStatus, toResetLink } from '../mockPasswordResets'
 import { positionTitlesOf } from '../mockPermissions'
-import { endSession, startSession } from '../mockSession'
+import { endSession, getSessionUserId, hasValidCsrf, startSession } from '../mockSession'
 import { isRealDate, nowIso, vnToday } from '../mockTime'
 import { staffEventsOf } from '../mockStaffEvents'
 import { newUser } from '../seed/memberSeed'
@@ -62,6 +65,8 @@ function toProfile(user: DbUser): Profile {
 function passwordMatches(user: DbUser, password: string): boolean {
   return user.password === null ? password.length >= MIN_PASSWORD : password === user.password
 }
+
+const resetLinkNotFound = () => problem(404, 'Liên kết đặt lại mật khẩu không đúng. Mở lại liên kết trong email hoặc gửi yêu cầu mới.', 'RESET_LINK_NOT_FOUND')
 
 const wrongPassword = () =>
   problem(400, 'Mật khẩu hiện tại không đúng.', 'WRONG_PASSWORD', [{ field: 'currentPassword', message: 'Mật khẩu hiện tại không đúng.' }])
@@ -136,10 +141,47 @@ export const accountHandlers = [
     return HttpResponse.json({ email }, { status: 201 })
   }),
 
-  http.post(`${API}/auth/password-reset-requests`, async () => {
+  http.post(`${API}/auth/password-reset-requests`, async ({ request }) => {
     await networkDelay()
-    // Always 202 so the response does not reveal whether an email is registered.
+    const body = (await request.json()) as { email?: unknown }
+    const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : ''
+    const user = db.users.find((candidate) => candidate.email.toLowerCase() === email)
+    // Chỉ tài khoản Hoạt động nhận liên kết; luôn trả 202 để không lộ email nào đã đăng ký.
+    if (user?.status === 'ACTIVE') issueResetLink(user)
     return new HttpResponse(null, { status: 202 })
+  }),
+
+  http.get(`${API}/auth/password-resets/:token`, async ({ params }) => {
+    await networkDelay()
+    const reset = findResetLink(String(params.token))
+    const user = reset ? db.users.find((candidate) => candidate.id === reset.userId) : undefined
+    if (!reset || !user) return resetLinkNotFound()
+    return HttpResponse.json(toResetLink(reset, user))
+  }),
+
+  http.post(`${API}/auth/password-resets/:token/completion`, async ({ request, params }) => {
+    await networkDelay()
+    if (!hasValidCsrf(request)) return csrfRejected()
+    const reset = findResetLink(String(params.token))
+    const user = reset ? db.users.find((candidate) => candidate.id === reset.userId) : undefined
+    if (!reset || !user) return resetLinkNotFound()
+    const status = resetLinkStatus(reset)
+    if (status === 'USED') {
+      return problem(422, 'Liên kết đã được dùng hoặc đã có liên kết mới hơn. Gửi yêu cầu mới nếu bạn vẫn cần đặt lại mật khẩu.', 'RESET_LINK_USED')
+    }
+    if (status === 'EXPIRED') {
+      return problem(422, `Liên kết đã hết hạn (chỉ dùng được trong ${PASSWORD_RESET_MINUTES} phút). Gửi yêu cầu mới để nhận liên kết khác.`, 'RESET_LINK_EXPIRED')
+    }
+    if (user.status === 'LOCKED') return problem(422, 'Tài khoản đang bị khóa nên chưa đặt lại mật khẩu được. Liên hệ quản trị hệ thống.', 'ACCOUNT_LOCKED')
+    const body = (await request.json()) as Partial<CompletePasswordResetRequest>
+    const next = typeof body.newPassword === 'string' ? body.newPassword : ''
+    if (next.length < MIN_PASSWORD || next.length > MAX_PASSWORD) {
+      return problem(400, 'Mật khẩu mới chưa hợp lệ.', 'VALIDATION', [{ field: 'newPassword', message: 'Mật khẩu cần từ 8 đến 72 ký tự.' }])
+    }
+    completeReset(reset, user, next)
+    // NFR-SEC-01: đặt lại mật khẩu thu hồi mọi phiên của tài khoản đó.
+    if (getSessionUserId() === user.id) endSession()
+    return new HttpResponse(null, { status: 204 })
   }),
 
   http.get(`${API}/me/profile`, async () => {
