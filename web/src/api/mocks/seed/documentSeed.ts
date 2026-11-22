@@ -16,15 +16,34 @@ export interface DbDocument {
   termId: string | null
   tags: string[]
   visibility: DocumentVisibility
+  /** Người tải bản hiện hành; tệp, cỡ, kiểu ở trên cũng là của bản hiện hành. */
   uploadedBy: string
   /** Họ tên chụp lúc tải lên (BR-DATA-02). */
   uploaderName: string
   uploadedAt: string
+  /** Người tạo tài liệu (tải bản 1), được tải phiên bản mới (FR-DOC-03). */
+  createdBy: string
+  currentVersion: number
+  version: number
 }
 
-/** Nội dung tệp tải lên lúc chạy; tài liệu mẫu không có bản ghi ở đây thì tạo nội dung tạm khi tải. */
+/** Một phiên bản của tài liệu (FR-DOC-03); mọi bản cũ được giữ. */
+export interface DbDocumentVersion {
+  documentId: string
+  number: number
+  fileName: string
+  fileSize: number
+  contentType: string
+  note: string
+  uploadedBy: string
+  uploaderName: string
+  uploadedAt: string
+}
+
+/** Nội dung tệp tải lên lúc chạy, theo tài liệu và số bản; bản mẫu không có ở đây thì tạo nội dung tạm khi tải. */
 export interface DbDocumentFile {
   documentId: string
+  version: number
   file: Blob
 }
 
@@ -33,9 +52,14 @@ const DOCX = 'application/vnd.openxmlformats-officedocument.wordprocessingml.doc
 const XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 
 export function createDocumentSeed(): DbDocument[] {
-  const doc = (fields: Omit<DbDocument, 'clubId' | 'description'> & Partial<Pick<DbDocument, 'description'>>): DbDocument => ({
+  const doc = (
+    fields: Omit<DbDocument, 'clubId' | 'description' | 'createdBy' | 'currentVersion' | 'version'> & Partial<Pick<DbDocument, 'description' | 'currentVersion'>>,
+  ): DbDocument => ({
     clubId: 'c-guitar',
     description: '',
+    createdBy: fields.uploadedBy,
+    currentVersion: 1,
+    version: 1,
     ...fields,
   })
   return [
@@ -54,6 +78,7 @@ export function createDocumentSeed(): DbDocument[] {
       uploadedBy: 'u-anh',
       uploaderName: 'Nguyễn Minh Anh',
       uploadedAt: vnDayAt(-60, 9),
+      currentVersion: 2,
     }),
     doc({
       id: 'doc-media-plan',
@@ -101,4 +126,23 @@ export function createDocumentSeed(): DbDocument[] {
       uploadedAt: vnDayAt(-66, 15),
     }),
   ]
+}
+
+/** Bản 1 của mọi tài liệu mẫu theo đúng tệp hiện hành; riêng nội quy có bản dự thảo trước bản thông qua. */
+export function createDocumentVersionSeed(documents: readonly DbDocument[]): DbDocumentVersion[] {
+  return documents.flatMap((document): DbDocumentVersion[] => {
+    const current: DbDocumentVersion = {
+      documentId: document.id,
+      number: document.currentVersion,
+      fileName: document.fileName,
+      fileSize: document.fileSize,
+      contentType: document.contentType,
+      note: document.currentVersion === 1 ? 'Bản đầu tiên.' : 'Bản đã thông qua ở buổi họp đầu nhiệm kỳ.',
+      uploadedBy: document.uploadedBy,
+      uploaderName: document.uploaderName,
+      uploadedAt: document.uploadedAt,
+    }
+    if (document.currentVersion === 1) return [current]
+    return [{ ...current, number: 1, fileName: 'noi-quy-2026-du-thao.pdf', fileSize: 150_000, note: 'Bản dự thảo đưa ra lấy ý kiến.', uploadedAt: vnDayAt(-75, 9) }, current]
+  })
 }

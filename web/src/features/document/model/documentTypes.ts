@@ -13,6 +13,9 @@ export interface DocumentOwner {
   name: string
 }
 
+/** Thao tác máy chủ cho phép với tài liệu: tải phiên bản mới (FR-DOC-03). */
+export type DocumentAction = 'UPLOAD_VERSION'
+
 export interface DocumentSummary {
   id: string
   title: string
@@ -26,10 +29,34 @@ export interface DocumentSummary {
   /** Họ tên chụp lúc tải lên; người tải rời CLB thì tài liệu vẫn còn (BR-DATA-02). */
   uploadedBy: PersonRef
   uploadedAt: string
+  /** Số bản hiện hành; tệp, người tải, lúc tải ở trên là của bản này. */
+  currentVersion: number
+  allowedActions: DocumentAction[]
+  version: number
+}
+
+/** Một phiên bản tài liệu (FR-DOC-03); họ tên người tải chụp lúc tải. */
+export interface DocumentVersion {
+  number: number
+  fileName: string
+  fileSize: number
+  contentType: string
+  note: string
+  uploadedBy: PersonRef
+  uploadedAt: string
+  current: boolean
 }
 
 export interface DocumentDetail extends DocumentSummary {
   description: string
+  /** Mọi phiên bản, mới nhất trước. */
+  versions: DocumentVersion[]
+}
+
+export interface UploadVersionRequest {
+  file: File
+  note: string
+  version: number
 }
 
 /** Nơi người dùng được tải lên (quyền `MANAGE_DOCUMENTS` theo phạm vi). */

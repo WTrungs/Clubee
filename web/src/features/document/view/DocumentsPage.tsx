@@ -1,4 +1,4 @@
-import { Download, FileText, FilterX, Upload } from 'lucide-react'
+import { Download, FilePlus2, FileText, FilterX, History, Upload } from 'lucide-react'
 import { formatDate, formatDateTime } from '@/shared/format/formatDate'
 import { formatFileSize } from '@/shared/lib/validateUploadFile'
 import { Badge } from '@/shared/ui/Badge'
@@ -9,10 +9,11 @@ import { PageHeader } from '@/shared/ui/PageHeader'
 import { Sheet, SheetContent } from '@/shared/ui/Sheet'
 import { Skeleton } from '@/shared/ui/Skeleton'
 import { EmptyState, ErrorState } from '@/shared/ui/StateViews'
-import type { DocumentSummary } from '../model/documentTypes'
+import type { DocumentDetail, DocumentSummary } from '../model/documentTypes'
 import { visibilityOptions } from '../viewModel/documentFormSchema'
 import { useDocumentsViewModel, type DocumentsViewModel } from '../viewModel/useDocumentsViewModel'
 import { UploadDocumentSheet } from './UploadDocumentSheet'
+import { UploadVersionDialog } from './UploadVersionDialog'
 
 const visibilityLabel = (value: DocumentSummary['visibility']) => visibilityOptions.find((option) => option.value === value)?.label ?? value
 
@@ -29,6 +30,47 @@ function DownloadButton({ vm, document, compact = false }: { vm: DocumentsViewMo
       <Download aria-hidden />
       {!compact && 'Tải xuống'}
     </Button>
+  )
+}
+
+/** FR-DOC-03: mọi phiên bản, mới nhất trước; bản nào cũng tải lại được. */
+function VersionHistory({ vm, document }: { vm: DocumentsViewModel; document: DocumentDetail }) {
+  return (
+    <section aria-labelledby="document-versions" className="space-y-2 border-t pt-4">
+      <h3 id="document-versions" className="flex items-center gap-2 text-sm font-bold">
+        <History aria-hidden className="size-4 text-muted-foreground" />
+        Phiên bản ({document.versions.length})
+      </h3>
+      <ol aria-label="Các phiên bản" className="space-y-2">
+        {document.versions.map((version) => (
+          <li key={version.number} className="flex min-w-0 items-start gap-3 rounded-xl bg-muted/60 p-3 text-sm">
+            <div className="min-w-0 flex-1 space-y-0.5">
+              <p className="flex flex-wrap items-center gap-1.5 font-semibold">
+                Bản {version.number}
+                {version.current && <Badge tone="success">Hiện hành</Badge>}
+              </p>
+              <p className="text-xs text-muted-foreground [overflow-wrap:anywhere]">
+                {version.fileName} · {formatFileSize(version.fileSize)}
+              </p>
+              {version.note && <p className="[overflow-wrap:anywhere]">{version.note}</p>}
+              <p className="text-xs text-muted-foreground">
+                {version.uploadedBy.fullName} · {formatDateTime(version.uploadedAt)}
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              size="iconSm"
+              loading={vm.downloadingId === document.id && vm.downloadingVersion === version.number}
+              disabled={vm.downloadingId !== null}
+              onClick={() => vm.download(document.id, version.number)}
+              aria-label={`Tải xuống bản ${version.number} của ${document.title}`}
+            >
+              <Download aria-hidden />
+            </Button>
+          </li>
+        ))}
+      </ol>
+    </section>
   )
 }
 
@@ -72,7 +114,16 @@ function DocumentDetailSheet({ vm }: { vm: DocumentsViewModel }) {
                 </p>
               )}
               {document.description && <p className="text-sm leading-relaxed whitespace-pre-line text-muted-foreground [overflow-wrap:anywhere]">{document.description}</p>}
-              <DownloadButton vm={vm} document={document} />
+              <div className="flex flex-wrap gap-2">
+                <DownloadButton vm={vm} document={document} />
+                {document.allowedActions.includes('UPLOAD_VERSION') && (
+                  <Button variant="outline" size="sm" onClick={() => vm.setVersionOpen(true)}>
+                    <FilePlus2 aria-hidden />
+                    Tải phiên bản mới
+                  </Button>
+                )}
+              </div>
+              <VersionHistory vm={vm} document={document} />
             </>
           )}
         </div>
@@ -81,7 +132,7 @@ function DocumentDetailSheet({ vm }: { vm: DocumentsViewModel }) {
   )
 }
 
-/** FR-DOC-01, 02: tài liệu của CLB; bảng ở màn rộng, thẻ ở màn hẹp. */
+/** FR-DOC-01, 02, 03: tài liệu của CLB; bảng ở màn rộng, thẻ ở màn hẹp. */
 export function DocumentsPage() {
   const vm = useDocumentsViewModel()
 
@@ -170,6 +221,7 @@ export function DocumentsPage() {
                       </button>
                       <span className="block text-xs text-muted-foreground [overflow-wrap:anywhere]">
                         {document.fileName} · {formatFileSize(document.fileSize)}
+                        {document.currentVersion > 1 && ` · Bản ${document.currentVersion}`}
                       </span>
                       {document.tags.length > 0 && (
                         <span className="mt-1 flex flex-wrap gap-1">
@@ -205,7 +257,8 @@ export function DocumentsPage() {
                   {document.owner.name} · {document.term?.name ?? 'Không gắn nhiệm kỳ'}
                 </p>
                 <p className="text-xs text-muted-foreground [overflow-wrap:anywhere]">
-                  {document.fileName} · {formatFileSize(document.fileSize)} · {document.uploadedBy.fullName}, {formatDate(document.uploadedAt)}
+                  {document.fileName} · {formatFileSize(document.fileSize)}
+                  {document.currentVersion > 1 && ` · Bản ${document.currentVersion}`} · {document.uploadedBy.fullName}, {formatDate(document.uploadedAt)}
                 </p>
                 <DownloadButton vm={vm} document={document} />
               </li>
@@ -217,6 +270,7 @@ export function DocumentsPage() {
 
       {vm.canUpload && <UploadDocumentSheet clubId={vm.clubId} scopes={vm.scopes} open={vm.uploadOpen} onOpenChange={vm.setUploadOpen} />}
       <DocumentDetailSheet vm={vm} />
+      <UploadVersionDialog clubId={vm.clubId} document={vm.detail} open={vm.versionOpen} onOpenChange={vm.setVersionOpen} />
     </div>
   )
 }

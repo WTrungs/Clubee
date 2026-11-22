@@ -3,7 +3,7 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tansta
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { toast } from 'sonner'
-import { ApiError, getErrorMessage, isForbidden } from '@/api/apiError'
+import { ApiError, getErrorMessage, isConflict, isForbidden } from '@/api/apiError'
 import { useCurrentClub } from '@/features/club/viewModel/clubContext'
 import { termRepository } from '@/features/term/model/termRepository'
 import { termQueryKeys } from '@/features/term/viewModel/termQueryKeys'
@@ -11,8 +11,8 @@ import { applyServerFieldErrors } from '@/shared/form/applyServerFieldErrors'
 import { useDebouncedValue } from '@/shared/hooks/useDebouncedValue'
 import { saveBlob } from '@/shared/lib/saveBlob'
 import { documentRepository } from '../model/documentRepository'
-import type { DocumentOwnerType, DocumentQuery, DocumentScopeOption } from '../model/documentTypes'
-import { documentFormSchema, scopeKeyOf, toUploadRequest, type DocumentFormValues } from './documentFormSchema'
+import type { DocumentDetail, DocumentOwnerType, DocumentQuery, DocumentScopeOption } from '../model/documentTypes'
+import { documentFormSchema, scopeKeyOf, toUploadRequest, versionFormSchema, type DocumentFormValues, type VersionFormValues } from './documentFormSchema'
 
 export const documentQueryKeys = {
   all: ['documents'] as const,
@@ -37,6 +37,7 @@ export function useDocumentsViewModel() {
   const [page, setPage] = useState(0)
   const [detailId, setDetailId] = useState<string | null>(null)
   const [uploadOpen, setUploadOpen] = useState(false)
+  const [versionOpen, setVersionOpen] = useState(false)
 
   const [ownerType, ownerId] = owner ? (owner.split(':') as [DocumentOwnerType, string | undefined]) : [undefined, undefined]
   const query: DocumentQuery = { q: debouncedKeyword || undefined, tag: tag || undefined, termId: termId || undefined, ownerType, ownerId: ownerId || undefined, page }
@@ -50,9 +51,9 @@ export function useDocumentsViewModel() {
   })
 
   const download = useMutation({
-    mutationFn: (documentId: string) => documentRepository.download(clubId, documentId),
+    mutationFn: ({ documentId, versionNumber }: { documentId: string; versionNumber?: number }) => documentRepository.download(clubId, documentId, versionNumber),
     meta: { silentError: true },
-    onSuccess: ({ blob, fileName }, documentId) => {
+    onSuccess: ({ blob, fileName }, { documentId }) => {
       const fallback = list.data?.content.find((document) => document.id === documentId)?.fileName ?? 'tai-lieu'
       saveBlob(blob, fileName ?? fallback)
     },
@@ -109,8 +110,12 @@ export function useDocumentsViewModel() {
     detail: detail.data ?? null,
     detailLoading: detail.isPending && detailId !== null,
     detailError: detail.error,
-    download: (documentId: string) => download.mutate(documentId),
-    downloadingId: download.isPending ? (download.variables ?? null) : null,
+    download: (documentId: string, versionNumber?: number) => download.mutate({ documentId, versionNumber }),
+    downloadingId: download.isPending ? (download.variables?.documentId ?? null) : null,
+    /** Bản đang tải xuống ở mục Phiên bản; `undefined` là bản hiện hành. */
+    downloadingVersion: download.isPending ? download.variables?.versionNumber : undefined,
+    versionOpen,
+    setVersionOpen,
   }
 }
 
@@ -156,6 +161,44 @@ export function useUploadDocumentViewModel(clubId: string, scopes: readonly Docu
     errorMessage: upload.error && !(fieldErrorsApplied && upload.error instanceof ApiError) ? getErrorMessage(upload.error) : null,
     reset: () => {
       form.reset(defaults(scopes, currentTermId))
+      upload.reset()
+      setFieldErrorsApplied(false)
+    },
+  }
+}
+
+const VERSION_FIELDS = ['file', 'note'] as const
+
+/** FR-DOC-03: tải phiên bản mới cho tài liệu đang xem; gửi `version` lúc mở hộp để biết có ai vừa sửa (409). */
+export function useUploadVersionViewModel(clubId: string, document: DocumentDetail | null, onDone: () => void) {
+  const queryClient = useQueryClient()
+  const form = useForm<VersionFormValues>({ resolver: zodResolver(versionFormSchema), defaultValues: { file: null, note: '' } })
+  const [fieldErrorsApplied, setFieldErrorsApplied] = useState(false)
+  const upload = useMutation({
+    mutationFn: (values: VersionFormValues) =>
+      documentRepository.uploadVersion(clubId, document?.id ?? '', { file: values.file as File, note: values.note.trim(), version: document?.version ?? 0 }),
+    meta: { silentError: true },
+    onMutate: () => setFieldErrorsApplied(false),
+    onSuccess: async (saved) => {
+      await queryClient.invalidateQueries({ queryKey: documentQueryKeys.all })
+      toast.success(`Đã tải lên bản ${saved.currentVersion} của “${saved.title}”.`)
+      form.reset({ file: null, note: '' })
+      onDone()
+    },
+    onError: (error) => {
+      setFieldErrorsApplied(applyServerFieldErrors(error, form.setError, VERSION_FIELDS))
+      // Người khác vừa thêm bản hoặc vừa mất quyền: tải lại để thấy bản mới nhất và nút đúng quyền.
+      if (isConflict(error) || isForbidden(error)) void queryClient.invalidateQueries({ queryKey: documentQueryKeys.all })
+    },
+  })
+  return {
+    form,
+    submit: form.handleSubmit((values) => upload.mutate(values)),
+    pending: upload.isPending,
+    errorMessage: upload.error && !(fieldErrorsApplied && upload.error instanceof ApiError) ? getErrorMessage(upload.error) : null,
+    nextNumber: (document?.currentVersion ?? 0) + 1,
+    reset: () => {
+      form.reset({ file: null, note: '' })
       upload.reset()
       setFieldErrorsApplied(false)
     },

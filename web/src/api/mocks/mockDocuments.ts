@@ -1,6 +1,6 @@
-import type { DocumentDetail, DocumentOwner, DocumentScopeOption, DocumentSummary } from '@/features/document/model/documentTypes'
+import type { DocumentAction, DocumentDetail, DocumentOwner, DocumentScopeOption, DocumentSummary, DocumentVersion } from '@/features/document/model/documentTypes'
 import { db, type DbDocument } from './db'
-import { can } from './mockAccess'
+import { can, type AccessScope } from './mockAccess'
 import { canAccessClub, personRef } from './mockMembers'
 import { EVENT_STAFF_ACTIVE, isBoardMember } from './mockPermissions'
 import { isEventLead, isEventStaff } from './mockStaffEvents'
@@ -54,7 +54,30 @@ export function documentScopesFor(userId: string, clubId: string): DocumentScope
   return scopes
 }
 
-export function toDocumentSummary(document: DbDocument): DocumentSummary {
+/** Phạm vi của nơi sở hữu, để xét quyền Quản lý tài liệu theo bảng phân quyền (quyền phạm vi cha phủ xuống). */
+export function ownerScopeOf(document: Pick<DbDocument, 'ownerType' | 'ownerId'>): AccessScope {
+  if (document.ownerType === 'DEPARTMENT') return { type: 'DEPARTMENT', id: document.ownerId ?? '' }
+  if (document.ownerType === 'EVENT') return { type: 'EVENT', id: document.ownerId ?? '' }
+  return { type: 'CLUB' }
+}
+
+/** Người quản lý nơi sở hữu: có `MANAGE_DOCUMENTS` ở phạm vi đó (ban chủ nhiệm phủ mọi nơi). */
+export const managesDocument = (userId: string, document: DbDocument) => can(userId, document.clubId, 'MANAGE_DOCUMENTS', ownerScopeOf(document))
+
+/** FR-DOC-03: người tạo tài liệu còn xem được, hoặc người quản lý nơi sở hữu, được tải phiên bản mới. */
+export function canUploadVersion(userId: string, document: DbDocument): boolean {
+  if (!canViewDocument(userId, document)) return false
+  return document.createdBy === userId || managesDocument(userId, document)
+}
+
+export function documentActions(userId: string, document: DbDocument): DocumentAction[] {
+  return canUploadVersion(userId, document) ? ['UPLOAD_VERSION'] : []
+}
+
+export const versionsOf = (documentId: string) =>
+  db.documentVersions.filter((version) => version.documentId === documentId).toSorted((a, b) => b.number - a.number)
+
+export function toDocumentSummary(document: DbDocument, viewerId: string): DocumentSummary {
   const term = db.terms.find((candidate) => candidate.id === document.termId)
   return {
     id: document.id,
@@ -68,7 +91,25 @@ export function toDocumentSummary(document: DbDocument): DocumentSummary {
     visibility: document.visibility,
     uploadedBy: { ...personRef(document.uploadedBy), fullName: document.uploaderName },
     uploadedAt: document.uploadedAt,
+    currentVersion: document.currentVersion,
+    allowedActions: documentActions(viewerId, document),
+    version: document.version,
   }
 }
 
-export const toDocumentDetail = (document: DbDocument): DocumentDetail => ({ ...toDocumentSummary(document), description: document.description })
+export const toDocumentDetail = (document: DbDocument, viewerId: string): DocumentDetail => ({
+  ...toDocumentSummary(document, viewerId),
+  description: document.description,
+  versions: versionsOf(document.id).map(
+    (version): DocumentVersion => ({
+      number: version.number,
+      fileName: version.fileName,
+      fileSize: version.fileSize,
+      contentType: version.contentType,
+      note: version.note,
+      uploadedBy: { ...personRef(version.uploadedBy), fullName: version.uploaderName },
+      uploadedAt: version.uploadedAt,
+      current: version.number === document.currentVersion,
+    }),
+  ),
+})

@@ -4163,6 +4163,73 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+  /clubs/{clubId}/documents/{documentId}/versions:
+    post:
+      tags: [DOC]
+      operationId: uploadDocumentVersion
+      summary: Tải phiên bản mới (FR-DOC-03)
+      description: |
+        Người tạo tài liệu (còn xem được) hoặc người có `MANAGE_DOCUMENTS` ở nơi sở hữu (`allowedActions` có `UPLOAD_VERSION`).
+        Mọi bản cũ được giữ; tệp, người tải, lúc tải của tài liệu đổi theo bản mới. Kiểm quyền trước khi đọc tệp.
+        Lỗi theo thứ tự: 403 `NOT_A_MEMBER`, `CSRF`; 404 `DOCUMENT_NOT_FOUND`; 403 `FORBIDDEN`; 409 `VERSION_CONFLICT`;
+        400 `VALIDATION` (`file` như tải lên, `note` 5–500 ký tự).
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - name: documentId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file, note, version]
+              properties:
+                file: { type: string, format: binary }
+                note: { type: string, minLength: 5, maxLength: 500 }
+                version: { type: integer }
+      responses:
+        '201':
+          description: Tài liệu sau khi thêm bản.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DocumentDetail' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /clubs/{clubId}/documents/{documentId}/versions/{versionNumber}/file:
+    get:
+      tags: [DOC]
+      operationId: downloadDocumentVersion
+      summary: Tải lại một phiên bản (FR-DOC-03)
+      description: |
+        Kiểm lại quyền xem mỗi lần tải, giống tải bản hiện hành. Lỗi 403 `NOT_A_MEMBER`, `FORBIDDEN`; 404 `DOCUMENT_NOT_FOUND`, `VERSION_NOT_FOUND`.
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - name: documentId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: versionNumber
+          in: path
+          required: true
+          schema: { type: integer, minimum: 1 }
+      responses:
+        '200':
+          description: Nội dung tệp của bản đó.
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
   /me/club-history:
     get:
       tags: [RPT]
@@ -9400,7 +9467,7 @@ components:
       $ref: '#/components/schemas/DocumentOwner'
     DocumentSummary:
       type: object
-      required: [id, title, fileName, fileSize, contentType, owner, term, tags, visibility, uploadedBy, uploadedAt]
+      required: [id, title, fileName, fileSize, contentType, owner, term, tags, visibility, uploadedBy, uploadedAt, currentVersion, allowedActions, version]
       properties:
         id: { type: string }
         title: { type: string }
@@ -9422,13 +9489,35 @@ components:
         visibility: { $ref: '#/components/schemas/DocumentVisibility' }
         uploadedBy: { $ref: '#/components/schemas/PersonRef' }
         uploadedAt: { type: string, format: date-time }
+        currentVersion: { type: integer, minimum: 1, description: 'Số bản hiện hành; tệp, người tải, lúc tải ở trên là của bản này.' }
+        allowedActions:
+          type: array
+          items: { type: string, enum: [UPLOAD_VERSION] }
+        version: { type: integer }
+    DocumentVersion:
+      type: object
+      description: Một phiên bản tài liệu (FR-DOC-03); họ tên người tải chụp lúc tải.
+      required: [number, fileName, fileSize, contentType, note, uploadedBy, uploadedAt, current]
+      properties:
+        number: { type: integer, minimum: 1 }
+        fileName: { type: string }
+        fileSize: { type: integer }
+        contentType: { type: string }
+        note: { type: string }
+        uploadedBy: { $ref: '#/components/schemas/PersonRef' }
+        uploadedAt: { type: string, format: date-time }
+        current: { type: boolean }
     DocumentDetail:
       allOf:
         - $ref: '#/components/schemas/DocumentSummary'
         - type: object
-          required: [description]
+          required: [description, versions]
           properties:
             description: { type: string }
+            versions:
+              type: array
+              description: Mọi phiên bản, mới nhất trước.
+              items: { $ref: '#/components/schemas/DocumentVersion' }
     RecruitmentStatus:
       type: string
       description: Sắp mở, Đang nhận đơn, Đang xét (sau giờ đóng), Đã có kết quả, Đã đóng; suy ra từ giờ và thao tác.

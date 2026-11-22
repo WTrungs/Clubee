@@ -1,6 +1,6 @@
 import { httpClient } from '@/api/httpClient'
 import type { Page } from '@/api/pagination'
-import type { DocumentDetail, DocumentFacets, DocumentQuery, DocumentScopeOption, DocumentSummary, UploadDocumentRequest } from './documentTypes'
+import type { DocumentDetail, DocumentFacets, DocumentQuery, DocumentScopeOption, DocumentSummary, UploadDocumentRequest, UploadVersionRequest } from './documentTypes'
 
 const documents = (clubId: string) => `/clubs/${encodeURIComponent(clubId)}/documents`
 
@@ -25,6 +25,19 @@ export const documentRepository = {
     form.append('visibility', request.visibility)
     return httpClient.post<DocumentDetail>(documents(clubId), form)
   },
-  /** FR-DOC-02: máy chủ kiểm lại quyền xem mỗi lần tải. */
-  download: (clubId: string, documentId: string) => httpClient.download(`${documents(clubId)}/${encodeURIComponent(documentId)}/file`),
+  /** FR-DOC-02: máy chủ kiểm lại quyền xem mỗi lần tải; có `versionNumber` thì tải đúng bản đó (FR-DOC-03). */
+  download: (clubId: string, documentId: string, versionNumber?: number) =>
+    httpClient.download(
+      versionNumber === undefined
+        ? `${documents(clubId)}/${encodeURIComponent(documentId)}/file`
+        : `${documents(clubId)}/${encodeURIComponent(documentId)}/versions/${versionNumber}/file`,
+    ),
+  /** FR-DOC-03: tải phiên bản mới; bản cũ vẫn giữ. */
+  uploadVersion: (clubId: string, documentId: string, request: UploadVersionRequest) => {
+    const form = new FormData()
+    form.append('file', request.file)
+    form.append('note', request.note)
+    form.append('version', String(request.version))
+    return httpClient.post<DocumentDetail>(`${documents(clubId)}/${encodeURIComponent(documentId)}/versions`, form)
+  },
 }

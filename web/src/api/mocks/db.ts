@@ -20,7 +20,7 @@ import {
   type DbSessionRegistration,
 } from './seed/attendanceSeed'
 import { createClubSeed, type DbClub } from './seed/clubSeed'
-import { createDocumentSeed, type DbDocument, type DbDocumentFile } from './seed/documentSeed'
+import { createDocumentSeed, createDocumentVersionSeed, type DbDocument, type DbDocumentFile, type DbDocumentVersion } from './seed/documentSeed'
 import { createApplicationSeed, createRecruitmentSeed, type DbApplication, type DbRecruitment } from './seed/recruitmentSeed'
 import {
   createCoHostSeed,
@@ -45,7 +45,7 @@ import type { DbHandover, DbHandoverItem } from './seed/termSeed'
 /** Dữ liệu tổng hợp, không phải người thật (security.md); bản ghi ở dạng phía máy chủ, handler map sang DTO. */
 export type { DbAbsenceRequest, DbAttendance, DbAttendanceCode, DbAttendanceSheet, DbSession, DbSessionRegistration } from './seed/attendanceSeed'
 export type { DbClub } from './seed/clubSeed'
-export type { DbDocument, DbDocumentFile } from './seed/documentSeed'
+export type { DbDocument, DbDocumentFile, DbDocumentVersion } from './seed/documentSeed'
 export type { DbApplication, DbRecruitment } from './seed/recruitmentSeed'
 export type { DbAdvance } from './seed/advanceSeed'
 export type { DbDuesCampaign, DbDuesItem } from './seed/duesSeed'
@@ -114,6 +114,7 @@ export interface MockDb {
   sessionRegistrations: DbSessionRegistration[]
   absenceRequests: DbAbsenceRequest[]
   documents: DbDocument[]
+  documentVersions: DbDocumentVersion[]
   documentFiles: DbDocumentFile[]
   recruitments: DbRecruitment[]
   applications: DbApplication[]
@@ -162,6 +163,7 @@ export function createSeed(): MockDb {
     sessionRegistrations: [],
     absenceRequests: createAbsenceRequestSeed(),
     documents: createDocumentSeed(),
+    documentVersions: [],
     recruitments: createRecruitmentSeed(),
     applications: createApplicationSeed(),
     documentFiles: [],
@@ -174,6 +176,7 @@ export function createSeed(): MockDb {
   }
   seed.sessionRegistrations = createSessionRegistrationSeed(seed)
   seed.auditLogs = createAuditSeed(seed)
+  seed.documentVersions = createDocumentVersionSeed(seed.documents)
   return seed
 }
 
