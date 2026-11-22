@@ -14,13 +14,14 @@ import {
   Network,
   ScanLine,
   Shuffle,
+  type LucideIcon,
   UserCog,
+  UserPlus,
   UsersRound,
   Wallet,
-  type LucideIcon,
 } from 'lucide-react'
 import type { AccountType } from '@/features/account/model/accountTypes'
-import type { ClubViewerRole } from '@/features/club/model/clubTypes'
+import type { ClubAction, ClubViewerRole } from '@/features/club/model/clubTypes'
 
 export interface NavItem {
   to: string
@@ -41,6 +42,7 @@ export function buildNavigation(
   clubName: string | undefined,
   accountType: AccountType = 'USER',
   viewerRole: ClubViewerRole = 'MEMBER',
+  clubActions: readonly ClubAction[] = [],
 ): NavSection[] {
   if (accountType === 'ADMIN') {
     return [
@@ -82,6 +84,8 @@ export function buildNavigation(
         { to: `/clubs/${clubId}/tasks`, label: 'Công việc', icon: KanbanSquare },
         { to: `/clubs/${clubId}/documents`, label: 'Tài liệu', icon: FolderOpen },
         { to: `/clubs/${clubId}/finance`, label: 'Tài chính', icon: Wallet },
+        // Mục quản lý chỉ hiện khi máy chủ cho phép; trang vẫn tự kiểm quyền.
+        ...(clubActions.includes('MANAGE_RECRUITMENT') ? [{ to: `/clubs/${clubId}/recruitments`, label: 'Tuyển thành viên', icon: UserPlus }] : []),
       ],
     })
   }

@@ -27,6 +27,8 @@ export type ClubAction =
   | 'OPEN_DUES'
   /** FR-FIN-12: ban chủ nhiệm xem tab Báo cáo thu chi. */
   | 'VIEW_FINANCE_REPORT'
+  /** FR-REC-01: mở và quản lý đợt tuyển (quyền Quản lý thành viên). */
+  | 'MANAGE_RECRUITMENT'
 
 /** Nhiệm kỳ đang phụ trách CLB: Đang chạy hoặc Đang bàn giao. */
 export interface TermSummary {

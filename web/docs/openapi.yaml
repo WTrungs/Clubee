@@ -41,6 +41,8 @@ tags:
     description: Thông báo (SRS 5.13)
   - name: DOC
     description: Tài liệu (SRS 5.12)
+  - name: REC
+    description: Tuyển thành viên (SRS 5.6)
   - name: RPT
     description: Báo cáo, nhật ký (SRS 5.15)
 security:
@@ -3376,6 +3378,135 @@ paths:
                 items: { $ref: '#/components/schemas/DocumentScopeOption' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+  /clubs/{clubId}/recruitments:
+    get:
+      tags: [REC]
+      operationId: listRecruitments
+      summary: Danh sách đợt tuyển của CLB (FR-REC-01)
+      description: Chỉ người có quyền Quản lý thành viên (`MANAGE_MEMBERS`). Đợt chưa đóng trước, rồi theo giờ mở mới nhất. Lỗi 403 `NOT_A_MEMBER`, `FORBIDDEN`.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - $ref: '#/components/parameters/Page'
+      responses:
+        '200':
+          description: Trang đợt tuyển.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RecruitmentPage' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [REC]
+      operationId: createRecruitment
+      summary: Mở đợt tuyển (FR-REC-01)
+      description: |
+        Quyền `MANAGE_MEMBERS`. Giờ đóng sau giờ mở và sau hiện tại; chỉ tiêu 1–500 cho các ban đang hoạt động, không trùng ban;
+        1–5 vòng, tên 2–80 ký tự không trùng; 0–20 câu hỏi 3–300 ký tự; tối đa 20 giám khảo là thành viên Chính thức.
+        Lỗi theo dòng dùng `field` dạng `quotas[0].quota`, `rounds[1].name`.
+
+        Lỗi:
+        - 400 `VALIDATION`.
+        - 403 `NOT_A_MEMBER`, `FORBIDDEN`.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RecruitmentRequest' }
+      responses:
+        '201':
+          description: Đợt tuyển vừa mở.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RecruitmentDetail' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /clubs/{clubId}/recruitments/{recruitmentId}:
+    get:
+      tags: [REC]
+      operationId: getRecruitment
+      summary: Chi tiết đợt tuyển phía ban chủ nhiệm (FR-REC-01)
+      description: Quyền `MANAGE_MEMBERS`. Lỗi 403 `NOT_A_MEMBER`, `FORBIDDEN`; 404 `RECRUITMENT_NOT_FOUND`.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - $ref: '#/components/parameters/RecruitmentId'
+      responses:
+        '200':
+          description: Đợt tuyển.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RecruitmentDetail' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [REC]
+      operationId: updateRecruitment
+      summary: Sửa đợt tuyển (FR-REC-01)
+      description: |
+        Quyền `MANAGE_MEMBERS`, đợt chưa chốt kết quả. Chỉ gửi phần cần sửa; kiểm như lúc mở.
+        Từ giờ mở (`structureLocked`): đổi giờ mở, vòng hoặc câu hỏi thì 422 `RECRUITMENT_STARTED` (gửi lại đúng giá trị cũ vẫn được);
+        giờ đóng chỉ được lùi; tên, mô tả, chỉ tiêu, giám khảo vẫn sửa được.
+
+        Lỗi:
+        - 400 `VALIDATION`.
+        - 403 `NOT_A_MEMBER`, `FORBIDDEN`.
+        - 404 `RECRUITMENT_NOT_FOUND`.
+        - 409 `VERSION_CONFLICT`.
+        - 422 `RECRUITMENT_STARTED`, `RECRUITMENT_FINALIZED`.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - $ref: '#/components/parameters/RecruitmentId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateRecruitmentRequest' }
+      responses:
+        '200':
+          description: Đợt tuyển sau khi sửa.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RecruitmentDetail' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+  /clubs/{clubId}/recruitment-judge-candidates:
+    get:
+      tags: [REC]
+      operationId: listRecruitmentJudgeCandidates
+      summary: Ứng viên giám khảo (FR-REC-01)
+      description: Thành viên Chính thức của CLB, lọc theo `q`. Quyền `MANAGE_MEMBERS`.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - $ref: '#/components/parameters/Q'
+      responses:
+        '200':
+          description: Danh sách ứng viên.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/JudgeCandidate' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
   /clubs/{clubId}/documents:
     get:
       tags: [DOC]
@@ -5409,6 +5540,11 @@ components:
       in: path
       required: true
       schema: { type: string }
+    RecruitmentId:
+      name: recruitmentId
+      in: path
+      required: true
+      schema: { type: string }
     HandoverId:
       name: handoverId
       in: path
@@ -5976,7 +6112,8 @@ components:
         `VIEW_SHARED_EVENTS`: thuộc ban chủ nhiệm, xem và trả lời lời mời đồng tổ chức ở tab Sự kiện chung (FR-EVT-08).
         `VIEW_DUES`: thuộc ban chủ nhiệm, xem tab Đóng quỹ (FR-FIN-09). `OPEN_DUES`: ban chủ nhiệm có `RECORD_LEDGER`, mở đợt đóng quỹ.
         `VIEW_FINANCE_REPORT`: thuộc ban chủ nhiệm, xem tab Báo cáo thu chi (FR-FIN-12).
-      enum: [CREATE_EVENT, PROPOSE_EVENT, ASSIGN_TASK, MANAGE_MEMBERS, MANAGE_ORG, ASSIGN_PRESIDENCY, EDIT_CLUB, SEND_ANNOUNCEMENT, CREATE_TERM, ASSIGN_POSITION, REQUEST_PRESIDENCY_TRANSFER, VIEW_PERMISSIONS, VIEW_SHARED_EVENTS, VIEW_DUES, OPEN_DUES, VIEW_FINANCE_REPORT]
+        `MANAGE_RECRUITMENT`: có quyền Quản lý thành viên, mở và quản lý đợt tuyển (FR-REC-01).
+      enum: [CREATE_EVENT, PROPOSE_EVENT, ASSIGN_TASK, MANAGE_MEMBERS, MANAGE_ORG, ASSIGN_PRESIDENCY, EDIT_CLUB, SEND_ANNOUNCEMENT, CREATE_TERM, ASSIGN_POSITION, REQUEST_PRESIDENCY_TRANSFER, VIEW_PERMISSIONS, VIEW_SHARED_EVENTS, VIEW_DUES, OPEN_DUES, VIEW_FINANCE_REPORT, MANAGE_RECRUITMENT]
     TermSummary:
       type: object
       description: Nhiệm kỳ đang phụ trách CLB (Đang chạy hoặc Đang bàn giao).
@@ -8477,6 +8614,140 @@ components:
           required: [description]
           properties:
             description: { type: string }
+    RecruitmentStatus:
+      type: string
+      description: Sắp mở, Đang nhận đơn, Đang xét (sau giờ đóng), Đã có kết quả, Đã đóng; suy ra từ giờ và thao tác.
+      enum: [UPCOMING, OPEN, REVIEWING, RESULTS, CLOSED]
+    RecruitmentSummary:
+      type: object
+      required: [id, name, opensAt, closesAt, status, quotaTotal, roundCount, applicationCount]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        opensAt: { type: string, format: date-time }
+        closesAt: { type: string, format: date-time }
+        status: { $ref: '#/components/schemas/RecruitmentStatus' }
+        quotaTotal: { type: integer }
+        roundCount: { type: integer }
+        applicationCount: { type: integer }
+    RecruitmentDetail:
+      allOf:
+        - $ref: '#/components/schemas/RecruitmentSummary'
+        - type: object
+          required: [description, quotas, rounds, questions, judges, createdBy, createdAt, structureLocked, allowedActions, version]
+          properties:
+            description: { type: string }
+            quotas:
+              type: array
+              items:
+                type: object
+                required: [departmentId, departmentName, quota]
+                properties:
+                  departmentId: { type: string }
+                  departmentName: { type: string }
+                  quota: { type: integer }
+            rounds:
+              type: array
+              items:
+                type: object
+                required: [id, name]
+                properties:
+                  id: { type: string }
+                  name: { type: string }
+            questions:
+              type: array
+              items:
+                type: object
+                required: [id, text, required]
+                properties:
+                  id: { type: string }
+                  text: { type: string }
+                  required: { type: boolean }
+            judges:
+              type: array
+              items: { $ref: '#/components/schemas/PersonRef' }
+            createdBy: { $ref: '#/components/schemas/PersonRef' }
+            createdAt: { type: string, format: date-time }
+            structureLocked: { type: boolean, description: Đã tới giờ mở; giờ mở, vòng, câu hỏi không đổi được. }
+            allowedActions:
+              type: array
+              description: '`EDIT` cho người có quyền Quản lý thành viên khi đợt chưa chốt kết quả.'
+              items:
+                type: string
+                enum: [EDIT]
+            version: { type: integer }
+    RecruitmentRequest:
+      type: object
+      required: [name, description, opensAt, closesAt, quotas, rounds, questions, judgeIds]
+      properties:
+        name: { type: string, minLength: 3, maxLength: 120 }
+        description: { type: string, maxLength: 2000 }
+        opensAt: { type: string, format: date-time }
+        closesAt: { type: string, format: date-time }
+        quotas:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required: [departmentId, quota]
+            properties:
+              departmentId: { type: string }
+              quota: { type: integer, minimum: 1, maximum: 500 }
+        rounds:
+          type: array
+          minItems: 1
+          maxItems: 5
+          items:
+            type: object
+            required: [id, name]
+            properties:
+              id:
+                allOf: [{ $ref: '#/components/schemas/NullableString' }]
+                description: Mã vòng đã có; null là vòng mới.
+              name: { type: string, minLength: 2, maxLength: 80 }
+        questions:
+          type: array
+          maxItems: 20
+          items:
+            type: object
+            required: [id, text, required]
+            properties:
+              id: { $ref: '#/components/schemas/NullableString' }
+              text: { type: string, minLength: 3, maxLength: 300 }
+              required: { type: boolean }
+        judgeIds:
+          type: array
+          maxItems: 20
+          items: { type: string }
+    UpdateRecruitmentRequest:
+      type: object
+      required: [version]
+      properties:
+        name: { type: string, minLength: 3, maxLength: 120 }
+        description: { type: string, maxLength: 2000 }
+        opensAt: { type: string, format: date-time }
+        closesAt: { type: string, format: date-time }
+        quotas: { $ref: '#/components/schemas/RecruitmentRequest/properties/quotas' }
+        rounds: { $ref: '#/components/schemas/RecruitmentRequest/properties/rounds' }
+        questions: { $ref: '#/components/schemas/RecruitmentRequest/properties/questions' }
+        judgeIds: { $ref: '#/components/schemas/RecruitmentRequest/properties/judgeIds' }
+        version: { type: integer }
+    RecruitmentPage:
+      allOf:
+        - $ref: '#/components/schemas/PageMeta'
+        - type: object
+          required: [content]
+          properties:
+            content:
+              type: array
+              items: { $ref: '#/components/schemas/RecruitmentSummary' }
+    JudgeCandidate:
+      type: object
+      required: [id, fullName, departmentName]
+      properties:
+        id: { type: string }
+        fullName: { type: string }
+        departmentName: { $ref: '#/components/schemas/NullableString' }
     DocumentPage:
       allOf:
         - $ref: '#/components/schemas/PageMeta'

@@ -106,6 +106,14 @@ export const router = createBrowserRouter([
                         lazy: () => import('@/features/attendance/view/SessionDetailPage').then((module) => ({ Component: module.SessionDetailPage })),
                       },
                       { path: 'documents', lazy: () => import('@/features/document/view/DocumentsPage').then((module) => ({ Component: module.DocumentsPage })) },
+                      {
+                        path: 'recruitments',
+                        lazy: () => import('@/features/recruitment/view/RecruitmentsPage').then((module) => ({ Component: module.RecruitmentsPage })),
+                      },
+                      {
+                        path: 'recruitments/:recruitmentId',
+                        lazy: () => import('@/features/recruitment/view/RecruitmentDetailPage').then((module) => ({ Component: module.RecruitmentDetailPage })),
+                      },
                       { path: 'finance', lazy: () => import('@/features/finance/view/FinancePage').then((module) => ({ Component: module.FinancePage })) },
                     ],
                   },

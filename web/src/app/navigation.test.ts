@@ -15,6 +15,13 @@ describe('buildNavigation', () => {
     expect(inClub[1]?.items[0]).toMatchObject({ to: '/clubs/c-guitar', label: 'Tổng quan' })
   })
 
+  it('shows recruitment only to those the server lets manage it (FR-REC-01)', () => {
+    const member = buildNavigation('c-guitar', 'CLB Guitar Sinh viên', 'USER', 'MEMBER', [])
+    expect(labels(member)[1]?.[1]).not.toContain('Tuyển thành viên')
+    const board = buildNavigation('c-guitar', 'CLB Guitar Sinh viên', 'USER', 'MEMBER', ['MANAGE_RECRUITMENT'])
+    expect(board[1]?.items.at(-1)).toMatchObject({ to: '/clubs/c-guitar/recruitments', label: 'Tuyển thành viên' })
+  })
+
   it('gives an event guest only the Events item of the host club (FR-EVT-07, SRS 3.5)', () => {
     const guest = buildNavigation('c-guitar', 'CLB Guitar Sinh viên', 'USER', 'EVENT_GUEST')
     expect(labels(guest)[1]).toEqual(['CLB Guitar Sinh viên', ['Sự kiện']])

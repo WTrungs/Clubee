@@ -1,0 +1,14 @@
+/** Giới hạn khai báo đợt tuyển (FR-REC-01); mock và form dùng chung. */
+export const RECRUITMENT_NAME_MIN = 3
+export const RECRUITMENT_NAME_MAX = 120
+export const RECRUITMENT_DESCRIPTION_MAX = 2000
+export const RECRUITMENT_QUOTA_MIN = 1
+export const RECRUITMENT_QUOTA_MAX = 500
+export const RECRUITMENT_ROUNDS_MIN = 1
+export const RECRUITMENT_ROUNDS_MAX = 5
+export const RECRUITMENT_ROUND_NAME_MIN = 2
+export const RECRUITMENT_ROUND_NAME_MAX = 80
+export const RECRUITMENT_QUESTIONS_MAX = 20
+export const RECRUITMENT_QUESTION_MIN = 3
+export const RECRUITMENT_QUESTION_MAX = 300
+export const RECRUITMENT_JUDGES_MAX = 20

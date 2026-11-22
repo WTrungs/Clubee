@@ -20,6 +20,7 @@ import {
 } from './seed/attendanceSeed'
 import { createClubSeed, type DbClub } from './seed/clubSeed'
 import { createDocumentSeed, type DbDocument, type DbDocumentFile } from './seed/documentSeed'
+import { createRecruitmentSeed, type DbRecruitment } from './seed/recruitmentSeed'
 import {
   createCoHostSeed,
   createEventSeed,
@@ -44,6 +45,7 @@ import type { DbHandover, DbHandoverItem } from './seed/termSeed'
 export type { DbAbsenceRequest, DbAttendance, DbAttendanceCode, DbAttendanceSheet, DbSession, DbSessionRegistration } from './seed/attendanceSeed'
 export type { DbClub } from './seed/clubSeed'
 export type { DbDocument, DbDocumentFile } from './seed/documentSeed'
+export type { DbRecruitment } from './seed/recruitmentSeed'
 export type { DbAdvance } from './seed/advanceSeed'
 export type { DbDuesCampaign, DbDuesItem } from './seed/duesSeed'
 export type { DbFund, DbTransaction } from './seed/financeSeed'
@@ -112,6 +114,7 @@ export interface MockDb {
   absenceRequests: DbAbsenceRequest[]
   documents: DbDocument[]
   documentFiles: DbDocumentFile[]
+  recruitments: DbRecruitment[]
   attendance: DbAttendance[]
   attendanceSheets: DbAttendanceSheet[]
   attendanceCodes: DbAttendanceCode[]
@@ -156,6 +159,7 @@ export function createSeed(): MockDb {
     sessionRegistrations: [],
     absenceRequests: createAbsenceRequestSeed(),
     documents: createDocumentSeed(),
+    recruitments: createRecruitmentSeed(),
     documentFiles: [],
     attendance: createAttendanceSeed(),
     attendanceSheets: createAttendanceSheetSeed(),

@@ -33,7 +33,7 @@ import { canRequestTransfer } from '../mockTransfers'
 function clubActionsFor(userId: string, clubId: string): ClubAction[] {
   const actions: ClubAction[] = []
   if (can(userId, clubId, 'CREATE_EVENT')) actions.push('CREATE_EVENT')
-  if (can(userId, clubId, 'MANAGE_MEMBERS')) actions.push('MANAGE_MEMBERS')
+  if (can(userId, clubId, 'MANAGE_MEMBERS')) actions.push('MANAGE_MEMBERS', 'MANAGE_RECRUITMENT')
   if (can(userId, clubId, 'MANAGE_DEPARTMENTS')) actions.push('MANAGE_ORG')
   if (can(userId, clubId, 'CONFIGURE_CLUB')) actions.push('EDIT_CLUB')
   const assigns = can(userId, clubId, 'ASSIGN_POSITIONS')
