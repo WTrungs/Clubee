@@ -13,6 +13,7 @@ import { recruitmentPeriod, recruitmentStatusDisplay } from '../viewModel/recrui
 import { useRecruitmentDetailViewModel } from '../viewModel/useRecruitmentViewModels'
 import { ApplicationsPanel } from './ApplicationsPanel'
 import { RecruitmentFormSheet } from './RecruitmentFormSheet'
+import { RoundReviewPanel } from './RoundReviewPanel'
 
 function InfoCard({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -125,6 +126,9 @@ export function RecruitmentDetailPage() {
           </TabsContent>
           <TabsContent value="applications" className="pt-5">
             <ApplicationsPanel clubId={vm.clubId} recruitment={recruitment} active={vm.tab === 'applications'} />
+          </TabsContent>
+          <TabsContent value="rounds" className="pt-5">
+            <RoundReviewPanel clubId={vm.clubId} recruitment={recruitment} active={vm.tab === 'rounds'} />
           </TabsContent>
         </Tabs>
       )}

@@ -11,6 +11,7 @@ import type {
   RecruitmentDetail,
   RecruitmentRequest,
   RecruitmentSummary,
+  RoundResultRequest,
   SubmitApplicationRequest,
   UpdateRecruitmentRequest,
 } from './recruitmentTypes'
@@ -28,10 +29,16 @@ export const recruitmentRepository = {
   /** FR-REC-02: ban chủ nhiệm xem đơn của đợt (SRS 3.5). */
   applications: (clubId: string, recruitmentId: string, query: ApplicationQuery) =>
     httpClient.get<Page<ApplicationSummary>>(`${recruitments(clubId)}/${encodeURIComponent(recruitmentId)}/applications`, {
-      query: { status: query.status, departmentId: query.departmentId, q: query.q, page: query.page },
+      query: { status: query.status, departmentId: query.departmentId, roundId: query.roundId, roundState: query.roundState, q: query.q, page: query.page },
     }),
   application: (clubId: string, recruitmentId: string, applicationId: string) =>
     httpClient.get<ApplicationDetail>(`${recruitments(clubId)}/${encodeURIComponent(recruitmentId)}/applications/${encodeURIComponent(applicationId)}`),
+  /** FR-REC-03: ghi hoặc sửa kết quả một vòng; Đạt kèm điểm 0–100, Loại kèm nhận xét. */
+  reviewRound: (clubId: string, recruitmentId: string, applicationId: string, roundId: string, request: RoundResultRequest) =>
+    httpClient.put<ApplicationDetail>(
+      `${recruitments(clubId)}/${encodeURIComponent(recruitmentId)}/applications/${encodeURIComponent(applicationId)}/rounds/${encodeURIComponent(roundId)}`,
+      request,
+    ),
   /** FR-REC-02: đợt đang nhận đơn ở mọi CLB; cần đăng nhập. */
   openRecruitments: (q?: string, page = 0) => httpClient.get<Page<OpenRecruitment>>('/recruitments/open', { query: { q, page } }),
   publicRecruitment: (recruitmentId: string) => httpClient.get<PublicRecruitment>(`/recruitments/${encodeURIComponent(recruitmentId)}`),

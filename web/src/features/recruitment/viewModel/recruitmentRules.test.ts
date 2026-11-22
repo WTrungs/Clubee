@@ -34,7 +34,7 @@ describe('opening a recruitment (FR-REC-01)', () => {
     signInAs('u-anh')
     expect((await clubRepository.getClub('c-guitar')).allowedActions).toContain('MANAGE_RECRUITMENT')
     const created = await recruitmentRepository.create('c-guitar', request())
-    expect(created).toMatchObject({ status: 'UPCOMING', quotaTotal: 4, roundCount: 2, structureLocked: false, allowedActions: ['EDIT', 'VIEW_APPLICATIONS'], judges: [{ id: 'u-linh' }], version: 1 })
+    expect(created).toMatchObject({ status: 'UPCOMING', quotaTotal: 4, roundCount: 2, structureLocked: false, allowedActions: ['EDIT', 'VIEW_APPLICATIONS', 'REVIEW_ROUNDS'], judges: [{ id: 'u-linh' }], version: 1 })
     expect(created.rounds.every((round) => round.id.length > 0)).toBe(true)
     const list = await recruitmentRepository.list('c-guitar')
     expect(list.content.map((row) => [row.id, row.status])).toEqual(expect.arrayContaining([[created.id, 'UPCOMING'], ['rec-guitar-k1', 'OPEN']]))

@@ -7,13 +7,18 @@ import type {
   MyApplication,
   OpenRecruitment,
   PublicRecruitment,
+  RoundResult,
+  RoundStat,
+  RoundState,
   SubmitApplicationRequest,
 } from '@/features/recruitment/model/recruitmentTypes'
 import { STUDENT_ID_MESSAGE, STUDENT_ID_PATTERN } from '@/shared/lib/memberInfoRules'
 import { APPLICATION_ANSWER_MAX, APPLICATION_CHOICES_MAX } from '@/shared/lib/recruitmentRules'
 import { db, type DbApplication, type DbRecruitment } from './db'
+import type { DbRoundResult } from './seed/recruitmentSeed'
 import { personRef } from './mockMembers'
 import { recruitmentStatusOf } from './mockRecruitments'
+import { nowIso } from './mockTime'
 
 const departmentName = (id: string) => db.departments.find((department) => department.id === id)?.name ?? 'Ban'
 const clubOf = (clubId: string) => db.clubs.find((club) => club.id === clubId)
@@ -89,13 +94,86 @@ export function toPublicRecruitment(recruitment: DbRecruitment, userId: string):
   }
 }
 
+const recruitmentOf = (application: DbApplication) => db.recruitments.find((candidate) => candidate.id === application.recruitmentId) as DbRecruitment
+const resultAt = (application: DbApplication, roundId: string) => application.roundResults.find((result) => result.roundId === roundId)
+
+/** FR-REC-03: vòng đầu tiên chưa có kết quả khi các vòng trước đều Đạt; null khi đã rút, bị loại hoặc đã qua hết các vòng. */
+export function currentRoundOf(application: DbApplication, recruitment: DbRecruitment = recruitmentOf(application)): string | null {
+  if (application.status !== 'SUBMITTED') return null
+  for (const round of recruitment.rounds) {
+    const result = resultAt(application, round.id)
+    if (!result) return round.id
+    if (result.result === 'FAIL') return null
+  }
+  return null
+}
+
+/** Đã Đạt mọi vòng (đủ điều kiện xếp hạng khi chốt kết quả). */
+export const passedAllRounds = (application: DbApplication, recruitment: DbRecruitment = recruitmentOf(application)) =>
+  recruitment.rounds.every((round) => resultAt(application, round.id)?.result === 'PASS')
+
+export const totalScoreOf = (application: DbApplication) => application.roundResults.reduce((total, result) => total + (result.result === 'PASS' ? (result.score ?? 0) : 0), 0)
+
+/** Kết quả một vòng sửa được khi đợt chưa chốt, đơn chưa rút và vòng sau chưa có kết quả. */
+export function roundEditable(application: DbApplication, recruitment: DbRecruitment, roundIndex: number): boolean {
+  if (recruitment.finalizedAt || recruitment.closedAt || application.status === 'WITHDRAWN') return false
+  const next = recruitment.rounds[roundIndex + 1]
+  return next === undefined || resultAt(application, next.id) === undefined
+}
+
+function roundResultsOf(application: DbApplication, recruitment: DbRecruitment): RoundResult[] {
+  return recruitment.rounds.flatMap((round, index) => {
+    const result = resultAt(application, round.id)
+    return result ? [{ roundId: round.id, roundName: round.name, result: result.result, score: result.score, note: result.note, by: personRef(result.by), at: result.at, editable: roundEditable(application, recruitment, index) }] : []
+  })
+}
+
 export function toApplicationSummary(application: DbApplication): ApplicationSummary {
-  return { id: application.id, applicant: personRef(application.userId), status: application.status, choices: choicesOf(application), submittedAt: application.submittedAt }
+  const recruitment = recruitmentOf(application)
+  return {
+    id: application.id,
+    applicant: personRef(application.userId),
+    status: application.status,
+    choices: choicesOf(application),
+    submittedAt: application.submittedAt,
+    currentRoundId: currentRoundOf(application, recruitment),
+    roundResults: roundResultsOf(application, recruitment),
+    totalScore: totalScoreOf(application),
+    version: application.version,
+  }
+}
+
+/** Đơn khớp bộ lọc vòng: đang chờ xét ở vòng, đã Đạt hoặc bị Loại ở vòng. */
+export function matchesRound(application: DbApplication, roundId: string, state: RoundState | null): boolean {
+  const result = resultAt(application, roundId)
+  if (state === 'PENDING') return currentRoundOf(application) === roundId
+  if (state === 'PASSED') return result?.result === 'PASS'
+  if (state === 'FAILED') return result?.result === 'FAIL'
+  return currentRoundOf(application) === roundId || result !== undefined
+}
+
+export function roundStatsOf(recruitment: DbRecruitment): RoundStat[] {
+  const applications = db.applications.filter((application) => application.recruitmentId === recruitment.id)
+  return recruitment.rounds.map((round) => ({
+    roundId: round.id,
+    pending: applications.filter((application) => currentRoundOf(application, recruitment) === round.id).length,
+    passed: applications.filter((application) => resultAt(application, round.id)?.result === 'PASS').length,
+    failed: applications.filter((application) => resultAt(application, round.id)?.result === 'FAIL').length,
+  }))
+}
+
+/** Ghi hoặc sửa kết quả vòng; Loại thì đơn thành Bị loại, Đạt (kể cả sửa từ Loại) thì đơn về Đã nộp. */
+export function setRoundResult(application: DbApplication, roundId: string, input: Omit<DbRoundResult, 'roundId' | 'at'>): void {
+  const entry: DbRoundResult = { roundId, at: nowIso(), ...input }
+  const recruitment = recruitmentOf(application)
+  const kept = application.roundResults.filter((result) => result.roundId !== roundId)
+  application.roundResults = [...kept, entry].toSorted((a, b) => recruitment.rounds.findIndex((round) => round.id === a.roundId) - recruitment.rounds.findIndex((round) => round.id === b.roundId))
+  application.status = input.result === 'FAIL' ? 'ELIMINATED' : 'SUBMITTED'
+  application.version += 1
 }
 
 export function toApplicationDetail(application: DbApplication): ApplicationDetail {
-  const recruitment = db.recruitments.find((candidate) => candidate.id === application.recruitmentId) as DbRecruitment
-  return { ...toApplicationSummary(application), answers: answersOf(application, recruitment), studentId: application.studentId, withdrawnAt: application.withdrawnAt, version: application.version }
+  return { ...toApplicationSummary(application), answers: answersOf(application, recruitmentOf(application)), studentId: application.studentId, withdrawnAt: application.withdrawnAt }
 }
 
 /** Kiểm đơn (400 theo ô): 1–3 nguyện vọng khác nhau trong các ban có chỉ tiêu, câu bắt buộc có trả lời, MSSV khi CLB thu thập. */

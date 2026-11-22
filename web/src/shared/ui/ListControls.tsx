@@ -50,13 +50,15 @@ export function FilterChip({ selected, onToggle, label, count }: FilterChipProps
       type="button"
       aria-pressed={selected}
       onClick={onToggle}
+      title={label}
       className={cn(
-        'inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border px-3 text-sm font-semibold transition-colors duration-200 pointer-coarse:h-10',
+        // Nhãn do người dùng đặt (ví dụ tên vòng tuyển) có thể dài: chip không vượt bề ngang, nhãn cắt bằng dấu ba chấm.
+        'inline-flex h-9 max-w-full shrink-0 items-center gap-1.5 rounded-full border px-3 text-sm font-semibold transition-colors duration-200 pointer-coarse:h-10',
         selected ? 'border-primary bg-primary-soft text-on-primary-soft' : 'bg-card text-muted-foreground hover:border-input/70 hover:text-foreground',
       )}
     >
-      {label}
-      {count !== undefined && <span className="text-xs tabular-nums opacity-80">{count}</span>}
+      <span className="min-w-0 truncate">{label}</span>
+      {count !== undefined && <span className="shrink-0 text-xs tabular-nums opacity-80">{count}</span>}
     </button>
   )
 }

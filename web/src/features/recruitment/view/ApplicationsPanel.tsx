@@ -31,6 +31,24 @@ function ApplicationDetailSheet({ vm }: { vm: ApplicationsViewModel }) {
               <p className="text-sm">
                 <span className="font-semibold">Nguyện vọng:</span> {choicesText(detail.choices)}
               </p>
+              {detail.roundResults.length > 0 && (
+                <section aria-label="Kết quả từng vòng" className="space-y-2">
+                  <h3 className="text-sm font-bold">Kết quả từng vòng · tổng điểm {detail.totalScore}</h3>
+                  <ol className="space-y-2">
+                    {detail.roundResults.map((result) => (
+                      <li key={result.roundId} className="rounded-xl bg-muted/60 p-3 text-sm">
+                        <p className="font-semibold">
+                          {result.roundName}: {result.result === 'PASS' ? `Đạt · ${result.score ?? 0} điểm` : 'Loại'}
+                        </p>
+                        {result.note && <p className="text-muted-foreground [overflow-wrap:anywhere]">{result.note}</p>}
+                        <p className="text-xs text-muted-foreground">
+                          {result.by.fullName} · {formatDateTime(result.at)}
+                        </p>
+                      </li>
+                    ))}
+                  </ol>
+                </section>
+              )}
               {detail.answers.length > 0 && (
                 <dl className="space-y-3">
                   {detail.answers.map((answer) => (

@@ -25,7 +25,8 @@ test.describe('Tuyển thành viên', () => {
     await expect(sheet.getByText('Từ 1 đến 500.')).toBeVisible()
     await sheet.getByRole('textbox', { name: 'Chỉ tiêu' }).fill('4')
     await sheet.getByRole('button', { name: 'Thêm vòng' }).click()
-    await sheet.getByRole('textbox', { name: 'Vòng 2' }).fill('Phỏng vấn')
+    // Tên vòng dài để kiểm chip vòng không làm trang tràn ngang ở 360 px.
+    await sheet.getByRole('textbox', { name: 'Vòng 2' }).fill('Phỏng vấn trực tiếp cùng trưởng ban và một thành viên ban chủ nhiệm')
     await sheet.getByRole('button', { name: 'Thêm câu hỏi' }).click()
     await sheet.getByRole('textbox', { name: 'Câu 1' }).fill('Vì sao bạn muốn vào ban Truyền thông?')
     await sheet.getByRole('list', { name: 'Chọn giám khảo' }).getByRole('checkbox', { name: /Đặng Khánh Linh/ }).check()
@@ -40,6 +41,9 @@ test.describe('Tuyển thành viên', () => {
     await expect(page.getByRole('list', { name: 'Giám khảo' })).toContainText('Đặng Khánh Linh')
     await expectNoHorizontalScroll(page)
     await snap(page, testInfo, 'recruitmentDetail')
+    await page.getByRole('tab', { name: 'Lọc theo vòng' }).click()
+    await expect(page.getByRole('group', { name: 'Chọn vòng' }).getByRole('button')).toHaveCount(2)
+    await expectNoHorizontalScroll(page)
   })
 
   test('đợt đang nhận đơn khóa vòng và câu hỏi, vẫn sửa được tên', async ({ page }) => {
@@ -112,6 +116,37 @@ test.describe('Tuyển thành viên', () => {
     await expect(page.getByRole('dialog').getByText('Vì sao bạn muốn tham gia CLB Guitar?')).toBeVisible()
     await expectNoHorizontalScroll(page)
     await snap(page, testInfo, 'recruitmentApplications')
+  })
+
+  test('ban chủ nhiệm lọc đơn theo vòng: Đạt kèm điểm, Loại kèm nhận xét', async ({ page }, testInfo) => {
+    await loginAs(page, 'anh.nguyen@demo.test')
+    await page.goto('/clubs/c-guitar/recruitments/rec-guitar-k1?tab=rounds')
+    const list = page.getByRole('list', { name: 'Đơn theo vòng' })
+    await expect(list.getByRole('listitem')).toHaveCount(1)
+    await list.getByRole('button', { name: 'Đạt: Hồ Tấn Đạt' }).click()
+    const dialog = page.getByRole('dialog', { name: 'Xét vòng: Hồ Tấn Đạt' })
+    await dialog.getByRole('textbox', { name: /^Điểm/ }).fill('101')
+    await dialog.getByRole('button', { name: 'Ghi Đạt' }).click()
+    await expect(dialog.getByText('Nhập điểm nguyên từ 0 đến 100.')).toBeVisible()
+    await dialog.getByRole('textbox', { name: /^Điểm/ }).fill('75')
+    await expectNoHorizontalScroll(page)
+    await snap(page, testInfo, 'recruitmentRoundDialog', { fullPage: false })
+    await dialog.getByRole('button', { name: 'Ghi Đạt' }).click()
+    await settleToast(page, 'Hồ Tấn Đạt đạt vòng này.')
+    await expect(page.getByText('Không có đơn nào ở bộ lọc này')).toBeVisible()
+
+    await page.getByRole('group', { name: 'Chọn vòng' }).getByRole('button', { name: /Vòng 2: Phỏng vấn/ }).click()
+    await expect(list.getByRole('listitem')).toHaveCount(2)
+    await list.getByRole('button', { name: 'Loại: Châu Minh Tú' }).click()
+    const tuDialog = page.getByRole('dialog', { name: 'Xét vòng: Châu Minh Tú' })
+    await tuDialog.getByRole('textbox', { name: 'Nhận xét' }).fill('Chưa sắp xếp được lịch tập cố định.')
+    await tuDialog.getByRole('button', { name: 'Ghi Loại' }).click()
+    await settleToast(page, 'Đã loại Châu Minh Tú ở vòng này.')
+    await page.getByRole('group', { name: 'Lọc theo kết quả vòng' }).getByRole('button', { name: /^Loại/ }).click()
+    await expect(list.getByRole('listitem').filter({ hasText: 'Châu Minh Tú' })).toContainText('Chưa sắp xếp được lịch tập cố định.')
+    await expect(list.getByRole('button', { name: 'Sửa kết quả: Châu Minh Tú' })).toBeVisible()
+    await expectNoHorizontalScroll(page)
+    await snap(page, testInfo, 'recruitmentRounds')
   })
 
   test('thành viên CLB thấy lý do không nộp đơn được', async ({ page }) => {

@@ -14,3 +14,6 @@ export const RECRUITMENT_QUESTION_MAX = 300
 export const RECRUITMENT_JUDGES_MAX = 20
 export const APPLICATION_CHOICES_MAX = 3
 export const APPLICATION_ANSWER_MAX = 2000
+export const ROUND_SCORE_MIN = 0
+export const ROUND_SCORE_MAX = 100
+export const ROUND_NOTE_MAX = 1000

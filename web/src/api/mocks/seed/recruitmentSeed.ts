@@ -66,7 +66,18 @@ export interface DbApplication {
   status: ApplicationStatus
   submittedAt: string
   withdrawnAt: string | null
+  /** FR-REC-03: kết quả từng vòng theo thứ tự vòng; Đạt kèm điểm 0–100, Loại kèm nhận xét. */
+  roundResults: DbRoundResult[]
   version: number
+}
+
+export interface DbRoundResult {
+  roundId: string
+  result: 'PASS' | 'FAIL'
+  score: number | null
+  note: string
+  by: string
+  at: string
 }
 
 export function createApplicationSeed(): DbApplication[] {
@@ -81,10 +92,15 @@ export function createApplicationSeed(): DbApplication[] {
     status: 'SUBMITTED',
     submittedAt: vnDayAt(-daysAgo, 20),
     withdrawnAt: null,
+    roundResults: [],
     version: 1,
   })
   return [
-    application('ap-tu', 'u-tu', ['d-music', 'd-media'], ['Mình muốn học đệm hát cho CLB tiếng Anh.', 'Chơi ukulele 1 năm.', '2 buổi'], 4, '22520001'),
+    {
+      ...application('ap-tu', 'u-tu', ['d-music', 'd-media'], ['Mình muốn học đệm hát cho CLB tiếng Anh.', 'Chơi ukulele 1 năm.', '2 buổi'], 4, '22520001'),
+      roundResults: [{ roundId: 'rr-k1-screen', result: 'PASS', score: 82, note: 'Đơn rõ ràng, có nền tảng nhạc cụ.', by: 'u-anh', at: vnDayAt(-1, 21) }],
+      version: 2,
+    },
     application('ap-dat', 'u-dat', ['d-logistics', 'd-music'], ['Muốn quay lại CLB sau một năm nghỉ.', 'Guitar 3 năm.', '3 buổi'], 2, '21520099'),
   ]
 }

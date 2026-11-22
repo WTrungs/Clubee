@@ -17,6 +17,7 @@ import {
 } from '@/shared/lib/recruitmentRules'
 import { matchesKeyword } from '@/shared/lib/searchText'
 import { db, type DbRecruitment } from './db'
+import { roundStatsOf } from './mockApplications'
 import { can } from './mockAccess'
 import { newId } from './mockHttp'
 import { membershipOf, personRef } from './mockMembers'
@@ -57,6 +58,7 @@ function recruitmentActions(recruitment: DbRecruitment, viewerId: string): Recru
   return [
     ...(canManageRecruitment(viewerId, recruitment.clubId) && status !== 'RESULTS' && status !== 'CLOSED' ? (['EDIT'] as const) : []),
     ...(isBoardMember(viewerId, recruitment.clubId) ? (['VIEW_APPLICATIONS'] as const) : []),
+    ...(isBoardMember(viewerId, recruitment.clubId) && status !== 'RESULTS' && status !== 'CLOSED' ? (['REVIEW_ROUNDS'] as const) : []),
   ]
 }
 
@@ -71,6 +73,7 @@ export function toRecruitmentDetail(recruitment: DbRecruitment, viewerId: string
     createdBy: personRef(recruitment.createdBy),
     createdAt: recruitment.createdAt,
     structureLocked: structureLocked(recruitment),
+    roundStats: isBoardMember(viewerId, recruitment.clubId) ? roundStatsOf(recruitment) : [],
     allowedActions: recruitmentActions(recruitment, viewerId),
     version: recruitment.version,
   }

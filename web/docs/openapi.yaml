@@ -3503,6 +3503,13 @@ paths:
         - name: departmentId
           in: query
           schema: { type: string }
+        - name: roundId
+          in: query
+          description: FR-REC-03, lọc theo vòng cùng `roundState` (bỏ trống là đang chờ xét hoặc đã có kết quả ở vòng này).
+          schema: { type: string }
+        - name: roundState
+          in: query
+          schema: { $ref: '#/components/schemas/RoundState' }
         - $ref: '#/components/parameters/Q'
         - $ref: '#/components/parameters/Page'
       responses:
@@ -3536,6 +3543,50 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+  /clubs/{clubId}/recruitments/{recruitmentId}/applications/{applicationId}/rounds/{roundId}:
+    put:
+      tags: [REC]
+      operationId: reviewApplicationRound
+      summary: Ghi kết quả một vòng (FR-REC-03)
+      description: |
+        Chỉ ban chủ nhiệm. Đạt kèm `score` 0–100 (nhận xét tùy chọn, tối đa 1000 ký tự); Loại kèm `note` 5–500 ký tự, đơn thành Bị loại.
+        Xét được ngay khi đợt còn nhận đơn. Ghi mới chỉ ở vòng hiện tại của đơn (`currentRoundId`); sửa được khi vòng sau chưa có kết quả.
+        Sửa Loại thành Đạt thì đơn về Đã nộp.
+
+        Lỗi:
+        - 400 `VALIDATION`.
+        - 403 `NOT_A_MEMBER`, `FORBIDDEN`.
+        - 404 `APPLICATION_NOT_FOUND`.
+        - 409 `VERSION_CONFLICT` (`version` của đơn).
+        - 422 `RECRUITMENT_FINALIZED`, `APPLICATION_WITHDRAWN`, `ROUND_NOT_REACHED`, `ROUND_LOCKED`.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - $ref: '#/components/parameters/RecruitmentId'
+        - $ref: '#/components/parameters/ApplicationId'
+        - name: roundId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RoundResultRequest' }
+      responses:
+        '200':
+          description: Đơn sau khi ghi kết quả.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApplicationDetail' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
   /recruitments/open:
     get:
       tags: [REC]
@@ -8847,13 +8898,58 @@ components:
             createdBy: { $ref: '#/components/schemas/PersonRef' }
             createdAt: { type: string, format: date-time }
             structureLocked: { type: boolean, description: Đã tới giờ mở; giờ mở, vòng, câu hỏi không đổi được. }
+            roundStats:
+              type: array
+              description: Số đơn chờ xét, Đạt, Loại theo vòng; chỉ ban chủ nhiệm, người khác nhận mảng rỗng.
+              items: { $ref: '#/components/schemas/RoundStat' }
             allowedActions:
               type: array
-              description: '`EDIT` cho người có quyền Quản lý thành viên khi đợt chưa chốt kết quả; `VIEW_APPLICATIONS` cho ban chủ nhiệm (SRS 3.5).'
+              description: |
+                `EDIT` cho người có quyền Quản lý thành viên khi đợt chưa chốt kết quả; `VIEW_APPLICATIONS` cho ban chủ nhiệm (SRS 3.5);
+                `REVIEW_ROUNDS` cho ban chủ nhiệm khi đợt chưa chốt.
               items:
                 type: string
-                enum: [EDIT, VIEW_APPLICATIONS]
+                enum: [EDIT, VIEW_APPLICATIONS, REVIEW_ROUNDS]
             version: { type: integer }
+    RoundState:
+      type: string
+      enum: [PENDING, PASSED, FAILED]
+    RoundStat:
+      type: object
+      required: [roundId, pending, passed, failed]
+      properties:
+        roundId: { type: string }
+        pending: { type: integer }
+        passed: { type: integer }
+        failed: { type: integer }
+    RoundResult:
+      type: object
+      required: [roundId, roundName, result, score, note, by, at, editable]
+      properties:
+        roundId: { type: string }
+        roundName: { type: string }
+        result: { type: string, enum: [PASS, FAIL] }
+        score:
+          oneOf:
+            - type: integer
+            - type: 'null'
+        note: { type: string }
+        by: { $ref: '#/components/schemas/PersonRef' }
+        at: { type: string, format: date-time }
+        editable: { type: boolean, description: Đợt chưa chốt, đơn chưa rút và vòng sau chưa có kết quả. }
+    RoundResultRequest:
+      type: object
+      required: [result, score, note, version]
+      properties:
+        result: { type: string, enum: [PASS, FAIL] }
+        score:
+          oneOf:
+            - type: integer
+              minimum: 0
+              maximum: 100
+            - type: 'null'
+        note: { type: string, maxLength: 1000 }
+        version: { type: integer }
     RecruitmentRequest:
       type: object
       required: [name, description, opensAt, closesAt, quotas, rounds, questions, judgeIds]
@@ -9052,7 +9148,7 @@ components:
         studentId: { $ref: '#/components/schemas/NullableString' }
     ApplicationSummary:
       type: object
-      required: [id, applicant, status, choices, submittedAt]
+      required: [id, applicant, status, choices, submittedAt, currentRoundId, roundResults, totalScore, version]
       properties:
         id: { type: string }
         applicant: { $ref: '#/components/schemas/PersonRef' }
@@ -9061,18 +9157,25 @@ components:
           type: array
           items: { $ref: '#/components/schemas/DepartmentChoice' }
         submittedAt: { type: string, format: date-time }
+        currentRoundId:
+          allOf: [{ $ref: '#/components/schemas/NullableString' }]
+          description: Vòng đầu tiên chưa có kết quả khi các vòng trước đều Đạt; null khi đã rút, bị loại hoặc qua hết các vòng.
+        roundResults:
+          type: array
+          items: { $ref: '#/components/schemas/RoundResult' }
+        totalScore: { type: integer, description: Tổng điểm các vòng Đạt. }
+        version: { type: integer }
     ApplicationDetail:
       allOf:
         - $ref: '#/components/schemas/ApplicationSummary'
         - type: object
-          required: [answers, studentId, withdrawnAt, version]
+          required: [answers, studentId, withdrawnAt]
           properties:
             answers:
               type: array
               items: { $ref: '#/components/schemas/ApplicationAnswer' }
             studentId: { $ref: '#/components/schemas/NullableString' }
             withdrawnAt: { $ref: '#/components/schemas/NullableDateTime' }
-            version: { type: integer }
     ApplicationPage:
       allOf:
         - $ref: '#/components/schemas/PageMeta'

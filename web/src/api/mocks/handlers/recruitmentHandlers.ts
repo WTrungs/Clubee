@@ -1,5 +1,7 @@
 import { http, HttpResponse } from 'msw'
-import type { ApplicationStatus, RecruitmentRequest, SubmitApplicationRequest, UpdateRecruitmentRequest } from '@/features/recruitment/model/recruitmentTypes'
+import type { ApplicationStatus, RecruitmentRequest, RoundResultRequest, RoundState, SubmitApplicationRequest, UpdateRecruitmentRequest } from '@/features/recruitment/model/recruitmentTypes'
+import { REASON_MAX, REASON_MIN } from '@/shared/lib/reasonRules'
+import { ROUND_NOTE_MAX, ROUND_SCORE_MAX, ROUND_SCORE_MIN } from '@/shared/lib/recruitmentRules'
 import { matchesKeyword } from '@/shared/lib/searchText'
 import { db, type DbRecruitment } from '../db'
 import { forbidden } from '../mockAccess'
@@ -8,7 +10,11 @@ import {
   ALREADY_MEMBER_MESSAGE,
   applicationOf,
   canSeePublicRecruitment,
+  currentRoundOf,
   hasCurrentMembership,
+  matchesRound,
+  roundEditable,
+  setRoundResult,
   parseApplication,
   toApplicationDetail,
   toApplicationSummary,
@@ -33,6 +39,7 @@ import { nowIso } from '../mockTime'
 const notMember = () => problem(403, 'Bạn không phải thành viên của CLB này.', 'NOT_A_MEMBER')
 const findRecruitment = (clubId: string, id: unknown) => db.recruitments.find((recruitment) => recruitment.id === id && recruitment.clubId === clubId)
 const APPLICATION_STATUSES: ApplicationStatus[] = ['SUBMITTED', 'WITHDRAWN', 'ELIMINATED', 'ADMITTED', 'RESERVE', 'NOT_ADMITTED', 'ACCEPTED', 'DECLINED']
+const ROUND_STATES: RoundState[] = ['PENDING', 'PASSED', 'FAILED']
 /** SRS 3.5: đơn ứng tuyển chỉ ban chủ nhiệm xem (giám khảo xem đơn được phân ở P2). */
 const boardOnly = () => problem(403, 'Chỉ ban chủ nhiệm xem được đơn ứng tuyển.', 'FORBIDDEN')
 
@@ -124,11 +131,19 @@ export const recruitmentHandlers = [
     const url = new URL(request.url)
     const status = url.searchParams.get('status')
     const departmentId = url.searchParams.get('departmentId')
+    const roundId = url.searchParams.get('roundId')
+    const roundState = url.searchParams.get('roundState')
     if (status !== null && !APPLICATION_STATUSES.includes(status as ApplicationStatus)) return problem(400, 'Trạng thái đơn không hợp lệ.', 'VALIDATION')
+    const badRound = roundId !== null && !recruitment.rounds.some((round) => round.id === roundId)
+    // `roundState` chỉ có nghĩa khi đi cùng `roundId`.
+    if (badRound || (roundState !== null && (roundId === null || !ROUND_STATES.includes(roundState as RoundState)))) {
+      return problem(400, 'Bộ lọc vòng không hợp lệ.', 'VALIDATION')
+    }
     const rows = db.applications
       .filter((application) => application.recruitmentId === recruitment.id)
       .filter((application) => status === null || application.status === status)
       .filter((application) => !departmentId || application.choices.includes(departmentId))
+      .filter((application) => roundId === null || matchesRound(application, roundId, roundState as RoundState | null))
       .filter((application) => matchesKeyword(personRef(application.userId).fullName, url.searchParams.get('q')))
       .toSorted((a, b) => a.submittedAt.localeCompare(b.submittedAt))
       .map(toApplicationSummary)
@@ -144,6 +159,42 @@ export const recruitmentHandlers = [
     if (!isBoardMember(user.value.id, clubId)) return boardOnly()
     const application = db.applications.find((candidate) => candidate.id === params.applicationId && candidate.recruitmentId === params.recruitmentId && candidate.clubId === clubId)
     if (!application) return problem(404, 'Không tìm thấy đơn ứng tuyển.', 'APPLICATION_NOT_FOUND')
+    return HttpResponse.json(toApplicationDetail(application))
+  }),
+
+  http.put(`${API}/clubs/:clubId/recruitments/:recruitmentId/applications/:applicationId/rounds/:roundId`, async ({ request, params }) => {
+    await networkDelay()
+    const user = writer(request)
+    if (!user.ok) return user.response
+    const clubId = String(params.clubId)
+    if (!canAccessClub(user.value.id, clubId)) return notMember()
+    if (!isBoardMember(user.value.id, clubId)) return problem(403, 'Chỉ ban chủ nhiệm xét đơn theo vòng.', 'FORBIDDEN')
+    const recruitment = findRecruitment(clubId, params.recruitmentId)
+    const application = db.applications.find((candidate) => candidate.id === params.applicationId && candidate.recruitmentId === recruitment?.id)
+    const roundIndex = recruitment?.rounds.findIndex((round) => round.id === params.roundId) ?? -1
+    if (!recruitment || !application || roundIndex < 0) return problem(404, 'Không tìm thấy đơn hoặc vòng.', 'APPLICATION_NOT_FOUND')
+    const body = (await request.json()) as Partial<RoundResultRequest>
+    if (body.version !== application.version) return problem(409, 'Đơn vừa được người khác xét. Tải lại để xem kết quả mới nhất.', 'VERSION_CONFLICT')
+    const status = recruitmentStatusOf(recruitment)
+    if (status === 'RESULTS' || status === 'CLOSED') return problem(422, 'Đợt tuyển đã chốt kết quả nên không sửa kết quả vòng được.', 'RECRUITMENT_FINALIZED')
+    if (application.status === 'WITHDRAWN') return problem(422, 'Ứng viên đã rút đơn.', 'APPLICATION_WITHDRAWN')
+    const roundId = String(params.roundId)
+    const existing = application.roundResults.some((result) => result.roundId === roundId)
+    if (!existing && currentRoundOf(application, recruitment) !== roundId) {
+      return problem(422, 'Đơn chưa tới vòng này (vòng trước chưa có kết quả hoặc đã bị loại).', 'ROUND_NOT_REACHED')
+    }
+    if (existing && !roundEditable(application, recruitment, roundIndex)) return problem(422, 'Vòng sau đã có kết quả nên không sửa vòng này được nữa.', 'ROUND_LOCKED')
+    const note = typeof body.note === 'string' ? body.note.trim() : ''
+    const errors = [
+      ...(body.result !== 'PASS' && body.result !== 'FAIL' ? [{ field: 'result', message: 'Chọn Đạt hoặc Loại.' }] : []),
+      ...(body.result === 'PASS' && (typeof body.score !== 'number' || !Number.isInteger(body.score) || body.score < ROUND_SCORE_MIN || body.score > ROUND_SCORE_MAX)
+        ? [{ field: 'score', message: `Điểm là số nguyên từ ${ROUND_SCORE_MIN} đến ${ROUND_SCORE_MAX}.` }]
+        : []),
+      ...(body.result === 'FAIL' && (note.length < REASON_MIN || note.length > REASON_MAX) ? [{ field: 'note', message: `Nhập nhận xét từ ${REASON_MIN} đến ${REASON_MAX} ký tự.` }] : []),
+      ...(body.result === 'PASS' && note.length > ROUND_NOTE_MAX ? [{ field: 'note', message: `Nhận xét tối đa ${ROUND_NOTE_MAX} ký tự.` }] : []),
+    ]
+    if (errors.length > 0) return problem(400, 'Kết quả vòng chưa hợp lệ.', 'VALIDATION', errors)
+    setRoundResult(application, roundId, { result: body.result as 'PASS' | 'FAIL', score: body.result === 'PASS' ? (body.score as number) : null, note, by: user.value.id })
     return HttpResponse.json(toApplicationDetail(application))
   }),
 
@@ -192,6 +243,7 @@ export const recruitmentHandlers = [
       status: 'SUBMITTED' as const,
       submittedAt: nowIso(),
       withdrawnAt: null,
+      roundResults: [],
       version: 1,
     }
     db.applications.push(application)
