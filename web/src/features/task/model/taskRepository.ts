@@ -10,6 +10,8 @@ import type {
   TaskSummary,
   TaskTransitionRequest,
   UpdateTaskRequest,
+  Workload,
+  WorkloadScope,
 } from './taskTypes'
 
 const club = (clubId: string) => `/clubs/${encodeURIComponent(clubId)}`
@@ -30,6 +32,10 @@ function toParams(query: TaskQuery): QueryParams {
 }
 
 export const taskRepository = {
+  /** FR-TASK-08: phạm vi người gọi được xem khối lượng việc. */
+  workloadScopes: (clubId: string) => httpClient.get<WorkloadScope[]>(`${club(clubId)}/workload-scopes`),
+  workload: (clubId: string, scope: Pick<WorkloadScope, 'type' | 'id'>) =>
+    httpClient.get<Workload>(`${club(clubId)}/workload`, { query: { scopeType: scope.type, scopeId: scope.id ?? undefined } }),
   /** FR-TASK-02: việc của tôi từ mọi ban, tiểu ban và CLB. */
   listMine: (query: TaskQuery) => httpClient.get<Page<TaskSummary>>('/me/tasks', { query: toParams(query) }),
   myFacets: () => httpClient.get<TaskFacets>('/me/tasks/facets'),

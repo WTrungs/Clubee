@@ -37,6 +37,8 @@ export type ClubAction =
   | 'VIEW_AUDIT_LOG'
   /** FR-DOC-04: ban chủ nhiệm xem và khôi phục tài liệu đã ẩn. */
   | 'VIEW_HIDDEN_DOCUMENTS'
+  /** FR-TASK-08: ban chủ nhiệm, Trưởng ban, Phó ban, Trưởng BTC xem khối lượng việc theo người. */
+  | 'VIEW_WORKLOAD'
 
 /** Nhiệm kỳ đang phụ trách CLB: Đang chạy hoặc Đang bàn giao. */
 export interface TermSummary {

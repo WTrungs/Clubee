@@ -29,6 +29,7 @@ import { canAssignStanding, canCreateTerm } from '../mockTerms'
 import { nowIso, vnToday } from '../mockTime'
 import { canRequestTransfer } from '../mockTransfers'
 import { reportDepartmentsOf } from '../mockClubReport'
+import { workloadScopesOf } from '../mockWorkload'
 
 
 function clubActionsFor(userId: string, clubId: string): ClubAction[] {
@@ -52,6 +53,7 @@ function clubActionsFor(userId: string, clubId: string): ClubAction[] {
   if (isBoardMember(userId, clubId) && keepsLedger(userId, clubId)) actions.push('OPEN_DUES')
   if (isBoardMember(userId, clubId)) actions.push('VIEW_CLUB_REPORT', 'VIEW_AUDIT_LOG', 'VIEW_HIDDEN_DOCUMENTS')
   if (reportDepartmentsOf(userId, clubId).length > 0) actions.push('VIEW_DEPARTMENT_REPORTS')
+  if (workloadScopesOf(userId, clubId).length > 0) actions.push('VIEW_WORKLOAD')
   return actions
 }
 

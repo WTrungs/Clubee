@@ -4318,6 +4318,57 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
         '422': { $ref: '#/components/responses/UnprocessableEntity' }
+  /clubs/{clubId}/workload-scopes:
+    get:
+      tags: [TASK]
+      operationId: listWorkloadScopes
+      summary: Phạm vi xem khối lượng việc (FR-TASK-08)
+      description: |
+        Ban chủ nhiệm: Toàn CLB, mọi ban đang hoạt động, mọi sự kiện còn hoạt động. Trưởng ban, Phó ban: ban mình. Trưởng BTC:
+        sự kiện mình. Người khác nhận danh sách rỗng. Lỗi 403 `NOT_A_MEMBER`.
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+      responses:
+        '200':
+          description: Các phạm vi.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/WorkloadScope' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /clubs/{clubId}/workload:
+    get:
+      tags: [TASK]
+      operationId: getWorkload
+      summary: Khối lượng việc theo người (FR-TASK-08)
+      description: |
+        Mỗi người trong phạm vi (CLB: thành viên Thử việc, Chính thức, Tạm nghỉ; ban: thành viên có ban chính đó; sự kiện: Trưởng
+        BTC và nhân sự còn trong tiểu ban) cùng người ngoài phạm vi còn giữ việc mở: `open` việc làm chính còn mở (Mới giao, Đang
+        làm, Chờ nghiệm thu), `overdue` trong đó đã quá hạn, `collaborating` việc phối hợp còn mở. Việc của sự kiện đã đóng, hủy
+        không tính. Nhiều việc mở trước.
+        Lỗi: 403 `NOT_A_MEMBER`, `FORBIDDEN` (không có phạm vi nào); 400 `VALIDATION`; 404 `SCOPE_NOT_FOUND`; 403 `FORBIDDEN` (phạm vi không được xem).
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - name: scopeType
+          in: query
+          required: true
+          schema: { type: string, enum: [CLUB, DEPARTMENT, EVENT] }
+        - name: scopeId
+          in: query
+          description: Bắt buộc với `DEPARTMENT`, `EVENT`.
+          schema: { type: string }
+      responses:
+        '200':
+          description: Khối lượng việc.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Workload' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
   /me/club-history:
     get:
       tags: [RPT]
@@ -6974,8 +7025,8 @@ components:
         `VIEW_DUES`: thuộc ban chủ nhiệm, xem tab Đóng quỹ (FR-FIN-09). `OPEN_DUES`: ban chủ nhiệm có `RECORD_LEDGER`, mở đợt đóng quỹ.
         `VIEW_FINANCE_REPORT`: thuộc ban chủ nhiệm, xem tab Báo cáo thu chi (FR-FIN-12).
         `MANAGE_RECRUITMENT`: có quyền Quản lý thành viên, mở và quản lý đợt tuyển (FR-REC-01).
-        `VIEW_CLUB_REPORT`, `VIEW_AUDIT_LOG`: ban chủ nhiệm (FR-RPT-04, 06). `VIEW_HIDDEN_DOCUMENTS`: ban chủ nhiệm (FR-DOC-04). `VIEW_DEPARTMENT_REPORTS`: ban chủ nhiệm, trưởng hoặc phó của một ban đang hoạt động (FR-RPT-03).
-      enum: [CREATE_EVENT, PROPOSE_EVENT, ASSIGN_TASK, MANAGE_MEMBERS, MANAGE_ORG, ASSIGN_PRESIDENCY, EDIT_CLUB, SEND_ANNOUNCEMENT, CREATE_TERM, ASSIGN_POSITION, REQUEST_PRESIDENCY_TRANSFER, VIEW_PERMISSIONS, VIEW_SHARED_EVENTS, VIEW_DUES, OPEN_DUES, VIEW_FINANCE_REPORT, MANAGE_RECRUITMENT, VIEW_CLUB_REPORT, VIEW_DEPARTMENT_REPORTS, VIEW_AUDIT_LOG, VIEW_HIDDEN_DOCUMENTS]
+        `VIEW_CLUB_REPORT`, `VIEW_AUDIT_LOG`: ban chủ nhiệm (FR-RPT-04, 06). `VIEW_HIDDEN_DOCUMENTS`: ban chủ nhiệm (FR-DOC-04). `VIEW_WORKLOAD`: có ít nhất một phạm vi xem khối lượng việc (FR-TASK-08). `VIEW_DEPARTMENT_REPORTS`: ban chủ nhiệm, trưởng hoặc phó của một ban đang hoạt động (FR-RPT-03).
+      enum: [CREATE_EVENT, PROPOSE_EVENT, ASSIGN_TASK, MANAGE_MEMBERS, MANAGE_ORG, ASSIGN_PRESIDENCY, EDIT_CLUB, SEND_ANNOUNCEMENT, CREATE_TERM, ASSIGN_POSITION, REQUEST_PRESIDENCY_TRANSFER, VIEW_PERMISSIONS, VIEW_SHARED_EVENTS, VIEW_DUES, OPEN_DUES, VIEW_FINANCE_REPORT, MANAGE_RECRUITMENT, VIEW_CLUB_REPORT, VIEW_DEPARTMENT_REPORTS, VIEW_AUDIT_LOG, VIEW_HIDDEN_DOCUMENTS, VIEW_WORKLOAD]
     TermSummary:
       type: object
       description: Nhiệm kỳ đang phụ trách CLB (Đang chạy hoặc Đang bàn giao).
@@ -9593,6 +9644,30 @@ components:
                 at: { type: string, format: date-time }
                 reason: { type: string }
         version: { type: integer }
+    WorkloadScope:
+      type: object
+      required: [type, id, name]
+      properties:
+        type: { type: string, enum: [CLUB, DEPARTMENT, EVENT] }
+        id: { $ref: '#/components/schemas/NullableString' }
+        name: { type: string }
+    Workload:
+      type: object
+      required: [scope, rows]
+      properties:
+        scope: { $ref: '#/components/schemas/WorkloadScope' }
+        rows:
+          type: array
+          items:
+            type: object
+            required: [person, detail, onLeave, open, overdue, collaborating]
+            properties:
+              person: { $ref: '#/components/schemas/PersonRef' }
+              detail: { $ref: '#/components/schemas/NullableString' }
+              onLeave: { type: boolean }
+              open: { type: integer, minimum: 0 }
+              overdue: { type: integer, minimum: 0 }
+              collaborating: { type: integer, minimum: 0 }
     DocumentVersion:
       type: object
       description: Một phiên bản tài liệu (FR-DOC-03); họ tên người tải chụp lúc tải.

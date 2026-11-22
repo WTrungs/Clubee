@@ -156,3 +156,29 @@ export interface TaskFacets {
   clubs: Array<{ id: string; name: string }>
   events: Array<{ id: string; name: string; clubName: string }>
 }
+
+/** FR-TASK-08: phạm vi xem khối lượng việc: toàn CLB (ban chủ nhiệm), một ban, một sự kiện. */
+export type WorkloadScopeType = 'CLUB' | 'DEPARTMENT' | 'EVENT'
+
+export interface WorkloadScope {
+  type: WorkloadScopeType
+  /** Bằng `null` khi là toàn CLB. */
+  id: string | null
+  name: string
+}
+
+/** Một người trong phạm vi: việc làm chính còn mở (Mới giao, Đang làm, Chờ nghiệm thu), trong đó quá hạn, và việc phối hợp còn mở. */
+export interface WorkloadRow {
+  person: PersonRef
+  /** Ban chính, vai trong BTC, hoặc ghi chú người ngoài phạm vi còn giữ việc. */
+  detail: string | null
+  onLeave: boolean
+  open: number
+  overdue: number
+  collaborating: number
+}
+
+export interface Workload {
+  scope: WorkloadScope
+  rows: WorkloadRow[]
+}

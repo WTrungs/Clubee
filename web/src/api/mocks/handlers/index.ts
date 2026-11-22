@@ -27,9 +27,10 @@ import { sessionHandlers } from './sessionHandlers'
 import { taskHandlers } from './taskHandlers'
 import { termHandlers } from './termHandlers'
 import { transferHandlers } from './transferHandlers'
+import { workloadHandlers } from './workloadHandlers'
 
 /** Route API thật, đối chiếu với docs/openapi.yaml. */
-export const routeHandlers = [...accountHandlers, ...adminHandlers, ...publicClubHandlers, ...clubHandlers, ...memberHandlers, ...invitationHandlers, ...leaveHandlers, ...backlogHandlers, ...orgHandlers, ...permissionHandlers, ...termHandlers, ...transferHandlers, ...taskHandlers, ...eventHandlers, ...coHostHandlers, ...sessionHandlers, ...attendanceHandlers, ...calendarHandlers, ...meReportHandlers, ...documentHandlers, ...recruitmentHandlers, ...financeHandlers, ...advanceHandlers, ...duesHandlers, ...financeReportHandlers, ...clubReportHandlers, ...auditHandlers, ...notificationHandlers, ...announcementHandlers]
+export const routeHandlers = [...accountHandlers, ...adminHandlers, ...publicClubHandlers, ...clubHandlers, ...memberHandlers, ...invitationHandlers, ...leaveHandlers, ...backlogHandlers, ...orgHandlers, ...permissionHandlers, ...termHandlers, ...transferHandlers, ...taskHandlers, ...workloadHandlers, ...eventHandlers, ...coHostHandlers, ...sessionHandlers, ...attendanceHandlers, ...calendarHandlers, ...meReportHandlers, ...documentHandlers, ...recruitmentHandlers, ...financeHandlers, ...advanceHandlers, ...duesHandlers, ...financeReportHandlers, ...clubReportHandlers, ...auditHandlers, ...notificationHandlers, ...announcementHandlers]
 
 /** Bộ chặn Admin ở route CLB chạy trước mọi route (NFR-SEC-06). */
 export const handlers = [...adminGuardHandlers, ...routeHandlers]
