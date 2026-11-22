@@ -57,6 +57,10 @@ export const router = createBrowserRouter([
               // Trang dùng chung cho mọi loại tài khoản.
               { path: '/me/profile', lazy: () => import('@/features/account/view/ProfilePage').then((module) => ({ Component: module.ProfilePage })) },
               {
+                path: '/me/notification-settings',
+                lazy: () => import('@/features/notification/view/NotificationSettingsPage').then((module) => ({ Component: module.NotificationSettingsPage })),
+              },
+              {
                 path: '/notifications',
                 lazy: () => import('@/features/notification/view/NotificationsPage').then((module) => ({ Component: module.NotificationsPage })),
               },

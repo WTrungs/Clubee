@@ -1,5 +1,6 @@
 import { motion } from 'motion/react'
-import { BellOff, CheckCheck, SearchX } from 'lucide-react'
+import { BellOff, CheckCheck, SearchX, Settings2 } from 'lucide-react'
+import { Link } from 'react-router'
 import { itemVariants, listVariants } from '@/shared/motion/presets'
 import { Button } from '@/shared/ui/Button'
 import { FilterChip, Pagination, SearchInput } from '@/shared/ui/ListControls'
@@ -21,10 +22,18 @@ export function NotificationsPage() {
         title="Thông báo"
         description="Thông báo từ mọi CLB bạn tham gia. Mở thông báo thì trang liên quan kiểm tra lại quyền của bạn."
         actions={
-          <Button variant="outline" onClick={vm.markAllRead} loading={vm.markingAll} disabled={vm.unreadCount === 0} className="w-full sm:w-auto">
-            <CheckCheck aria-hidden />
-            Đánh dấu đã đọc tất cả
-          </Button>
+          <>
+            <Button variant="outline" onClick={vm.markAllRead} loading={vm.markingAll} disabled={vm.unreadCount === 0} className="w-full sm:w-auto">
+              <CheckCheck aria-hidden />
+              Đánh dấu đã đọc tất cả
+            </Button>
+            <Button asChild variant="ghost" className="w-full sm:w-auto">
+              <Link to="/me/notification-settings">
+                <Settings2 aria-hidden />
+                Tùy chọn
+              </Link>
+            </Button>
+          </>
         }
       />
 

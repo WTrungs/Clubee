@@ -3,11 +3,13 @@ import type { Page } from '@/api/pagination'
 import type {
   AnnouncementAudience,
   NotificationDetail,
+  NotificationPreferences,
   NotificationQuery,
   NotificationSummary,
   SendAnnouncementRequest,
   SendAnnouncementResult,
   UnreadCount,
+  UpdateNotificationPreferencesRequest,
 } from './notificationTypes'
 
 const notification = (id: string) => `/me/notifications/${encodeURIComponent(id)}`
@@ -23,6 +25,9 @@ export const notificationRepository = {
   get: (id: string) => httpClient.get<NotificationDetail>(notification(id)),
   markRead: (id: string) => httpClient.post<NotificationSummary>(`${notification(id)}/read`),
   markAllRead: () => httpClient.post<void>('/me/notifications/read-all'),
+  /** FR-ACC-07: kênh email, push theo loại thông báo. */
+  preferences: () => httpClient.get<NotificationPreferences>('/me/notification-preferences'),
+  updatePreferences: (request: UpdateNotificationPreferencesRequest) => httpClient.put<NotificationPreferences>('/me/notification-preferences', request),
   /** FR-NOT-01: nhóm nhận người gọi được chọn ở CLB hiện hành. */
   audiences: (clubId: string) => httpClient.get<AnnouncementAudience[]>(`${club(clubId)}/announcement-audiences`),
   sendAnnouncement: (clubId: string, request: SendAnnouncementRequest) => httpClient.post<SendAnnouncementResult>(`${club(clubId)}/announcements`, request),

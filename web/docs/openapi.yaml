@@ -4369,6 +4369,54 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+  /me/notification-preferences:
+    get:
+      tags: [ACC]
+      operationId: getNotificationPreferences
+      summary: Tùy chọn thông báo (FR-ACC-07)
+      description: |
+        Email và push theo từng loại thông báo (9 loại của hộp thông báo). Chưa lưu lần nào thì bật hết, `version` 0.
+        Thông báo trong hệ thống luôn bật, không có trong tùy chọn. Push chỉ gửi tới ứng dụng Android (FR-NOT-04).
+      responses:
+        '200':
+          description: Tùy chọn hiện tại.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NotificationPreferences' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    put:
+      tags: [ACC]
+      operationId: updateNotificationPreferences
+      summary: Lưu tùy chọn thông báo (FR-ACC-07)
+      description: |
+        Gửi đủ 9 loại, mỗi loại một lần. Từ đó mỗi thông báo mới ghi kênh sẽ gửi cho từng người nhận theo tùy chọn của họ;
+        thông báo gửi tay chỉ có email khi người gửi chọn gửi kèm email và người nhận bật email.
+        Lỗi theo thứ tự: 403 `CSRF`; 409 `VERSION_CONFLICT`; 400 `VALIDATION` (`categories`).
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [categories, version]
+              properties:
+                categories:
+                  type: array
+                  items: { $ref: '#/components/schemas/NotificationChannelPreference' }
+                version: { type: integer }
+      responses:
+        '200':
+          description: Tùy chọn sau khi lưu.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NotificationPreferences' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
   /me/club-history:
     get:
       tags: [RPT]
@@ -9643,6 +9691,22 @@ components:
                 by: { $ref: '#/components/schemas/PersonRef' }
                 at: { type: string, format: date-time }
                 reason: { type: string }
+        version: { type: integer }
+    NotificationChannelPreference:
+      type: object
+      required: [category, email, push]
+      properties:
+        category: { type: string, enum: [MEMBERSHIP, POSITION, TASK, EVENT, SESSION, FINANCE, TERM, ANNOUNCEMENT, RECRUITMENT] }
+        email: { type: boolean }
+        push: { type: boolean }
+    NotificationPreferences:
+      type: object
+      required: [categories, updatedAt, version]
+      properties:
+        categories:
+          type: array
+          items: { $ref: '#/components/schemas/NotificationChannelPreference' }
+        updatedAt: { $ref: '#/components/schemas/NullableDateTime' }
         version: { type: integer }
     WorkloadScope:
       type: object

@@ -1,5 +1,6 @@
 import type { AnnouncementAudienceRef, NotificationCategory, NotificationKind, NotificationTarget } from '@/features/notification/model/notificationTypes'
 import { db, type DbNotification } from './db'
+import { channelsOf } from './mockNotificationPreferences'
 import { newId } from './mockHttp'
 import { nowIso } from './mockTime'
 
@@ -36,7 +37,13 @@ export function notify(userIds: Iterable<string | null | undefined>, input: Noti
     ...(input.audience ? { audience: input.audience } : {}),
   }
   db.notifications.push(notification)
-  db.notificationRecipients.push(...recipients.map((userId) => ({ notificationId: notification.id, userId, readAt: null })))
+  // Trong hệ thống luôn ghi; email, push theo tùy chọn của từng người nhận, thông báo gửi tay chỉ có email khi người gửi chọn.
+  db.notificationRecipients.push(
+    ...recipients.map((userId) => {
+      const channels = channelsOf(userId, input.category)
+      return { notificationId: notification.id, userId, readAt: null, email: channels.email && (kind === 'SYSTEM' || notification.sendEmail), push: channels.push }
+    }),
+  )
   return notification
 }
 

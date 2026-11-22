@@ -50,6 +50,24 @@ export interface NotificationDetail extends NotificationSummary {
   sender: PersonRef | null
 }
 
+/** FR-ACC-07: kênh gửi ngoài hệ thống cho một loại thông báo; thông báo trong hệ thống luôn bật. Push chỉ tới ứng dụng Android. */
+export interface NotificationChannelPreference {
+  category: NotificationCategory
+  email: boolean
+  push: boolean
+}
+
+export interface NotificationPreferences {
+  categories: NotificationChannelPreference[]
+  updatedAt: string | null
+  version: number
+}
+
+export interface UpdateNotificationPreferencesRequest {
+  categories: NotificationChannelPreference[]
+  version: number
+}
+
 export interface UnreadCount {
   count: number
 }

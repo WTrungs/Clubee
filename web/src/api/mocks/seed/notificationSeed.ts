@@ -22,6 +22,9 @@ export interface DbNotificationRecipient {
   notificationId: string
   userId: string
   readAt: string | null
+  /** FR-ACC-07, FR-NOT-04: kênh máy chủ sẽ gửi thêm theo tùy chọn của người nhận lúc gửi; bản ghi mẫu không có. */
+  email?: boolean
+  push?: boolean
 }
 
 interface SeedSpec {

@@ -1,11 +1,12 @@
 import { http, HttpResponse } from 'msw'
-import type { NotificationCategory, NotificationDetail, NotificationSummary } from '@/features/notification/model/notificationTypes'
+import type { NotificationCategory, NotificationDetail, NotificationSummary, UpdateNotificationPreferencesRequest } from '@/features/notification/model/notificationTypes'
 import { db, type DbNotification, type DbNotificationRecipient } from '../db'
 import { API, currentUser, matchesKeyword, networkDelay, paginate, problem, writer } from '../mockHttp'
 import { canViewAdvance } from '../mockAdvances'
 import { canViewTransaction } from '../mockFinance'
 import { isInAudience } from '../mockAnnouncements'
 import { canAccessClub, personRef } from '../mockMembers'
+import { PREFERENCE_CATEGORIES, preferenceRecordOf, toPreferences } from '../mockNotificationPreferences'
 import { nowIso } from '../mockTime'
 
 const CATEGORIES: NotificationCategory[] = ['MEMBERSHIP', 'POSITION', 'TASK', 'EVENT', 'SESSION', 'FINANCE', 'TERM', 'ANNOUNCEMENT', 'RECRUITMENT']
@@ -123,5 +124,33 @@ export const notificationHandlers = [
     if (!entry) return notFound()
     entry.recipient.readAt ??= nowIso()
     return HttpResponse.json(toSummary(entry.notification, entry.recipient))
+  }),
+
+  http.get(`${API}/me/notification-preferences`, async () => {
+    await networkDelay()
+    const user = currentUser()
+    if (!user.ok) return user.response
+    return HttpResponse.json(toPreferences(user.value.id))
+  }),
+
+  http.put(`${API}/me/notification-preferences`, async ({ request }) => {
+    await networkDelay()
+    const user = writer(request)
+    if (!user.ok) return user.response
+    const body = (await request.json()) as Partial<UpdateNotificationPreferencesRequest>
+    if (body.version !== toPreferences(user.value.id).version) {
+      return problem(409, 'Tùy chọn thông báo vừa được lưu ở nơi khác. Tải lại để xem bản mới nhất.', 'VERSION_CONFLICT')
+    }
+    const sent = Array.isArray(body.categories) ? body.categories : []
+    const valid =
+      sent.length === PREFERENCE_CATEGORIES.length &&
+      PREFERENCE_CATEGORIES.every((category) => sent.filter((item) => item?.category === category).length === 1) &&
+      sent.every((item) => typeof item.email === 'boolean' && typeof item.push === 'boolean')
+    if (!valid) return problem(400, 'Cần đủ mỗi loại thông báo một lần, kèm bật hoặc tắt email và push.', 'VALIDATION', [{ field: 'categories', message: 'Danh sách loại thông báo chưa hợp lệ.' }])
+    const channels = Object.fromEntries(sent.map((item) => [item.category, { email: item.email, push: item.push }]))
+    const record = preferenceRecordOf(user.value.id)
+    if (record) Object.assign(record, { channels, updatedAt: nowIso(), version: record.version + 1 })
+    else db.notificationPreferences.push({ userId: user.value.id, channels, updatedAt: nowIso(), version: 1 })
+    return HttpResponse.json(toPreferences(user.value.id))
   }),
 ]
