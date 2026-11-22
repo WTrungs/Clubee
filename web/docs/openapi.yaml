@@ -5427,6 +5427,27 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
         '422': { $ref: '#/components/responses/UnprocessableEntity' }
+  /me/dues:
+    get:
+      tags: [FIN]
+      operationId: listMyDues
+      summary: Khoản đóng của tôi (FR-FIN-13)
+      description: |
+        Chỉ dòng của chính người gọi trong các đợt đóng quỹ (kể cả đợt đã đóng), đợt mở gần nhất trước; không cần quyền xem
+        đợt. `overdue` khi đợt còn mở đã qua hạn mà còn thiếu. Lọc `clubId` tùy chọn.
+      parameters:
+        - name: clubId
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: Các khoản đóng của tôi.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/MyDuesItem' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
   /clubs/{clubId}/dues-campaigns:
     get:
       tags: [FIN]
@@ -10572,6 +10593,39 @@ components:
           description: Các lần nộp, mới nhất trước (FR-FIN-10).
           items: { $ref: '#/components/schemas/DuesPayment' }
         version: { type: integer }
+    MyDuesItem:
+      type: object
+      description: Khoản đóng của chính người xem trong một đợt (FR-FIN-13).
+      required: [id, campaign, amountDue, paidAmount, remaining, status, overdue, exemption, payments]
+      properties:
+        id: { type: string }
+        campaign:
+          type: object
+          required: [id, clubId, clubName, name, amount, dueOn, status]
+          properties:
+            id: { type: string }
+            clubId: { type: string }
+            clubName: { type: string }
+            name: { type: string }
+            amount: { type: integer }
+            dueOn: { type: string, format: date }
+            status: { type: string, enum: [OPEN, CLOSED] }
+        amountDue: { type: integer, description: Mức phải đóng sau miễn giảm. }
+        paidAmount: { type: integer }
+        remaining: { type: integer }
+        status: { type: string, enum: [UNPAID, PARTIAL, PAID, EXEMPT] }
+        overdue: { type: boolean }
+        exemption:
+          oneOf:
+            - type: object
+              required: [kind, reason]
+              properties:
+                kind: { type: string, enum: [EXEMPT, REDUCED] }
+                reason: { type: string }
+            - type: 'null'
+        payments:
+          type: array
+          items: { $ref: '#/components/schemas/DuesPayment' }
     DuesPayment:
       type: object
       required: [id, amount, paidOn, confirmedBy, confirmedAt, transactionId]

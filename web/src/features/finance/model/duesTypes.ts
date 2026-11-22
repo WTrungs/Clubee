@@ -132,3 +132,20 @@ export interface DuesCandidate {
   fullName: string
   departmentName: string | null
 }
+
+/** FR-FIN-13: khoản đóng của chính người xem trong một đợt; họ tên, mức đóng chụp lúc mở đợt (BR-DATA-02). */
+export interface MyDuesItem {
+  id: string
+  campaign: { id: string; clubId: string; clubName: string; name: string; amount: number; dueOn: string; status: DuesCampaignStatus }
+  /** Mức phải đóng sau miễn giảm; 0 khi được miễn. */
+  amountDue: number
+  paidAmount: number
+  remaining: number
+  status: DuesItemStatus
+  /** Đợt còn mở đã qua hạn mà còn thiếu. */
+  overdue: boolean
+  /** Lý do miễn giảm là của chính người xem nên được hiện. */
+  exemption: { kind: DuesExemptionKind; reason: string } | null
+  /** Các lần nộp, mới nhất trước. */
+  payments: DuesPayment[]
+}

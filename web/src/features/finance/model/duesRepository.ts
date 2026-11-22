@@ -7,6 +7,7 @@ import type {
   DuesCandidate,
   DuesItem,
   DuesItemQuery,
+  MyDuesItem,
   OpenDuesRequest,
   RecordDuesPaymentRequest,
   SetExemptionRequest,
@@ -18,6 +19,8 @@ const campaign = (clubId: string, campaignId: string) => `${campaigns(clubId)}/$
 
 /** FR-FIN-09, FR-FIN-10: đợt đóng quỹ, xác nhận đã nộp. */
 export const duesRepository = {
+  /** FR-FIN-13: khoản đóng của chính mình, mọi đợt (kể cả đã đóng) của CLB. */
+  mine: (clubId: string) => httpClient.get<MyDuesItem[]>('/me/dues', { query: { clubId } }),
   list: (clubId: string, query: DuesCampaignQuery) =>
     httpClient.get<Page<DuesCampaignSummary>>(campaigns(clubId), { query: { status: query.status, page: query.page, size: query.size } }),
   candidates: (clubId: string, q: string) => httpClient.get<DuesCandidate[]>(`/clubs/${encodeURIComponent(clubId)}/dues-candidates`, { query: { q: q || undefined } }),

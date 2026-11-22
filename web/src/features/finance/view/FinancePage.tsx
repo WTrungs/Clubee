@@ -10,6 +10,7 @@ import { DuesCampaignPanel } from './DuesCampaignPanel'
 import { EventFundList } from './EventFundList'
 import { FinanceReportPanel } from './FinanceReportPanel'
 import { FundPanel } from './FundPanel'
+import { MyDuesPanel } from './MyDuesPanel'
 import { OpenDuesSheet } from './OpenDuesSheet'
 
 /** Tab Đóng quỹ: danh sách đợt, hoặc một đợt khi URL có `?dues=`. */
@@ -30,7 +31,7 @@ function DuesTab({ active }: { active: boolean }) {
   )
 }
 
-/** FR-FIN-06: sổ Quỹ chung cho mọi thành viên (SRS 3.5); ban chủ nhiệm và BTC xem thêm quỹ sự kiện (FR-FIN-11); ban chủ nhiệm có tab Đóng quỹ (FR-FIN-09). */
+/** FR-FIN-06: sổ Quỹ chung cho mọi thành viên (SRS 3.5); quỹ sự kiện (FR-FIN-11); tab Đóng quỹ của ban chủ nhiệm (FR-FIN-09); khoản đóng của tôi (FR-FIN-13). */
 export function FinancePage() {
   const vm = useFinancePageViewModel()
   return (
@@ -47,19 +48,18 @@ export function FinancePage() {
       )}
       {/* Luôn giữ cùng cấu trúc Tabs để sổ Quỹ chung không bị gắn lại khi biết có quỹ sự kiện. */}
       <Tabs value={vm.view} onValueChange={vm.setView}>
-        {(vm.hasEventFunds || vm.canViewDues || vm.canViewReport) && (
-          <TabsBar
-            aria-label="Chọn quỹ"
-            active={vm.view}
-            className="mb-5"
-            items={[
-              { value: 'general', label: 'Quỹ chung' },
-              ...(vm.hasEventFunds ? [{ value: 'events', label: 'Quỹ sự kiện', count: vm.eventFundCount }] : []),
-              ...(vm.canViewDues ? [{ value: 'dues', label: 'Đóng quỹ' }] : []),
-              ...(vm.canViewReport ? [{ value: 'report', label: 'Báo cáo' }] : []),
-            ]}
-          />
-        )}
+        <TabsBar
+          aria-label="Chọn quỹ"
+          active={vm.view}
+          className="mb-5"
+          items={[
+            { value: 'general', label: 'Quỹ chung' },
+            ...(vm.hasEventFunds ? [{ value: 'events', label: 'Quỹ sự kiện', count: vm.eventFundCount }] : []),
+            ...(vm.canViewDues ? [{ value: 'dues', label: 'Đóng quỹ' }] : []),
+            ...(vm.canViewReport ? [{ value: 'report', label: 'Báo cáo' }] : []),
+            { value: 'mine', label: 'Khoản đóng của tôi' },
+          ]}
+        />
         <TabsContent value="general">
           <FundPanel fundId={vm.generalFundId} />
         </TabsContent>
@@ -78,6 +78,9 @@ export function FinancePage() {
             <FinanceReportPanel active={vm.view === 'report'} />
           </TabsContent>
         )}
+        <TabsContent value="mine">
+          <MyDuesPanel clubId={vm.clubId} active={vm.view === 'mine'} highlightId={vm.highlightDuesId} />
+        </TabsContent>
       </Tabs>
     </div>
   )

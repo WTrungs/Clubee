@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { expectNoHorizontalScroll, loginAs, openNotification, settleToast, snap, switchUser } from './helpers.ts'
+import { expectNoHorizontalScroll, loginAs, openNavLink, openNotification, settleToast, snap, switchUser } from './helpers.ts'
 
 /** Ngày dd/mm/yyyy cách hôm nay `days` ngày theo giờ Việt Nam. */
 function vnDateText(days: number): string {
@@ -74,9 +74,25 @@ test.describe('Đóng quỹ', () => {
     // Không tải lại trang: mock chạy trong trình duyệt nên tải lại là mất đợt vừa mở.
     await switchUser(page, 'Võ Ngọc Mai', 'thao.mai@demo.test')
     await openNotification(page, /Đóng quỹ: Quỹ học kỳ 2/)
-    // Thành viên không có tab Đóng quỹ nên về sổ Quỹ chung.
+    // Thành viên không có tab Đóng quỹ nên vào Khoản đóng của tôi (FR-FIN-13).
     await page.waitForURL((url) => url.pathname === '/clubs/c-guitar/finance')
-    await expect(page.getByRole('region', { name: 'Số dư Quỹ chung' })).toBeVisible()
     await expect(page.getByRole('tab', { name: 'Đóng quỹ' })).toHaveCount(0)
+    await expect(page.getByRole('tab', { name: 'Khoản đóng của tôi' })).toHaveAttribute('aria-selected', 'true')
+    const thaoDues = page.getByRole('listitem', { name: 'Đợt Quỹ học kỳ 2' })
+    await expect(thaoDues).toContainText('Bạn được giảm còn 60.000 đ')
+    await expect(page.getByRole('region', { name: 'Tổng còn thiếu' })).toContainText('Bạn còn thiếu 160.000 đ ở 2 đợt đang mở')
+
+    // Người nộp một phần thấy số đã nộp, số còn thiếu và khoản thu tương ứng.
+    await switchUser(page, 'Mai Phương Thảo', 'linh.dang@demo.test')
+    await openNavLink(page, 'Tài chính')
+    await page.getByRole('tab', { name: 'Khoản đóng của tôi' }).click()
+    const linh = page.getByRole('listitem', { name: 'Đợt Quỹ học kỳ 2' })
+    await expect(linh).toContainText('Nộp một phần')
+    await expect(linh).toContainText('50.000 đ')
+    await expect(linh).toContainText('70.000 đ')
+    await expectNoHorizontalScroll(page)
+    await snap(page, testInfo, 'myDues')
+    await linh.getByRole('link', { name: /^50\.000 đ ngày/ }).click()
+    await expect(page.getByRole('dialog', { name: 'Khoản thu' })).toContainText('Đóng quỹ Quỹ học kỳ 2: Đặng Khánh Linh')
   })
 })

@@ -40,7 +40,7 @@ export function notificationPath(target: NotificationTarget | null): string | nu
     case 'FINANCE':
       return club && id ? `/clubs/${club}/finance?tx=${id}` : null
     case 'DUES':
-      // Ban chủ nhiệm mở thẳng đợt; thành viên phải đóng không có tab Đóng quỹ nên trang tự về sổ Quỹ chung.
+      // Ban chủ nhiệm mở thẳng đợt; thành viên không có tab Đóng quỹ thì trang mở Khoản đóng của tôi (FR-FIN-13).
       return club && id ? `/clubs/${club}/finance?view=dues&dues=${id}` : null
     case 'ADVANCE':
       // Chi tiết tạm ứng mở trong sheet ở trang Tài chính, máy chủ kiểm lại quyền xem (BR-SEC-02).
