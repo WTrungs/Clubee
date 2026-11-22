@@ -158,3 +158,34 @@ export interface ClubDirectoryQuery {
   page?: number
   size?: number
 }
+
+/** Thẻ CLB ở danh bạ công khai (FR-CLB-05): chỉ thông tin ai cũng xem được theo SRS 3.5, khách chưa đăng nhập cũng xem. */
+export interface PublicClubCard extends ClubContacts {
+  id: string
+  name: string
+  shortName: string
+  field: string
+  description: string
+  logoUrl: string | null
+  openRecruitmentCount: number
+}
+
+export interface PublicClubQuery {
+  q?: string
+  field?: string
+  page?: number
+  size?: number
+}
+
+/** Đợt tuyển đang nhận đơn hiện ở trang công khai của CLB. */
+export interface PublicRecruitmentSummary {
+  id: string
+  name: string
+  closesAt: string
+  departments: Array<{ id: string; name: string; quota: number }>
+}
+
+/** Trang công khai của CLB: không có sĩ số, nội quy, cơ cấu hay người giữ chức vụ (SRS 3.5). */
+export interface PublicClubProfile extends PublicClubCard {
+  openRecruitments: PublicRecruitmentSummary[]
+}

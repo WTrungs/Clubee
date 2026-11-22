@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from "motion/react";
 import { CalendarCheck2, KanbanSquare, UsersRound, Wallet } from "lucide-react";
-import { useLocation, useOutlet } from "react-router";
+import { Link, useLocation, useOutlet } from "react-router";
 import {
   duration,
   easeOut,
@@ -121,9 +121,14 @@ export function AuthLayout() {
       </aside>
 
       <main className="flex min-h-dvh flex-col px-4 py-6 sm:px-8">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-2">
           <Logo className="lg:invisible" />
-          <ThemeToggle />
+          <div className="flex items-center gap-1">
+            <Link to="/explore" className="inline-flex h-11 items-center rounded-lg px-3 text-sm font-semibold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
+              Danh bạ CLB
+            </Link>
+            <ThemeToggle />
+          </div>
         </div>
         <div className="flex flex-1 items-center justify-center py-8">
           <div className="w-full max-w-md">

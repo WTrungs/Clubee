@@ -4,6 +4,7 @@ import { FullScreenLoader } from '@/shared/ui/FullScreenLoader'
 import { AppLayout } from './layouts/AppLayout'
 import { AuthLayout } from './layouts/AuthLayout'
 import { ClubLayout } from './layouts/ClubLayout'
+import { PublicLayout } from './layouts/PublicLayout'
 import { NotFoundPage } from './NotFoundPage'
 import { RouteErrorPage } from './RouteErrorPage'
 
@@ -27,6 +28,14 @@ export const router = createBrowserRouter([
               },
             ],
           },
+        ],
+      },
+      {
+        // Danh bạ công khai cho cả khách chưa đăng nhập (FR-CLB-05, SRS 3.5).
+        element: <PublicLayout />,
+        children: [
+          { path: '/explore', lazy: () => import('@/features/club/view/PublicDirectoryPage').then((module) => ({ Component: module.PublicDirectoryPage })) },
+          { path: '/explore/:clubId', lazy: () => import('@/features/club/view/PublicClubPage').then((module) => ({ Component: module.PublicClubPage })) },
         ],
       },
       {
