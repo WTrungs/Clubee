@@ -1,12 +1,10 @@
 import { CalendarCheck2, ClipboardList, HandCoins, History, UserRoundX } from 'lucide-react'
-import type { ReactNode } from 'react'
 import { Link } from 'react-router'
 import { memberStatusDisplay } from '@/features/account/viewModel/memberStatus'
 import { attendanceStatusDisplay } from '@/features/attendance/viewModel/attendanceDisplay'
 import { duesItemStatusDisplay } from '@/features/finance/viewModel/duesDisplay'
 import { formatDate } from '@/shared/format/formatDate'
 import { formatMoney } from '@/shared/format/formatMoney'
-import { cn } from '@/shared/lib/cn'
 import { Badge } from '@/shared/ui/Badge'
 import { FormAlert } from '@/shared/ui/FormAlert'
 import { FormField } from '@/shared/ui/FormField'
@@ -17,38 +15,10 @@ import { Skeleton } from '@/shared/ui/Skeleton'
 import { EmptyState, ErrorState } from '@/shared/ui/StateViews'
 import { Tabs, TabsBar, TabsContent } from '@/shared/ui/Tabs'
 import type { AttendanceTally, MyReport } from '../model/myReportTypes'
-import { rateLabel, useMyActivityViewModel, type MyActivityViewModel } from '../viewModel/useMyActivityViewModel'
+import { rateLabel } from '../viewModel/reportDisplay'
+import { useMyActivityViewModel, type MyActivityViewModel } from '../viewModel/useMyActivityViewModel'
+import { ReportSection as Section, Stat } from './ReportBlocks'
 import { ReportPeriodPicker } from './ReportPeriodPicker'
-
-function Stat({ label, value, tone }: { label: string; value: ReactNode; tone?: 'success' | 'danger' | 'warning' }) {
-  return (
-    <div className="rounded-2xl border bg-card p-4 shadow-sm">
-      <p className="text-xs text-muted-foreground">{label}</p>
-      <p
-        className={cn(
-          'mt-1 text-xl font-extrabold tabular-nums',
-          tone === 'success' && 'text-status-success',
-          tone === 'danger' && 'text-status-danger',
-          tone === 'warning' && 'text-status-warning',
-        )}
-      >
-        {value}
-      </p>
-    </div>
-  )
-}
-
-function Section({ title, icon, children }: { title: string; icon: ReactNode; children: ReactNode }) {
-  return (
-    <section className="space-y-3">
-      <h2 className="flex items-center gap-2 text-base font-bold">
-        {icon}
-        {title}
-      </h2>
-      {children}
-    </section>
-  )
-}
 
 function AttendanceStats({ tally }: { tally: AttendanceTally }) {
   return (

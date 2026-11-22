@@ -6,7 +6,6 @@ import type {
   CreateSubcommitteeRequest,
   EventAction,
   EventDetail,
-  EventProgress,
   EventStatus,
   EventSummary,
   EventTransitionAction,
@@ -19,7 +18,6 @@ import type {
   StaffCandidate,
   Subcommittee,
   SubcommitteeAction,
-  TaskProgressCounts,
 } from '@/features/event/model/eventTypes'
 import { db } from '../db'
 import { API, currentUser, matchesKeyword, networkDelay, newId, paginate, problem, writer } from '../mockHttp'
@@ -57,8 +55,7 @@ import {
 import { acceptedCoHost, clubNameOf, coHostCandidates, hasAcceptedCoHost } from '../mockCoHosts'
 import { isBoardAppointee, openHandoverOf } from '../mockTerms'
 import { nowIso } from '../mockTime'
-import { isTaskOverdue } from '../mockScopes'
-import type { DbTask } from '../seed/taskSeed'
+import { eventReport } from '../mockEventReport'
 import type { DbEvent, DbEventStaff, DbRegistration, DbScheduleChange, DbSubcommittee } from '../seed/eventSeed'
 
 const CANCELLABLE: EventStatus[] = ['DRAFT', 'PENDING_APPROVAL', 'APPROVED', 'REGISTRATION_OPEN']
@@ -110,8 +107,8 @@ function eventActions(userId: string, event: DbEvent): EventAction[] {
   if (closable(event) && runs) actions.push('CLOSE')
   if (STAFF_ACTIVE.includes(event.status) && can(userId, event.clubId, 'MANAGE_EVENT_STAFF', eventScope(event))) actions.push('MANAGE_SUBCOMMITTEES')
   if (registrationOpen(event) && isActiveMember(userId, event.clubId) && !myRegistration(userId, event)) actions.push('REGISTER')
-  // Ban chủ nhiệm CLB đồng tổ chức xem cơ cấu và tiến độ, không xem danh sách tham dự (FR-EVT-09, chốt bản hẹp).
-  if (canViewStaff(userId, event)) actions.push('VIEW_STAFF', 'VIEW_PROGRESS')
+  // Ban chủ nhiệm CLB đồng tổ chức xem cơ cấu và báo cáo, không xem danh sách tham dự (FR-EVT-09, FR-RPT-05).
+  if (canViewStaff(userId, event)) actions.push('VIEW_STAFF', 'VIEW_REPORT')
   if (isOrganizer(userId, event)) actions.push('VIEW_REGISTRATIONS')
   const fund = eventFundOf(event.id)
   if (fund && canViewFund(userId, fund)) actions.push('VIEW_FUND')
@@ -169,33 +166,6 @@ function viewingAsCoHost(userId: string, event: DbEvent): { id: string; name: st
   if (canAccessClub(userId, event.clubId) || isEventStaff(userId, event)) return null
   const clubId = coHostBoardClubOf(userId, event)
   return clubId ? { id: clubId, name: clubNameOf(clubId) } : null
-}
-
-const emptyCounts = (): TaskProgressCounts => ({ total: 0, assigned: 0, inProgress: 0, pendingReview: 0, done: 0, overdue: 0 })
-
-/** Đếm việc theo trạng thái, bỏ việc Đã hủy; quá hạn tính theo BR-TASK-03. */
-function countTasks(tasks: DbTask[]): TaskProgressCounts {
-  const counts = emptyCounts()
-  for (const task of tasks) {
-    if (task.status === 'CANCELLED') continue
-    counts.total += 1
-    if (task.status === 'ASSIGNED') counts.assigned += 1
-    if (task.status === 'IN_PROGRESS') counts.inProgress += 1
-    if (task.status === 'PENDING_REVIEW') counts.pendingReview += 1
-    if (task.status === 'DONE') counts.done += 1
-    if (isTaskOverdue(task)) counts.overdue += 1
-  }
-  return counts
-}
-
-/** FR-EVT-09: tiến độ là số việc theo tiểu ban, không lộ nội dung việc cho người không được xem việc. */
-function eventProgress(event: DbEvent): EventProgress {
-  const subcommittees = db.subcommittees.filter((subcommittee) => subcommittee.eventId === event.id)
-  const tasksOf = (subcommitteeId: string) => db.tasks.filter((task) => task.scopeType === 'SUBCOMMITTEE' && task.scopeId === subcommitteeId)
-  return {
-    total: countTasks(subcommittees.flatMap((subcommittee) => tasksOf(subcommittee.id))),
-    subcommittees: subcommittees.map((subcommittee) => ({ id: subcommittee.id, name: subcommittee.name, counts: countTasks(tasksOf(subcommittee.id)) })),
-  }
 }
 
 function toScheduleChange(change: DbScheduleChange | undefined): ScheduleChange | null {
@@ -530,16 +500,16 @@ export const eventHandlers = [
     return HttpResponse.json(toDetail(event, user.value.id))
   }),
 
-  http.get(`${API}/clubs/:clubId/events/:eventId/progress`, async ({ params }) => {
+  http.get(`${API}/clubs/:clubId/events/:eventId/report`, async ({ params }) => {
     await networkDelay()
     const user = currentUser()
     if (!user.ok) return user.response
     const event = findEvent(params)
     if (!event || !canViewEvent(user.value.id, event)) return problem(404, 'Không tìm thấy sự kiện.', 'EVENT_NOT_FOUND')
-    if (!eventActions(user.value.id, event).includes('VIEW_PROGRESS')) {
-      return problem(403, 'Chỉ ban tổ chức, ban chủ nhiệm và ban chủ nhiệm CLB đồng tổ chức xem được tiến độ.', 'FORBIDDEN')
+    if (!eventActions(user.value.id, event).includes('VIEW_REPORT')) {
+      return problem(403, 'Chỉ ban tổ chức, ban chủ nhiệm và ban chủ nhiệm CLB đồng tổ chức xem được báo cáo sự kiện.', 'FORBIDDEN')
     }
-    return HttpResponse.json(eventProgress(event))
+    return HttpResponse.json(eventReport(event, user.value.id))
   }),
 
   http.get(`${API}/clubs/:clubId/events/:eventId/subcommittees`, async ({ params }) => {

@@ -5,7 +5,8 @@ import { server } from '@/api/mocks/server'
 import { vnDate } from '@/api/mocks/mockTime'
 import { createTestWrapper, signInAs } from '@/testUtils'
 import type { ReportPeriods } from '../model/reportPeriodTypes'
-import { rateLabel, useMyActivityViewModel } from './useMyActivityViewModel'
+import { rateLabel } from './reportDisplay'
+import { useMyActivityViewModel } from './useMyActivityViewModel'
 import { useReportPeriodParams } from './useReportPeriodParams'
 
 const periods: ReportPeriods = {

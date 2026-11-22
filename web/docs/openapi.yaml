@@ -2818,24 +2818,29 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
         '422': { $ref: '#/components/responses/UnprocessableEntity' }
-  /clubs/{clubId}/events/{eventId}/progress:
+  /clubs/{clubId}/events/{eventId}/report:
     get:
-      tags: [EVT]
-      operationId: getEventProgress
-      summary: Tiến độ sự kiện theo tiểu ban (FR-EVT-09)
+      tags: [RPT]
+      operationId: getEventReport
+      summary: Báo cáo sự kiện, báo cáo BTC (FR-RPT-05, FR-RPT-03, FR-EVT-09)
       description: |
-        Người có `VIEW_PROGRESS`: ban chủ nhiệm, Trưởng BTC, nhân sự BTC, ban chủ nhiệm CLB đồng tổ chức. Chỉ số việc theo
-        trạng thái (bỏ việc Đã hủy) và số quá hạn (BR-TASK-03), không có nội dung việc.
+        Thay cho route `/progress` cũ. Người có `VIEW_REPORT`: ban chủ nhiệm, Trưởng BTC, nhân sự BTC, ban chủ nhiệm CLB đồng tổ chức.
+        - `registrations`: số chỗ và số đăng ký theo trạng thái.
+        - `attendance`: từng ngày của sự kiện; rỗng khi sự kiện chưa duyệt hoặc đã hủy.
+        - `tasks`: số việc theo trạng thái của từng tiểu ban (bỏ việc Đã hủy) và số quá hạn (BR-TASK-03), không có nội dung việc.
+        - `staff`: Trưởng BTC rồi nhân sự còn trong tiểu ban, với việc mình làm chính và số ngày Có mặt hoặc Đi muộn. Chỉ Trưởng BTC và
+          ban chủ nhiệm CLB chủ trì; người khác nhận `null`.
+        - `fund`: tính theo giao dịch đã ghi sổ; chỉ người xem được quỹ sự kiện, người khác nhận `null`.
         Lỗi: 403 `FORBIDDEN`; 404 `EVENT_NOT_FOUND`.
       parameters:
         - $ref: '#/components/parameters/ClubId'
         - $ref: '#/components/parameters/EventId'
       responses:
         '200':
-          description: Tiến độ.
+          description: Báo cáo sự kiện.
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/EventProgress' }
+              schema: { $ref: '#/components/schemas/EventReport' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -8351,9 +8356,9 @@ components:
       description: |
         Chuyển trạng thái cộng các quyền khác do máy chủ tính: `MANAGE_SUBCOMMITTEES`, `REGISTER`, `RESCHEDULE` (dời thời gian, FR-EVT-14),
         `VIEW_STAFF`, `VIEW_REGISTRATIONS`, `VIEW_FUND`, `VIEW_ATTENDANCE` (dữ liệu BTC, danh sách tham dự, quỹ sự kiện, điểm danh chỉ BTC và ban chủ nhiệm xem, SRS 3.5).
-        `VIEW_PROGRESS`: số việc theo tiểu ban (FR-EVT-09). Ban chủ nhiệm CLB đồng tổ chức (đang Chấp nhận, sự kiện còn hoạt
-        động) chỉ có `VIEW_PROGRESS`, `VIEW_STAFF`, `VIEW_FUND`: không có `VIEW_REGISTRATIONS`, `VIEW_ATTENDANCE` và không thao tác ghi nào.
-      enum: [SUBMIT, APPROVE, REJECT, OPEN_REGISTRATION, CANCEL, CLOSE, MANAGE_SUBCOMMITTEES, REGISTER, RESCHEDULE, VIEW_STAFF, VIEW_PROGRESS, VIEW_REGISTRATIONS, VIEW_FUND, VIEW_ATTENDANCE]
+        `VIEW_REPORT`: báo cáo sự kiện (FR-RPT-05, gồm số việc theo tiểu ban của FR-EVT-09). Ban chủ nhiệm CLB đồng tổ chức (đang Chấp nhận, sự kiện còn hoạt
+        động) chỉ có `VIEW_REPORT`, `VIEW_STAFF`, `VIEW_FUND`: không có `VIEW_REGISTRATIONS`, `VIEW_ATTENDANCE` và không thao tác ghi nào.
+      enum: [SUBMIT, APPROVE, REJECT, OPEN_REGISTRATION, CANCEL, CLOSE, MANAGE_SUBCOMMITTEES, REGISTER, RESCHEDULE, VIEW_STAFF, VIEW_REPORT, VIEW_REGISTRATIONS, VIEW_FUND, VIEW_ATTENDANCE]
     EventFormat:
       type: string
       enum: [OFFLINE, ONLINE]
@@ -8503,6 +8508,63 @@ components:
               id: { type: string }
               name: { type: string }
               counts: { $ref: '#/components/schemas/TaskProgressCounts' }
+    EventReport:
+      type: object
+      required: [registrations, attendance, tasks, staff, fund]
+      properties:
+        registrations:
+          type: object
+          required: [capacity, confirmed, waitlisted, reconfirmPending, cancelled]
+          properties:
+            capacity: { type: [integer, 'null'], description: Không giới hạn chỗ khi null. }
+            confirmed: { type: integer }
+            waitlisted: { type: integer }
+            reconfirmPending: { type: integer }
+            cancelled: { type: integer }
+        attendance:
+          type: array
+          items:
+            type: object
+            required: [day, closed, expected, tally]
+            properties:
+              day: { type: string, format: date }
+              closed: { type: boolean }
+              expected: { type: integer, description: Người giữ chỗ; sau khi chốt là người có bản ghi (không tính người phát sinh). }
+              tally: { $ref: '#/components/schemas/AttendanceTally' }
+        tasks: { $ref: '#/components/schemas/EventProgress' }
+        staff:
+          description: Chỉ Trưởng BTC và ban chủ nhiệm CLB chủ trì; người khác nhận null.
+          oneOf:
+            - type: array
+              items: { $ref: '#/components/schemas/EventStaffStats' }
+            - type: 'null'
+        fund:
+          description: Chỉ người xem được quỹ sự kiện; null khi không xem được hoặc sự kiện chưa có quỹ.
+          oneOf:
+            - $ref: '#/components/schemas/EventFundStats'
+            - type: 'null'
+    EventStaffStats:
+      type: object
+      required: [person, subcommitteeName, role, open, done, overdue, presentDays, days]
+      properties:
+        person: { $ref: '#/components/schemas/PersonRef' }
+        subcommitteeName: { type: [string, 'null'] }
+        role: { type: string, enum: [LEAD, MEMBER, COLLABORATOR, CO_HOST] }
+        open: { type: integer, description: Việc Đã giao, Đang làm, Chờ nghiệm thu. }
+        done: { type: integer }
+        overdue: { type: integer }
+        presentDays: { type: integer, description: Số ngày Có mặt hoặc Đi muộn. }
+        days: { type: integer, description: Số ngày của sự kiện đã mở hoặc đã chốt điểm danh; ngày chưa tới không tính. }
+    EventFundStats:
+      type: object
+      required: [balance, income, expense, pendingCount, pendingAmount, openAdvanceCount]
+      properties:
+        balance: { type: integer }
+        income: { type: integer }
+        expense: { type: integer }
+        pendingCount: { type: [integer, 'null'], description: Khoản Đã đề xuất hoặc Đã duyệt, chưa ghi sổ; null với người không phải ban chủ nhiệm hoặc Trưởng BTC (như `FundDetail`). }
+        pendingAmount: { type: [integer, 'null'] }
+        openAdvanceCount: { type: integer }
     EventPage:
       allOf:
         - $ref: '#/components/schemas/PageMeta'

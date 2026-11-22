@@ -18,7 +18,7 @@ import { EventCover } from './EventCover'
 import { EventLifecycle } from './EventLifecycle'
 import { EventPlace, EventStatusBadge } from './EventMeta'
 import { EventOverviewTab } from './EventOverviewTab'
-import { EventProgressTab } from './EventProgressTab'
+import { EventReportTab } from './EventReportTab'
 import { EventRegistrationTab } from './EventRegistrationTab'
 import { EventStaffTab } from './EventStaffTab'
 import { EventTransitionDialogs } from './EventTransitionDialogs'
@@ -110,7 +110,7 @@ export function EventDetailPage() {
         <p role="note" className="flex items-start gap-2 rounded-xl bg-status-info-soft p-3 text-sm text-status-info">
           <Eye aria-hidden className="mt-0.5 size-4 shrink-0" />
           <span>
-            Bạn đang xem với tư cách ban chủ nhiệm {event.viewingAsCoHost.name}, CLB đồng tổ chức. Chỉ xem tiến độ, nhân sự và quỹ, không thao tác được.
+            Bạn đang xem với tư cách ban chủ nhiệm {event.viewingAsCoHost.name}, CLB đồng tổ chức. Chỉ xem báo cáo, nhân sự và quỹ, không thao tác được.
           </span>
         </p>
       )}
@@ -139,9 +139,9 @@ export function EventDetailPage() {
         <TabsContent value="overview" className="pt-5">
           <EventOverviewTab event={event} />
         </TabsContent>
-        {vm.canViewProgress && (
-          <TabsContent value="progress" className="pt-5">
-            <EventProgressTab clubId={vm.clubId} eventId={event.id} />
+        {vm.canViewReport && (
+          <TabsContent value="report" className="pt-5">
+            <EventReportTab clubId={vm.clubId} eventId={event.id} />
           </TabsContent>
         )}
         {vm.canViewStaff && (
