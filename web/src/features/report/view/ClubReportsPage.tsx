@@ -16,6 +16,7 @@ import type { ClubReport, DepartmentReport } from '../model/clubReportTypes'
 import { rateLabel } from '../viewModel/reportDisplay'
 import { departmentTotals, useClubReportsViewModel, type ClubReportsViewModel } from '../viewModel/useClubReportsViewModel'
 import { AttendanceStats, ReportSection, Stat } from './ReportBlocks'
+import { AuditLogPanel } from './AuditLogPanel'
 import { ReportPeriodPicker } from './ReportPeriodPicker'
 
 const icon = 'size-5 text-muted-foreground'
@@ -228,6 +229,13 @@ function DepartmentTab({ report }: { report: DepartmentReport }) {
 }
 
 function Body({ vm }: { vm: ClubReportsViewModel }) {
+  if (vm.tab === 'audit') {
+    return (
+      <TabsContent value="audit">
+        <AuditLogPanel clubId={vm.clubId} />
+      </TabsContent>
+    )
+  }
   if (vm.invalidReasons) return <FormAlert message={vm.invalidReasons.join(' ')} />
   if (vm.periodsError) return <ErrorState error={vm.periodsError} onRetry={vm.retryPeriods} />
   if (vm.noDepartments) return <EmptyState icon={ClipboardList} title="Chưa có ban nào" description="Báo cáo ban hiện khi CLB có ban đang hoạt động." />
@@ -250,7 +258,7 @@ function Body({ vm }: { vm: ClubReportsViewModel }) {
   )
 }
 
-/** FR-RPT-03 (phần ban), FR-RPT-04: báo cáo CLB cho ban chủ nhiệm, báo cáo ban cho ban chủ nhiệm và trưởng, phó ban. */
+/** FR-RPT-03 (phần ban), FR-RPT-04, FR-RPT-06: báo cáo CLB và nhật ký cho ban chủ nhiệm, báo cáo ban cho ban chủ nhiệm và trưởng, phó ban. */
 export function ClubReportsPage() {
   const vm = useClubReportsViewModel()
   if (!vm.tab) {
@@ -263,23 +271,25 @@ export function ClubReportsPage() {
   }
   return (
     <div>
-      <PageHeader title="Báo cáo" description="Sĩ số, chuyên cần, sự kiện, thu chi của CLB và tình hình từng ban theo kỳ." />
+      <PageHeader title="Báo cáo" description="Sĩ số, chuyên cần, sự kiện, thu chi của CLB, tình hình từng ban theo kỳ và nhật ký thao tác." />
       <Tabs value={vm.tab} onValueChange={vm.setTab}>
         <TabsBar items={vm.tabs} active={vm.tab} aria-label="Loại báo cáo" />
         <div className="space-y-5 pt-5">
-          <ReportPeriodPicker params={vm.periodParams} loading={vm.periodsLoading}>
-            {vm.tab === 'department' && vm.departments.length > 1 && (
-              <FormField label="Ban" className="sm:w-56">
-                <NativeSelect value={vm.department?.id ?? ''} onChange={(event) => vm.setDepartment(event.target.value)}>
-                  {vm.departments.map((option) => (
-                    <option key={option.id} value={option.id}>
-                      {option.name}
-                    </option>
-                  ))}
-                </NativeSelect>
-              </FormField>
-            )}
-          </ReportPeriodPicker>
+          {vm.usesPeriod && (
+            <ReportPeriodPicker params={vm.periodParams} loading={vm.periodsLoading}>
+              {vm.tab === 'department' && vm.departments.length > 1 && (
+                <FormField label="Ban" className="sm:w-56">
+                  <NativeSelect value={vm.department?.id ?? ''} onChange={(event) => vm.setDepartment(event.target.value)}>
+                    {vm.departments.map((option) => (
+                      <option key={option.id} value={option.id}>
+                        {option.name}
+                      </option>
+                    ))}
+                  </NativeSelect>
+                </FormField>
+              )}
+            </ReportPeriodPicker>
+          )}
           <Body vm={vm} />
         </div>
       </Tabs>

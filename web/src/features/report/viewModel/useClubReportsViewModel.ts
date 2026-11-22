@@ -8,7 +8,7 @@ import type { AttendanceTally, TaskTally } from '../model/myReportTypes'
 import { periodErrorReasons } from './reportDisplay'
 import { useReportPeriodParams } from './useReportPeriodParams'
 
-export type ClubReportTab = 'club' | 'department'
+export type ClubReportTab = 'club' | 'department' | 'audit'
 
 export const clubReportQueryKeys = {
   all: ['clubReport'] as const,
@@ -23,6 +23,7 @@ export function clubReportTabs(actions: readonly ClubAction[]): Array<{ value: C
   return [
     ...(actions.includes('VIEW_CLUB_REPORT') ? [{ value: 'club' as const, label: 'Báo cáo CLB' }] : []),
     ...(actions.includes('VIEW_DEPARTMENT_REPORTS') ? [{ value: 'department' as const, label: 'Báo cáo ban' }] : []),
+    ...(actions.includes('VIEW_AUDIT_LOG') ? [{ value: 'audit' as const, label: 'Nhật ký' }] : []),
   ]
 }
 
@@ -48,15 +49,17 @@ export const departmentTotals = (rows: readonly DepartmentMemberRow[]) => ({
   attendance: sumAttendance(rows.map((row) => row.attendance)),
 })
 
-/** FR-RPT-03 (phần ban), FR-RPT-04: trang Báo cáo của CLB; tab, kỳ, ban nằm trên URL. */
+/** FR-RPT-03 (phần ban), FR-RPT-04, FR-RPT-06: trang Báo cáo của CLB; tab, kỳ, ban nằm trên URL. */
 export function useClubReportsViewModel() {
   const { clubId, club } = useCurrentClub()
   const [searchParams, setSearchParams] = useSearchParams()
   const tabs = clubReportTabs(club.allowedActions)
   const requested = searchParams.get('tab')
   const tab = tabs.find((item) => item.value === requested)?.value ?? tabs[0]?.value ?? null
+  // Tab Nhật ký có bộ lọc riêng, không dùng kỳ báo cáo.
+  const usesPeriod = tab === 'club' || tab === 'department'
 
-  const periods = useQuery({ queryKey: clubReportQueryKeys.periods(clubId), queryFn: () => clubReportRepository.periods(clubId), enabled: tab !== null })
+  const periods = useQuery({ queryKey: clubReportQueryKeys.periods(clubId), queryFn: () => clubReportRepository.periods(clubId), enabled: usesPeriod })
   const periodParams = useReportPeriodParams(periods.data)
   const departments = useQuery({
     queryKey: clubReportQueryKeys.departments(clubId),
@@ -96,10 +99,11 @@ export function useClubReportsViewModel() {
     tab,
     setTab: (value: string) => update({ tab: value }),
     periodParams,
-    periodsLoading: periods.isPending && tab !== null,
+    usesPeriod,
+    periodsLoading: periods.isPending && usesPeriod,
     periodsError: periods.error,
     retryPeriods: () => void periods.refetch(),
-    waitingForPeriod: tab !== null && !periods.isPending && !periods.error && !periodParams.ready,
+    waitingForPeriod: usesPeriod && !periods.isPending && !periods.error && !periodParams.ready,
     departments: options,
     department,
     setDepartment: (value: string) => update({ department: value }),
@@ -109,7 +113,7 @@ export function useClubReportsViewModel() {
     departmentReport: departmentReport.data ?? null,
     /** Đang tải kỳ hoặc ban mới mà vẫn hiện số cũ: làm mờ để không đọc nhầm. */
     refreshing: active.isPlaceholderData,
-    loading: periodParams.ready && active.isPending && (tab === 'club' || department !== null),
+    loading: usesPeriod && periodParams.ready && active.isPending && (tab === 'club' || department !== null),
     error: reasons ? null : (active.error ?? departments.error),
     invalidReasons: reasons,
     refetch: () => void (departments.error ? departments.refetch() : active.refetch()),

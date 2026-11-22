@@ -1,11 +1,11 @@
 import type { TransactionStatus } from '@/features/finance/model/financeTypes'
-import { membershipAuditLabel, positionAuditLabel, transactionAuditLabel, userNameOf, type AuditLabelSource } from '../auditLabels'
+import { auditNamesOf, membershipAuditLabel, positionAuditLabel, transactionAuditLabel, userNameOf, type AuditLabelSource } from '../auditLabels'
 import type { DbAuditLog, DbTransaction, MockDb } from '../db'
 import { SYSTEM_ACTOR } from '../mockSchedule'
 
 export type AuditSeedSource = AuditLabelSource & Pick<MockDb, 'positions' | 'memberships' | 'transactions'>
 
-type SeedEntry = Omit<DbAuditLog, 'id' | 'actorName'>
+type SeedEntry = Omit<DbAuditLog, 'id' | 'actorName' | 'names'>
 
 /** Các lần đổi trạng thái của một giao dịch mẫu, dựng lại từ mốc thời gian đã lưu; mốc nào không lưu (ví dụ lúc rút) thì bỏ qua. */
 function transactionTrail(source: AuditSeedSource, transaction: DbTransaction): SeedEntry[] {
@@ -83,5 +83,5 @@ export function createAuditSeed(source: AuditSeedSource): DbAuditLog[] {
   ]
   return entries
     .toSorted((a, b) => a.at.localeCompare(b.at))
-    .map((entry, index) => ({ id: `log-seed-${index + 1}`, actorName: userNameOf(source, entry.actorId), ...entry }))
+    .map((entry, index) => ({ id: `log-seed-${index + 1}`, actorName: userNameOf(source, entry.actorId), names: auditNamesOf(source, entry.before, entry.after), ...entry }))
 }

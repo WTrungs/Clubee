@@ -5672,6 +5672,58 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+  /clubs/{clubId}/audit-logs:
+    get:
+      tags: [RPT]
+      operationId: listAuditLogs
+      summary: Xem nhật ký thao tác của CLB (FR-RPT-06, NFR-SEC-05)
+      description: |
+        Chỉ ban chủ nhiệm. Chỉ đọc: không có route sửa hay xóa nhật ký. Mới nhất trước, 50 dòng một trang. Thao tác của Admin chỉ
+        có khi gắn với CLB này (ví dụ duyệt chuyển quyền Chủ nhiệm); thao tác cấp hệ thống như khóa tài khoản không hiện.
+        `actor.fullName`, `objectLabel` chụp lúc ghi (BR-DATA-02). `names`: họ tên lúc ghi của mã người dùng nằm trong `before`, `after` (BR-DATA-02).
+        `from`, `to` là ngày theo giờ Việt Nam, tính cả hai đầu.
+        Lỗi: 400 `VALIDATION` (`objectType`, `from`, `to`); 403 `NOT_A_MEMBER`, `FORBIDDEN`; 404 `CLUB_NOT_FOUND`.
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - { name: actorId, in: query, schema: { type: string } }
+        - { name: objectType, in: query, schema: { $ref: '#/components/schemas/AuditObjectType' } }
+        - { name: objectId, in: query, schema: { type: string } }
+        - { name: from, in: query, schema: { type: string, format: date } }
+        - { name: to, in: query, schema: { type: string, format: date } }
+        - $ref: '#/components/parameters/Page'
+        - { name: size, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 50 } }
+      responses:
+        '200':
+          description: Một trang nhật ký.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuditLogPage' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /clubs/{clubId}/audit-log-actors:
+    get:
+      tags: [RPT]
+      operationId: listAuditLogActors
+      summary: Những người có tên trong nhật ký của CLB (FR-RPT-06)
+      description: |
+        Chỉ ban chủ nhiệm. Kể cả người đã rời CLB và Admin có thao tác gắn với CLB; họ tên theo lần ghi gần nhất; sắp theo tên.
+        Lỗi: 403 `NOT_A_MEMBER`, `FORBIDDEN`; 404 `CLUB_NOT_FOUND`.
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - { name: q, in: query, schema: { type: string } }
+      responses:
+        '200':
+          description: Người làm.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/PersonRef' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
   /clubs/{clubId}/finance-report/periods:
     get:
       tags: [FIN]
@@ -9725,6 +9777,35 @@ components:
                   status: { $ref: '#/components/schemas/AttendanceStatus' }
                   method: { type: string, enum: [MANUAL, QR] }
                   edited: { type: boolean }
+    AuditObjectType:
+      type: string
+      enum: [ACCOUNT, CLUB, POSITION, PERMISSION, TRANSFER_REQUEST, MEMBERSHIP, TRANSACTION, ATTENDANCE, TERM, HANDOVER_ITEM]
+    AuditLogEntry:
+      type: object
+      required: [id, at, actor, action, objectType, objectId, objectLabel, before, after, reason, names]
+      properties:
+        id: { type: string }
+        at: { type: string, format: date-time }
+        actor: { $ref: '#/components/schemas/PersonRef' }
+        action: { type: string, description: 'Ví dụ `GRANT_POSITION`, `CHANGE_MEMBER_STATUS`, `CHANGE_TRANSACTION_STATUS`, `ATTENDANCE_EDIT`.' }
+        objectType: { $ref: '#/components/schemas/AuditObjectType' }
+        objectId: { type: string }
+        objectLabel: { type: string }
+        before: { type: [object, 'null'], additionalProperties: true }
+        after: { type: [object, 'null'], additionalProperties: true }
+        reason: { type: [string, 'null'] }
+        names:
+          type: object
+          additionalProperties: { type: string }
+    AuditLogPage:
+      allOf:
+        - $ref: '#/components/schemas/PageMeta'
+        - type: object
+          required: [content]
+          properties:
+            content:
+              type: array
+              items: { $ref: '#/components/schemas/AuditLogEntry' }
     TaskTally:
       type: object
       required: [doneOnTime, doneLate, open, overdue]

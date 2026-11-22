@@ -14,6 +14,19 @@ const TRANSACTION_KINDS: Record<TransactionType, string> = {
   TRANSFER: 'Chuyển quỹ',
 }
 
+/** Trường trong `before`, `after` chứa mã người dùng; họ tên được chụp kèm lúc ghi (BR-DATA-02). */
+const AUDIT_PERSON_FIELDS = ['eventLead', 'presidents']
+
+export function auditNamesOf(source: Pick<MockDb, 'users'>, ...values: Array<Record<string, unknown> | null>): Record<string, string> {
+  const ids = values.flatMap((value) =>
+    AUDIT_PERSON_FIELDS.flatMap((field) => {
+      const raw = value?.[field]
+      return Array.isArray(raw) ? raw : [raw]
+    }),
+  )
+  return Object.fromEntries(ids.filter((id): id is string => typeof id === 'string').map((id) => [id, userNameOf(source, id)]))
+}
+
 export function userNameOf(source: Pick<MockDb, 'users'>, userId: string): string {
   if (userId === SYSTEM_ACTOR) return 'Hệ thống'
   return source.users.find((user) => user.id === userId)?.fullName ?? 'Người dùng không còn tồn tại'

@@ -22,7 +22,7 @@ async function wrapperAs(userId: string, path: string) {
 
 describe('club report helpers (FR-RPT-03, 04)', () => {
   it('shows tabs by permission', () => {
-    expect(clubReportTabs(['VIEW_CLUB_REPORT', 'VIEW_DEPARTMENT_REPORTS']).map((tab) => tab.value)).toEqual(['club', 'department'])
+    expect(clubReportTabs(['VIEW_CLUB_REPORT', 'VIEW_DEPARTMENT_REPORTS', 'VIEW_AUDIT_LOG']).map((tab) => tab.value)).toEqual(['club', 'department', 'audit'])
     expect(clubReportTabs(['VIEW_DEPARTMENT_REPORTS']).map((tab) => tab.value)).toEqual(['department'])
     expect(clubReportTabs(['MANAGE_MEMBERS'])).toEqual([])
   })
@@ -63,7 +63,7 @@ describe('ClubReportsPage', () => {
     const wrapper = await wrapperAs('u-anh', '/clubs/c-guitar/reports')
     render(<ClubReportsPage />, { wrapper })
     for (const name of ['Thành viên', 'Chuyên cần', 'Sự kiện', 'Thu chi']) expect(await screen.findByRole('region', { name })).toBeInTheDocument()
-    expect(within(screen.getByRole('tablist', { name: 'Loại báo cáo' })).getAllByRole('tab').map((tab) => tab.textContent)).toEqual(['Báo cáo CLB', 'Báo cáo ban'])
+    expect(within(screen.getByRole('tablist', { name: 'Loại báo cáo' })).getAllByRole('tab').map((tab) => tab.textContent)).toEqual(['Báo cáo CLB', 'Báo cáo ban', 'Nhật ký'])
   })
 
   it('says so when the member has no report to see', async () => {
