@@ -322,3 +322,27 @@ export interface EventQuery {
   page?: number
   size?: number
 }
+
+/** FR-CLB-07, FR-EVT-12: sự kiện mở cho khách trên trang công khai; không có BTC, quỹ, danh sách người đăng ký. */
+export interface PublicEventSummary {
+  id: string
+  clubId: string
+  clubName: string
+  name: string
+  startAt: string
+  endAt: string
+  format: EventFormat
+  location: string | null
+  capacity: number | null
+  /** `null` khi không giới hạn chỗ; 0 thì đăng ký mới vào danh sách chờ. */
+  seatsLeft: number | null
+  registrationDeadline: string | null
+}
+
+export interface PublicEventDetail extends PublicEventSummary {
+  description: string
+  clubShortName: string
+  clubLogoUrl: string | null
+  /** Đang Mở đăng ký và chưa quá hạn (BR-EVT-02). */
+  registrationOpen: boolean
+}

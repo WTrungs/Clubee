@@ -2,6 +2,8 @@ import type { PersonRef } from '@/api/commonTypes'
 import type { MemberStatus } from '@/features/account/model/accountTypes'
 import type { MembershipExit } from '@/features/member/model/memberTypes'
 import type { TermStatus } from '@/features/term/model/termTypes'
+import type { PublicEventSummary } from '@/features/event/model/eventTypes'
+import type { PublicNewsSummary } from '@/features/news/model/newsTypes'
 
 /** Hành động cấp CLB máy chủ cho phép người đang xem (quyền tính ở máy chủ, SRS 2.4). */
 export type ClubAction =
@@ -220,4 +222,8 @@ export interface PublicRecruitmentSummary {
 /** Trang công khai của CLB: không có sĩ số, nội quy, cơ cấu hay người giữ chức vụ (SRS 3.5). */
 export interface PublicClubProfile extends PublicClubCard {
   openRecruitments: PublicRecruitmentSummary[]
+  /** FR-CLB-07: 6 tin đã xuất bản mới nhất. */
+  news: PublicNewsSummary[]
+  /** FR-CLB-07: sự kiện mở cho khách đang nhận đăng ký. */
+  guestEvents: PublicEventSummary[]
 }

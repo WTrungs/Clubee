@@ -149,6 +149,7 @@ export function createEventSeed(): DbEvent[] {
       location: 'Hội trường A, Nhà văn hóa sinh viên',
       capacity: 12,
       registrationDeadline: vnDayAt(10, 23, 59),
+      openToGuests: true,
       proposerId: 'u-bao',
       approverId: 'u-anh',
     }),

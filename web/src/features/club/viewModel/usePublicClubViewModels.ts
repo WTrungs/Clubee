@@ -9,6 +9,8 @@ export const publicClubQueryKeys = {
   list: (query: PublicClubQuery) => ['publicClubs', 'list', query] as const,
   fields: ['publicClubs', 'fields'] as const,
   detail: (clubId: string) => ['publicClubs', 'detail', clubId] as const,
+  news: (clubId: string) => ['publicClubs', 'news', clubId] as const,
+  newsDetail: (clubId: string, newsId: string) => ['publicClubs', 'news', clubId, newsId] as const,
 }
 
 const PAGE_SIZE = 12
@@ -65,5 +67,18 @@ export function usePublicClubViewModel(clubId: string) {
     refetch: () => void club.refetch(),
     signedIn: Boolean(session.data),
     isAdmin: session.data?.accountType === 'ADMIN',
+  }
+}
+
+/** FR-CLB-07: một tin đã xuất bản và vài tin khác của CLB. */
+export function usePublicNewsViewModel(clubId: string, newsId: string) {
+  const news = useQuery({ queryKey: publicClubQueryKeys.newsDetail(clubId, newsId), queryFn: () => publicClubRepository.newsDetail(clubId, newsId) })
+  const others = useQuery({ queryKey: publicClubQueryKeys.news(clubId), queryFn: () => publicClubRepository.news(clubId) })
+  return {
+    news: news.data ?? null,
+    loading: news.isPending,
+    error: news.error,
+    refetch: () => void news.refetch(),
+    others: (others.data?.content ?? []).filter((item) => item.id !== newsId).slice(0, 3),
   }
 }

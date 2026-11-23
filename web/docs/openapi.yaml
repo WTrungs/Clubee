@@ -641,7 +641,8 @@ paths:
       summary: Trang công khai của CLB (FR-CLB-05)
       description: |
         Không cần đăng nhập. Thông tin công khai (SRS 3.5) và các đợt tuyển đang nhận đơn; không có sĩ số, nội quy, cơ cấu,
-        người giữ chức vụ. Tin tức và sự kiện mở cho khách thuộc FR-CLB-07. Lỗi: 404 `CLUB_NOT_FOUND` (không có hoặc không hoạt động).
+        người giữ chức vụ. FR-CLB-07: thêm 6 tin đã xuất bản mới nhất và các sự kiện mở cho khách đang nhận đăng ký.
+        Lỗi: 404 `CLUB_NOT_FOUND` (không có hoặc không hoạt động).
       security: []
       parameters:
         - $ref: '#/components/parameters/ClubId'
@@ -651,6 +652,64 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/PublicClubProfile' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /public/clubs/{clubId}/news:
+    get:
+      tags: [CLB]
+      operationId: listPublicNews
+      summary: Tin đã xuất bản của CLB trên trang công khai (FR-CLB-07)
+      description: Không cần đăng nhập. Mới nhất trước, 12 tin một trang; không ghi người viết. Lỗi 404 `CLUB_NOT_FOUND`.
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - $ref: '#/components/parameters/Page'
+      responses:
+        '200':
+          description: Trang tin.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PublicNewsPage' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /public/clubs/{clubId}/news/{newsId}:
+    get:
+      tags: [CLB]
+      operationId: getPublicNews
+      summary: Một tin đã xuất bản (FR-CLB-07)
+      description: Không cần đăng nhập. Tin Nháp, Đã ẩn trả 404 `NEWS_NOT_FOUND`; CLB không hoạt động trả 404 `CLUB_NOT_FOUND`.
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - name: newsId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Tin.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PublicNewsDetail' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /public/events/{eventId}:
+    get:
+      tags: [EVT]
+      operationId: getPublicEvent
+      summary: Trang công khai của sự kiện mở cho khách (FR-CLB-07, FR-EVT-12)
+      description: |
+        Không cần đăng nhập. Chỉ sự kiện mở cho khách đang Mở đăng ký hoặc Đang diễn ra, của CLB còn Hoạt động; không có BTC,
+        quỹ, danh sách người đăng ký. Lỗi 404 `EVENT_NOT_FOUND`.
+      security: []
+      parameters:
+        - name: eventId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Thông tin công khai của sự kiện.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PublicEventDetail' }
         '404': { $ref: '#/components/responses/NotFound' }
   /clubs:
     get:
@@ -7592,8 +7651,16 @@ components:
       allOf:
         - $ref: '#/components/schemas/PublicClubCard'
         - type: object
-          required: [openRecruitments]
+          required: [openRecruitments, news, guestEvents]
           properties:
+            news:
+              type: array
+              description: 6 tin đã xuất bản mới nhất (FR-CLB-07).
+              items: { $ref: '#/components/schemas/PublicNewsSummary' }
+            guestEvents:
+              type: array
+              description: Sự kiện mở cho khách đang nhận đăng ký, sắp diễn ra trước (FR-CLB-07).
+              items: { $ref: '#/components/schemas/PublicEventSummary' }
             openRecruitments:
               type: array
               description: Đợt đang nhận đơn, hạn gần nhất trước.
@@ -7613,6 +7680,62 @@ components:
                         id: { type: string }
                         name: { type: string }
                         quota: { type: integer, minimum: 1 }
+    PublicNewsSummary:
+      type: object
+      required: [id, title, excerpt, imageUrl, publishedAt]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        excerpt: { type: string }
+        imageUrl: { $ref: '#/components/schemas/NullableString' }
+        publishedAt: { type: string, format: date-time }
+    PublicNewsDetail:
+      allOf:
+        - $ref: '#/components/schemas/PublicNewsSummary'
+        - type: object
+          required: [body, clubId, clubName]
+          properties:
+            body: { type: string, description: 'Chữ thuần, giữ xuống dòng.' }
+            clubId: { type: string }
+            clubName: { type: string }
+    PublicNewsPage:
+      allOf:
+        - $ref: '#/components/schemas/PageMeta'
+        - type: object
+          required: [content]
+          properties:
+            content:
+              type: array
+              items: { $ref: '#/components/schemas/PublicNewsSummary' }
+    PublicEventSummary:
+      type: object
+      required: [id, clubId, clubName, name, startAt, endAt, format, location, capacity, seatsLeft, registrationDeadline]
+      properties:
+        id: { type: string }
+        clubId: { type: string }
+        clubName: { type: string }
+        name: { type: string }
+        startAt: { type: string, format: date-time }
+        endAt: { type: string, format: date-time }
+        format: { type: string, enum: [OFFLINE, ONLINE] }
+        location: { $ref: '#/components/schemas/NullableString' }
+        capacity: { type: [integer, 'null'] }
+        seatsLeft:
+          type: [integer, 'null']
+          description: '`null` khi không giới hạn chỗ; 0 thì đăng ký mới vào danh sách chờ.'
+        registrationDeadline: { type: [string, 'null'], format: date-time }
+    PublicEventDetail:
+      allOf:
+        - $ref: '#/components/schemas/PublicEventSummary'
+        - type: object
+          required: [description, clubShortName, clubLogoUrl, registrationOpen]
+          properties:
+            description: { type: string }
+            clubShortName: { type: string }
+            clubLogoUrl: { $ref: '#/components/schemas/NullableString' }
+            registrationOpen:
+              type: boolean
+              description: Đang Mở đăng ký và chưa quá hạn (BR-EVT-02).
     # Thành viên
     MemberTransitionAction:
       type: string

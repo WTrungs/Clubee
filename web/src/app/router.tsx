@@ -36,6 +36,8 @@ export const router = createBrowserRouter([
         children: [
           { path: '/explore', lazy: () => import('@/features/club/view/PublicDirectoryPage').then((module) => ({ Component: module.PublicDirectoryPage })) },
           { path: '/explore/:clubId', lazy: () => import('@/features/club/view/PublicClubPage').then((module) => ({ Component: module.PublicClubPage })) },
+          { path: '/explore/:clubId/news/:newsId', lazy: () => import('@/features/club/view/PublicNewsPage').then((module) => ({ Component: module.PublicNewsPage })) },
+          { path: '/explore/events/:eventId', lazy: () => import('@/features/event/view/PublicEventPage').then((module) => ({ Component: module.PublicEventPage })) },
         ],
       },
       {

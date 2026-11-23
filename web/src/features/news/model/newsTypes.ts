@@ -41,3 +41,18 @@ export interface NewsRequest {
 export interface UpdateNewsRequest extends NewsRequest {
   version: number
 }
+
+/** FR-CLB-07: tin đã xuất bản trên trang công khai; không ghi người viết vì trang công khai không hiện người giữ chức vụ. */
+export interface PublicNewsSummary {
+  id: string
+  title: string
+  excerpt: string
+  imageUrl: string | null
+  publishedAt: string
+}
+
+export interface PublicNewsDetail extends PublicNewsSummary {
+  body: string
+  clubId: string
+  clubName: string
+}

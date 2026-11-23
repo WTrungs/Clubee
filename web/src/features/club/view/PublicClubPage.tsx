@@ -1,8 +1,10 @@
 import { motion } from 'motion/react'
-import { ArrowLeft, CalendarClock, LogIn, Send, UserPlus, Users } from 'lucide-react'
+import { ArrowLeft, CalendarClock, CalendarHeart, LogIn, MapPin, Newspaper, Send, UserPlus, Users } from 'lucide-react'
 import { Link, useParams } from 'react-router'
 import { ClubMonogram } from '@/features/account/view/ClubMonogram'
-import { formatDateTime } from '@/shared/format/formatDate'
+import { formatEventTime, publicSeatsText } from '@/features/event/viewModel/eventDisplay'
+import { NewsCover } from '@/features/news/view/NewsCover'
+import { formatDate, formatDateTime } from '@/shared/format/formatDate'
 import { itemVariants, listVariants } from '@/shared/motion/presets'
 import { Badge } from '@/shared/ui/Badge'
 import { Button } from '@/shared/ui/Button'
@@ -11,7 +13,7 @@ import { EmptyState, ErrorState } from '@/shared/ui/StateViews'
 import { usePublicClubViewModel } from '../viewModel/usePublicClubViewModels'
 import { ClubContactList } from './ClubContactList'
 
-/** FR-CLB-05: trang CLB chỉ có thông tin công khai theo SRS 3.5; tin tức và sự kiện cho khách thuộc FR-CLB-07. */
+/** FR-CLB-05, 07: thông tin công khai, sự kiện mở cho khách, đợt tuyển đang mở, tin đã xuất bản; không có cơ cấu, người giữ chức vụ. */
 export function PublicClubPage() {
   const { clubId = '' } = useParams()
   const vm = usePublicClubViewModel(clubId)
@@ -62,6 +64,41 @@ export function PublicClubPage() {
             </div>
           </section>
 
+          <section aria-labelledby="public-guest-events" className="space-y-3">
+            <h2 id="public-guest-events" className="text-lg font-bold">
+              Sự kiện mở cho khách
+            </h2>
+            {club.guestEvents.length === 0 ? (
+              <EmptyState icon={CalendarHeart} title="Chưa có sự kiện nào mở cho khách" description="Sự kiện mở cho khách đang nhận đăng ký sẽ hiện ở đây." />
+            ) : (
+              <ul className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                {club.guestEvents.map((event) => (
+                  <li key={event.id}>
+                    <Link
+                      to={`/explore/events/${encodeURIComponent(event.id)}`}
+                      className="flex h-full min-w-0 flex-col gap-2 rounded-2xl border bg-card p-4 shadow-sm transition-colors hover:border-primary/40"
+                    >
+                      <span className="font-semibold [overflow-wrap:anywhere]">{event.name}</span>
+                      <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                        <CalendarClock aria-hidden className="size-4 shrink-0" />
+                        {formatEventTime(event)}
+                      </span>
+                      {event.location && (
+                        <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                          <MapPin aria-hidden className="size-4 shrink-0" />
+                          <span className="[overflow-wrap:anywhere]">{event.location}</span>
+                        </span>
+                      )}
+                      <Badge tone={event.seatsLeft === 0 ? 'warning' : 'success'} className="self-start">
+                        {publicSeatsText(event)}
+                      </Badge>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+
           <section aria-labelledby="public-recruitments" className="space-y-3">
             <h2 id="public-recruitments" className="text-lg font-bold">
               Đợt tuyển đang nhận đơn
@@ -97,6 +134,32 @@ export function PublicClubPage() {
               </motion.ul>
             )}
           </section>
+
+          {club.news.length > 0 && (
+            <section aria-labelledby="public-news" className="space-y-3">
+              <h2 id="public-news" className="flex items-center gap-2 text-lg font-bold">
+                <Newspaper aria-hidden className="size-5 text-primary" />
+                Tin tức
+              </h2>
+              <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {club.news.map((news) => (
+                  <li key={news.id}>
+                    <Link
+                      to={`/explore/${encodeURIComponent(club.id)}/news/${encodeURIComponent(news.id)}`}
+                      className="flex h-full flex-col overflow-hidden rounded-2xl border bg-card shadow-sm transition-colors hover:border-primary/40"
+                    >
+                      <NewsCover imageUrl={news.imageUrl} />
+                      <span className="flex flex-1 flex-col gap-1.5 p-4">
+                        <span className="line-clamp-2 font-semibold">{news.title}</span>
+                        <span className="line-clamp-3 text-sm text-muted-foreground">{news.excerpt}</span>
+                        <span className="mt-auto pt-1 text-xs text-muted-foreground">{formatDate(news.publishedAt)}</span>
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
 
           {!vm.isAdmin && (
             <section className="flex flex-col gap-3 rounded-2xl border border-dashed bg-card/60 p-4 sm:flex-row sm:items-center sm:justify-between">
