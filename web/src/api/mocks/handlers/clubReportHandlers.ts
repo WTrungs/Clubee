@@ -4,6 +4,7 @@ import { canViewClubReport, clubReport, departmentReport, leadsDepartment, repor
 import { API, currentUser, networkDelay, problem } from '../mockHttp'
 import { canAccessClub } from '../mockMembers'
 import { reportPeriods, resolveReportRange } from '../mockReportPeriods'
+import { auditExport, clubReportDocument, departmentReportDocument, formatOf, reportFileResponse } from '../mockReportExports'
 
 // FR-RPT-03 (phần ban), FR-RPT-04: báo cáo CLB và báo cáo ban theo kỳ dùng chung với báo cáo thu chi.
 
@@ -49,6 +50,22 @@ export const clubReportHandlers = [
     return HttpResponse.json(clubReport(target.club, resolved.range))
   }),
 
+  // FR-RPT-07: số liệu gộp, không có dữ liệu cá nhân nên không ghi nhật ký.
+  http.get(`${API}/clubs/:clubId/club-report/export`, async ({ request, params }) => {
+    await networkDelay()
+    const user = currentUser()
+    if (!user.ok) return user.response
+    const target = clubOf(user.value.id, String(params.clubId))
+    if (!target.ok) return target.response
+    if (!canViewClubReport(user.value.id, target.club.id)) return problem(403, 'Báo cáo CLB chỉ ban chủ nhiệm xem được.', 'FORBIDDEN')
+    const url = new URL(request.url)
+    const format = formatOf(url)
+    if (format instanceof Response) return format
+    const resolved = resolveReportRange(url, target.club)
+    if (!resolved.ok) return problem(400, 'Kỳ chưa hợp lệ.', 'VALIDATION', resolved.errors)
+    return reportFileResponse(clubReportDocument(clubReport(target.club, resolved.range)), format)
+  }),
+
   http.get(`${API}/clubs/:clubId/departments/:departmentId/report`, async ({ request, params }) => {
     await networkDelay()
     const user = currentUser()
@@ -63,5 +80,27 @@ export const clubReportHandlers = [
     const resolved = resolveReportRange(new URL(request.url), target.club)
     if (!resolved.ok) return problem(400, 'Kỳ chưa hợp lệ.', 'VALIDATION', resolved.errors)
     return HttpResponse.json(departmentReport(target.club, department, resolved.range))
+  }),
+
+  http.get(`${API}/clubs/:clubId/departments/:departmentId/report/export`, async ({ request, params }) => {
+    await networkDelay()
+    const user = currentUser()
+    if (!user.ok) return user.response
+    const target = clubOf(user.value.id, String(params.clubId))
+    if (!target.ok) return target.response
+    const department = db.departments.find((candidate) => candidate.id === params.departmentId && candidate.clubId === target.club.id)
+    if (!department) return problem(404, 'Không tìm thấy ban.', 'DEPARTMENT_NOT_FOUND')
+    if (!canViewClubReport(user.value.id, target.club.id) && !leadsDepartment(user.value.id, department)) {
+      return problem(403, 'Báo cáo ban chỉ ban chủ nhiệm, trưởng và phó của ban đó xem được.', 'FORBIDDEN')
+    }
+    const url = new URL(request.url)
+    const format = formatOf(url)
+    if (format instanceof Response) return format
+    const resolved = resolveReportRange(url, target.club)
+    if (!resolved.ok) return problem(400, 'Kỳ chưa hợp lệ.', 'VALIDATION', resolved.errors)
+    const report = departmentReport(target.club, department, resolved.range)
+    // Có tên và số liệu của từng thành viên nên ghi nhật ký (BR-DATA-03).
+    auditExport(user.value.id, target.club.id, `Báo cáo Ban ${department.name}`, format, report.rows.length)
+    return reportFileResponse(departmentReportDocument(report, target.club.name), format)
   }),
 ]

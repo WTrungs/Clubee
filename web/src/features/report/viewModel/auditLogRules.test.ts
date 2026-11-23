@@ -88,7 +88,7 @@ describe('audit log view (FR-RPT-06, NFR-SEC-05)', () => {
     expect(await fail(auditLogRepository.list('c-guitar', { from: vnDate(0), to: vnDate(-1) }))).toMatchObject({ status: 400 })
     expect(await fail(auditLogRepository.list('c-guitar', { objectType: 'NOPE' as never }))).toMatchObject({ status: 400 })
     const auditRoutes = routeHandlers.filter((handler) => 'info' in handler && String((handler.info as { path: unknown }).path).includes('audit-log'))
-    expect(auditRoutes.map((handler) => (handler.info as { method: unknown }).method)).toEqual(['GET', 'GET'])
+    expect(auditRoutes.map((handler) => (handler.info as { method: unknown }).method)).toEqual(['GET', 'GET', 'GET']) // xem, xuất (FR-RPT-07), danh sách người làm
   })
 
   it('lists people who acted, including those who left', async () => {

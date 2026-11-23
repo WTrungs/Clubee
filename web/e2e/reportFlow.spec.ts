@@ -39,4 +39,32 @@ test.describe('Báo cáo CLB, báo cáo ban (FR-RPT-03, FR-RPT-04)', () => {
     await expect(nav.getByRole('link', { name: 'Tài chính', exact: true }).filter({ visible: true }).first()).toBeVisible()
     await expect(nav.getByRole('link', { name: 'Báo cáo', exact: true })).toHaveCount(0)
   })
+
+  test('xuất báo cáo CLB ra Excel, PDF và xuất nhật ký thao tác (FR-RPT-07)', async ({ page }, testInfo) => {
+    await loginAs(page, 'anh.nguyen@demo.test')
+    await page.goto('/clubs/c-guitar/reports')
+    await expect(page.getByRole('region', { name: 'Thành viên' })).toBeVisible()
+    const exportAs = async (button: string, format: string) => {
+      const download = page.waitForEvent('download')
+      await page.getByRole('button', { name: button }).click()
+      await page.getByRole('menuitem', { name: format }).click()
+      return (await download).suggestedFilename()
+    }
+    expect(await exportAs('Xuất báo cáo', 'Excel (.xlsx)')).toMatch(/^bao-cao-clb-.*\.xlsx$/)
+    await snap(page, testInfo, 'reportExport', { fullPage: false })
+    expect(await exportAs('Xuất báo cáo', 'PDF')).toMatch(/^bao-cao-clb-.*\.pdf$/)
+
+    await page.getByRole('tab', { name: 'Nhật ký' }).click()
+    expect(await exportAs('Xuất nhật ký', 'Excel (.xlsx)')).toMatch(/^nhat-ky-.*\.xlsx$/)
+  })
+
+  test('thành viên xuất báo cáo cá nhân ra PDF (FR-RPT-07)', async ({ page }) => {
+    await loginAs(page, 'ha.le@demo.test')
+    await page.goto('/me/activity')
+    await expect(page.getByRole('heading', { name: 'Hoạt động của tôi', level: 1 })).toBeVisible()
+    const download = page.waitForEvent('download')
+    await page.getByRole('button', { name: 'Xuất báo cáo' }).click()
+    await page.getByRole('menuitem', { name: 'PDF' }).click()
+    expect((await download).suggestedFilename()).toMatch(/^bao-cao-ca-nhan-.*\.pdf$/)
+  })
 })

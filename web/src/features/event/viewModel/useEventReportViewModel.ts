@@ -2,6 +2,8 @@ import { useQuery } from '@tanstack/react-query'
 import { eventRepository } from '../model/eventRepository'
 import type { EventStaffStats, TaskProgressCounts } from '../model/eventTypes'
 import { eventQueryKeys } from './eventQueryKeys'
+import { useFileDownload } from '@/shared/hooks/useFileDownload'
+import type { ExportFormat } from '@/shared/lib/exportFormat'
 
 /** Phần trăm việc Hoàn thành, làm tròn xuống để 99,6% không hiện thành 100% khi còn việc dở; không có việc thì null. */
 export function donePercent(counts: Pick<TaskProgressCounts, 'total' | 'done'>): number | null {
@@ -33,7 +35,11 @@ export const presentDaysLabel = (row: Pick<EventStaffStats, 'presentDays' | 'day
 /** FR-RPT-05: báo cáo sự kiện; phần nào máy chủ trả null là người xem không có quyền xem phần đó. */
 export function useEventReportViewModel(clubId: string, eventId: string) {
   const report = useQuery({ queryKey: eventQueryKeys.report(clubId, eventId), queryFn: () => eventRepository.report(clubId, eventId) })
+  const exporter = useFileDownload('bao-cao-su-kien')
   return {
+    /** FR-RPT-07. */
+    exportReport: (format: ExportFormat) => exporter.download(() => eventRepository.exportReport(clubId, eventId, format)),
+    exporting: exporter.pending,
     report: report.data ?? null,
     loading: report.isPending,
     error: report.error,

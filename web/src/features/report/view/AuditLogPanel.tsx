@@ -12,6 +12,7 @@ import { EmptyState, ErrorState } from '@/shared/ui/StateViews'
 import type { AuditLogEntry } from '../model/auditLogTypes'
 import { AUDIT_OBJECT_TYPES, auditActionLabel, auditChanges, auditObjectTypeLabel } from '../viewModel/auditDisplay'
 import { useAuditLogViewModel, type AuditLogViewModel } from '../viewModel/useAuditLogViewModel'
+import { ExportMenu } from '@/shared/ui/ExportMenu'
 
 function Filters({ vm }: { vm: AuditLogViewModel }) {
   return (
@@ -42,13 +43,14 @@ function Filters({ vm }: { vm: AuditLogViewModel }) {
       <FormField label="Đến ngày" className="sm:w-36" error={vm.rangeError?.field === 'to' ? vm.rangeError.message : undefined}>
         <Input inputMode="numeric" placeholder="dd/mm/yyyy" value={vm.toText} onChange={(event) => vm.setToText(event.target.value)} />
       </FormField>
-      <div className="flex gap-2 sm:mt-7">
+      <div className="flex flex-wrap gap-2 sm:mt-7">
         <Button onClick={vm.applyRange}>Lọc theo ngày</Button>
         {vm.filtered && (
           <Button variant="ghost" onClick={vm.clearFilters}>
             Bỏ lọc
           </Button>
         )}
+        <ExportMenu onExport={vm.exportLog} pending={vm.exporting} label="Xuất nhật ký" />
       </div>
     </div>
   )

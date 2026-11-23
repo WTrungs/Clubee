@@ -23,6 +23,7 @@ import type {
 import { db } from '../db'
 import { mailGuest } from '../mockGuests'
 import { scheduleConflictsOf } from '../mockScheduleConflicts'
+import { auditExport, eventReportDocument, formatOf, reportFileResponse } from '../mockReportExports'
 import { newActivityBlocked } from '../mockClubStatus'
 import { API, currentUser, matchesKeyword, networkDelay, newId, paginate, problem, writer } from '../mockHttp'
 import { canAccessClub, departmentNameOf, eligibleMembers, isActiveMember, membershipOf, personRef as person } from '../mockMembers'
@@ -530,6 +531,23 @@ export const eventHandlers = [
       return problem(403, 'Chỉ ban tổ chức, ban chủ nhiệm và ban chủ nhiệm CLB đồng tổ chức xem được báo cáo sự kiện.', 'FORBIDDEN')
     }
     return HttpResponse.json(eventReport(event, user.value.id))
+  }),
+
+  http.get(`${API}/clubs/:clubId/events/:eventId/report/export`, async ({ request, params }) => {
+    await networkDelay()
+    const user = currentUser()
+    if (!user.ok) return user.response
+    const event = findEvent(params)
+    if (!event || !canViewEvent(user.value.id, event)) return problem(404, 'Không tìm thấy sự kiện.', 'EVENT_NOT_FOUND')
+    if (!eventActions(user.value.id, event).includes('VIEW_REPORT')) {
+      return problem(403, 'Chỉ ban tổ chức, ban chủ nhiệm và ban chủ nhiệm CLB đồng tổ chức xem được báo cáo sự kiện.', 'FORBIDDEN')
+    }
+    const format = formatOf(new URL(request.url))
+    if (format instanceof Response) return format
+    const report = eventReport(event, user.value.id)
+    // Có thống kê theo từng nhân sự thì là dữ liệu cá nhân, ghi nhật ký ở CLB chủ trì.
+    if (report.staff) auditExport(user.value.id, event.clubId, `Báo cáo sự kiện ${event.name}`, format, report.staff.length)
+    return reportFileResponse(eventReportDocument(report, event.name), format)
   }),
 
   http.get(`${API}/clubs/:clubId/events/:eventId/subcommittees`, async ({ params }) => {

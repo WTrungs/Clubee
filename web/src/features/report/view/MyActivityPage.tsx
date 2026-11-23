@@ -18,6 +18,7 @@ import type { MyReport } from '../model/myReportTypes'
 import { useMyActivityViewModel, type MyActivityViewModel } from '../viewModel/useMyActivityViewModel'
 import { AttendanceStats, ReportSection as Section, Stat } from './ReportBlocks'
 import { ReportPeriodPicker } from './ReportPeriodPicker'
+import { ExportMenu } from '@/shared/ui/ExportMenu'
 
 function ReportTab({ report }: { report: MyReport }) {
   return (
@@ -137,6 +138,11 @@ export function MyActivityPage() {
               </NativeSelect>
             </FormField>
           </ReportPeriodPicker>
+          {vm.canExport && (
+            <div className="flex justify-end">
+              <ExportMenu onExport={vm.exportReport} pending={vm.exporting} label="Xuất báo cáo" />
+            </div>
+          )}
           {vm.club && (
             <p className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
               <Badge tone={memberStatusDisplay[vm.club.status].tone}>{memberStatusDisplay[vm.club.status].label}</Badge>

@@ -1,4 +1,5 @@
 import { httpClient } from '@/api/httpClient'
+import type { ExportFormat } from '@/shared/lib/exportFormat'
 import type { Page } from '@/api/pagination'
 import type {
   CoHost,
@@ -44,6 +45,7 @@ export const eventRepository = {
 
   /** FR-RPT-05: báo cáo sự kiện thay cho tiến độ (FR-EVT-09 nằm trong phần công việc). */
   report: (clubId: string, eventId: string) => httpClient.get<EventReport>(`${event(clubId, eventId)}/report`),
+  exportReport: (clubId: string, eventId: string, format: ExportFormat) => httpClient.download(`${event(clubId, eventId)}/report/export`, { query: { format } }),
   subcommittees: (clubId: string, eventId: string) => httpClient.get<Subcommittee[]>(`${event(clubId, eventId)}/subcommittees`),
   createSubcommittee: (clubId: string, eventId: string, request: CreateSubcommitteeRequest) =>
     httpClient.post<Subcommittee>(`${event(clubId, eventId)}/subcommittees`, request),

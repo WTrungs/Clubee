@@ -4,6 +4,8 @@ import { useSearchParams } from 'react-router'
 import { myReportRepository } from '../model/myReportRepository'
 import { periodErrorReasons } from './reportDisplay'
 import { useReportPeriodParams } from './useReportPeriodParams'
+import { useFileDownload } from '@/shared/hooks/useFileDownload'
+import type { ExportFormat } from '@/shared/lib/exportFormat'
 
 export const myReportQueryKeys = {
   all: ['myReport'] as const,
@@ -58,7 +60,12 @@ export function useMyActivityViewModel() {
   const active = tab === 'report' ? report : attendance
   const reasons = periodErrorReasons(active.error)
 
+  const exporter = useFileDownload('bao-cao-ca-nhan')
   return {
+    /** FR-RPT-07: xuất báo cáo cá nhân của CLB, kỳ đang chọn. */
+    canExport: report.data !== undefined,
+    exportReport: (format: ExportFormat) => exporter.download(() => myReportRepository.exportReport(query, format)),
+    exporting: exporter.pending,
     clubs,
     club,
     setClubId: (value: string) => {

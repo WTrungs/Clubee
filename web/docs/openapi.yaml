@@ -3343,6 +3343,32 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+  /clubs/{clubId}/events/{eventId}/report/export:
+    get:
+      tags: [RPT]
+      operationId: exportEventReport
+      summary: Xuất báo cáo sự kiện (FR-RPT-07)
+      description: |
+        Cùng quyền với báo cáo sự kiện; thống kê nhân sự chỉ có khi người xuất được xem (Trưởng BTC, ban chủ nhiệm CLB chủ trì) và khi đó
+        ghi nhật ký `EXPORT_REPORT`. Quỹ sự kiện chỉ có khi người xuất xem được quỹ.
+      parameters:
+        - name: format
+          in: query
+          schema: { type: string, enum: [xlsx, pdf] }
+        - $ref: '#/components/parameters/ClubId'
+        - $ref: '#/components/parameters/EventId'
+      responses:
+        '200':
+          description: Tệp báo cáo; tên tệp ở `Content-Disposition`.
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema: { type: string, format: binary }
+            application/pdf:
+              schema: { type: string, format: binary }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
   /clubs/{clubId}/events/{eventId}/staff-signup:
     get:
       tags: [EVT]
@@ -5396,6 +5422,49 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+  /me/report/export:
+    get:
+      tags: [RPT]
+      operationId: exportMyReport
+      summary: Xuất báo cáo cá nhân (FR-RPT-07)
+      description: |
+        Dữ liệu của chính người gọi nên không ghi nhật ký.
+      parameters:
+        - name: format
+          in: query
+          schema: { type: string, enum: [xlsx, pdf] }
+        - name: clubId
+          in: query
+          required: true
+          schema: { type: string }
+        - name: period
+          in: query
+          required: true
+          schema: { type: string, enum: [MONTH, SEMESTER, TERM, CUSTOM] }
+        - name: key
+          in: query
+          description: Mã kỳ trong `GET /me/report-periods` (tháng, học kỳ, nhiệm kỳ).
+          schema: { type: string }
+        - name: from
+          in: query
+          description: Bắt buộc khi `period=CUSTOM`.
+          schema: { type: string, format: date }
+        - name: to
+          in: query
+          description: Bắt buộc khi `period=CUSTOM`; tối đa 5 năm sau `from`.
+          schema: { type: string, format: date }
+      responses:
+        '200':
+          description: Tệp báo cáo; tên tệp ở `Content-Disposition`.
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema: { type: string, format: binary }
+            application/pdf:
+              schema: { type: string, format: binary }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
   /me/calendar:
     get:
       tags: [ATT]
@@ -6893,6 +6962,34 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+  /clubs/{clubId}/club-report/export:
+    get:
+      tags: [RPT]
+      operationId: exportClubReport
+      summary: Xuất báo cáo CLB (FR-RPT-07)
+      description: |
+        Cùng quyền, cùng kỳ với báo cáo CLB. Số liệu gộp nên không ghi nhật ký. Lỗi như báo cáo CLB; 400 `VALIDATION` khi `format` sai.
+      parameters:
+        - name: format
+          in: query
+          schema: { type: string, enum: [xlsx, pdf] }
+        - $ref: '#/components/parameters/ClubId'
+        - { name: period, in: query, required: true, schema: { type: string, enum: [MONTH, SEMESTER, TERM, CUSTOM] } }
+        - { name: key, in: query, schema: { type: string } }
+        - { name: from, in: query, schema: { type: string, format: date } }
+        - { name: to, in: query, schema: { type: string, format: date } }
+      responses:
+        '200':
+          description: Tệp báo cáo; tên tệp ở `Content-Disposition`.
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema: { type: string, format: binary }
+            application/pdf:
+              schema: { type: string, format: binary }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
   /clubs/{clubId}/departments/{departmentId}/report:
     get:
       tags: [RPT]
@@ -6916,6 +7013,35 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/DepartmentReport' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /clubs/{clubId}/departments/{departmentId}/report/export:
+    get:
+      tags: [RPT]
+      operationId: exportDepartmentReport
+      summary: Xuất báo cáo ban (FR-RPT-07)
+      description: |
+        Cùng quyền với báo cáo ban. Có số liệu từng thành viên nên ghi nhật ký `EXPORT_REPORT` (BR-DATA-03).
+      parameters:
+        - name: format
+          in: query
+          schema: { type: string, enum: [xlsx, pdf] }
+        - $ref: '#/components/parameters/ClubId'
+        - $ref: '#/components/parameters/DepartmentId'
+        - { name: period, in: query, required: true, schema: { type: string, enum: [MONTH, SEMESTER, TERM, CUSTOM] } }
+        - { name: key, in: query, schema: { type: string } }
+        - { name: from, in: query, schema: { type: string, format: date } }
+        - { name: to, in: query, schema: { type: string, format: date } }
+      responses:
+        '200':
+          description: Tệp báo cáo; tên tệp ở `Content-Disposition`.
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema: { type: string, format: binary }
+            application/pdf:
+              schema: { type: string, format: binary }
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
@@ -6946,6 +7072,36 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/AuditLogPage' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /clubs/{clubId}/audit-logs/export:
+    get:
+      tags: [RPT]
+      operationId: exportAuditLogs
+      summary: Xuất nhật ký thao tác (FR-RPT-07)
+      description: |
+        Chỉ ban chủ nhiệm, theo bộ lọc, không phân trang. Ghi nhật ký `EXPORT_REPORT`.
+      parameters:
+        - name: format
+          in: query
+          schema: { type: string, enum: [xlsx, pdf] }
+        - $ref: '#/components/parameters/ClubId'
+        - { name: actorId, in: query, schema: { type: string } }
+        - { name: objectType, in: query, schema: { $ref: '#/components/schemas/AuditObjectType' } }
+        - { name: objectId, in: query, schema: { type: string } }
+        - { name: from, in: query, schema: { type: string, format: date } }
+        - { name: to, in: query, schema: { type: string, format: date } }
+        - { name: size, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 50 } }
+      responses:
+        '200':
+          description: Tệp báo cáo; tên tệp ở `Content-Disposition`.
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema: { type: string, format: binary }
+            application/pdf:
+              schema: { type: string, format: binary }
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
@@ -7019,6 +7175,36 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/FinanceReport' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /clubs/{clubId}/finance-report/export:
+    get:
+      tags: [RPT]
+      operationId: exportFinanceReport
+      summary: Xuất báo cáo thu chi (FR-RPT-07)
+      description: |
+        Chỉ ban chủ nhiệm. Gồm theo hạng mục, quỹ, tháng, khoản cùng người duyệt và ghi sổ, danh sách chưa nộp quỹ; ghi nhật ký `EXPORT_REPORT`.
+      parameters:
+        - name: format
+          in: query
+          schema: { type: string, enum: [xlsx, pdf] }
+        - $ref: '#/components/parameters/ClubId'
+        - { name: period, in: query, required: true, schema: { type: string, enum: [MONTH, SEMESTER, TERM, CUSTOM] } }
+        - { name: key, in: query, schema: { type: string } }
+        - { name: from, in: query, schema: { type: string, format: date } }
+        - { name: to, in: query, schema: { type: string, format: date } }
+        - { name: category, in: query, schema: { $ref: '#/components/schemas/FinanceCategory' } }
+        - { name: eventId, in: query, schema: { type: string } }
+      responses:
+        '200':
+          description: Tệp báo cáo; tên tệp ở `Content-Disposition`.
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema: { type: string, format: binary }
+            application/pdf:
+              schema: { type: string, format: binary }
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }

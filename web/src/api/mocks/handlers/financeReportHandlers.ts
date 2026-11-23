@@ -6,6 +6,7 @@ import { buildFinanceReport, clubEventWithFund, unpaidDuesOf } from '../mockFina
 import { reportPeriods, resolveReportRange } from '../mockReportPeriods'
 import { API, currentUser, networkDelay, paginate, problem } from '../mockHttp'
 import { isBoardMember } from '../mockPermissions'
+import { auditExport, financeReportDocument, formatOf, reportFileResponse } from '../mockReportExports'
 
 // FR-FIN-12: báo cáo thu chi chỉ ban chủ nhiệm xem (SRS 3.5). Bộ lọc hạng mục, sự kiện dùng kèm kỳ.
 
@@ -51,6 +52,32 @@ export const financeReportHandlers = [
     if (eventId && !clubEventWithFund(clubId, eventId)) errors.push({ field: 'eventId', message: 'Sự kiện không thuộc CLB hoặc chưa có quỹ.' })
     if (errors.length > 0 || !range) return problem(400, 'Điều kiện báo cáo chưa hợp lệ.', 'VALIDATION', errors)
     return HttpResponse.json(buildFinanceReport(club, range, { category: (category as FinanceCategory | null) || null, eventId: eventId || null }))
+  }),
+
+  // FR-RPT-07: kèm danh sách chưa nộp quỹ (có tên) nên ghi nhật ký.
+  http.get(`${API}/clubs/:clubId/finance-report/export`, async ({ request, params }) => {
+    await networkDelay()
+    const user = currentUser()
+    if (!user.ok) return user.response
+    const clubId = String(params.clubId)
+    const denied = gate(user.value.id, clubId)
+    if (denied) return denied
+    const club = db.clubs.find((candidate) => candidate.id === clubId)
+    if (!club) return problem(404, 'Không tìm thấy CLB.', 'CLUB_NOT_FOUND')
+    const url = new URL(request.url)
+    const format = formatOf(url)
+    if (format instanceof Response) return format
+    const resolved = resolveReportRange(url, club)
+    const errors: FieldError[] = resolved.ok ? [] : [...resolved.errors]
+    const category = url.searchParams.get('category')
+    if (category && !REPORT_CATEGORIES.includes(category as FinanceCategory)) errors.push({ field: 'category', message: 'Hạng mục không có trong danh mục.' })
+    const eventId = url.searchParams.get('eventId')
+    if (eventId && !clubEventWithFund(clubId, eventId)) errors.push({ field: 'eventId', message: 'Sự kiện không thuộc CLB hoặc chưa có quỹ.' })
+    if (errors.length > 0 || !resolved.ok) return problem(400, 'Điều kiện báo cáo chưa hợp lệ.', 'VALIDATION', errors)
+    const report = buildFinanceReport(club, resolved.range, { category: (category as FinanceCategory | null) || null, eventId: eventId || null })
+    const unpaid = unpaidDuesOf(clubId)
+    auditExport(user.value.id, clubId, 'Báo cáo thu chi', format, unpaid.length + report.flagged.length)
+    return reportFileResponse(financeReportDocument(report, club.name, unpaid), format)
   }),
 
   http.get(`${API}/clubs/:clubId/finance-report/unpaid-dues`, async ({ request, params }) => {
