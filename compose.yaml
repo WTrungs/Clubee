@@ -1,0 +1,9 @@
+services:
+  web:
+    build:
+      context: ./web
+      args:
+        VITE_USE_MOCK: ${VITE_USE_MOCK:-true}
+    ports:
+      - "${WEB_PORT:-3000}:80"
+    restart: unless-stopped
