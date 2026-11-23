@@ -40,7 +40,7 @@ function fileOf(document: DbDocument, version: Pick<DbDocumentVersion, 'number' 
   return stored?.file ?? new Blob([`Tài liệu mẫu: ${document.title} (bản ${version.number})\n`], { type: version.contentType })
 }
 
-const fileResponse = (document: DbDocument, version: Pick<DbDocumentVersion, 'number' | 'contentType' | 'fileName'>): Response =>
+const fileResponse = (document: DbDocument, version: Pick<DbDocumentVersion, 'number' | 'contentType' | 'fileName'>): Promise<Response> =>
   downloadResponse(fileOf(document, version), version.fileName, version.contentType)
 
 export const documentHandlers = [

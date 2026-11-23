@@ -47,6 +47,8 @@ export type ClubAction =
   | 'CREATE_RECRUITMENT'
   /** FR-CLB-06: ban chủ nhiệm soạn, xuất bản, ẩn tin tức; thấy cả tin nháp và tin đã ẩn. */
   | 'MANAGE_NEWS'
+  /** FR-MEM-11: ban chủ nhiệm xuất danh sách thành viên ra Excel. */
+  | 'EXPORT_MEMBERS'
 
 /** ST-CLB: Hoạt động ↔ Tạm ngừng; Hoạt động, Tạm ngừng → Giải thể. */
 export type ClubStatus = 'ACTIVE' | 'SUSPENDED' | 'DISSOLVED'

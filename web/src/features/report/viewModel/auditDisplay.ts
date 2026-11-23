@@ -45,6 +45,8 @@ const actionLabels: Record<string, string> = {
   UNLOCK_ACCOUNT: 'Mở khóa tài khoản',
   SEND_PASSWORD_RESET: 'Gửi đặt lại mật khẩu',
   CHANGE_CLUB_STATUS: 'Đổi trạng thái CLB',
+  EXPORT_MEMBERS: 'Xuất danh sách thành viên',
+  EXPORT_REPORT: 'Xuất báo cáo',
 }
 
 /** Thao tác chưa có nhãn thì hiện mã để không mất thông tin. */
@@ -59,6 +61,10 @@ const fieldLabels: Record<string, string> = {
   eventLead: 'Trưởng BTC giữ lại',
   movedPositions: 'Số chức vụ được dời',
   presidents: 'Chủ nhiệm',
+  rows: 'Số dòng',
+  filters: 'Bộ lọc',
+  report: 'Báo cáo',
+  format: 'Định dạng',
 }
 /** Trường kỹ thuật, không có ý nghĩa với người đọc. */
 const HIDDEN_FIELDS = new Set(['positionIds'])

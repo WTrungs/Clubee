@@ -29,10 +29,10 @@ export function currentUser(): Guarded<DbUser> {
   return { ok: true, value: user }
 }
 
-/** Trả tệp kèm tên gốc (UTF-8); không lưu đệm vì quyền xem kiểm lại mỗi lần. */
-export function downloadResponse(file: Blob, fileName: string, contentType: string): Response {
+/** Trả tệp kèm tên gốc (UTF-8); không lưu đệm vì quyền xem kiểm lại mỗi lần. Đọc ra ArrayBuffer để chạy đúng cả trong test (Blob của jsdom). */
+export async function downloadResponse(file: Blob, fileName: string, contentType: string): Promise<Response> {
   const ascii = fileName.normalize('NFD').replace(/[^\x20-\x7e]/g, '').replace(/"/g, '') || 'tep'
-  return new HttpResponse(file, {
+  return new HttpResponse(await file.arrayBuffer(), {
     headers: {
       'Content-Type': contentType,
       'Content-Disposition': `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(fileName)}`,

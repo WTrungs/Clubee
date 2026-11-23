@@ -1485,6 +1485,50 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+  /clubs/{clubId}/members/export:
+    get:
+      tags: [MEM]
+      operationId: exportMembers
+      summary: Xuất danh sách thành viên ra Excel (FR-MEM-11)
+      description: |
+        Chỉ ban chủ nhiệm (`EXPORT_MEMBERS`). Cùng bộ lọc với danh sách, không phân trang. Tệp chỉ có trường người xuất được xem
+        (dựng từ cùng dữ liệu với `MemberSummary`; cột trống ở mọi dòng bị bỏ). Ghi nhật ký `EXPORT_MEMBERS` (số dòng, bộ lọc; BR-DATA-03).
+        Lỗi 403 `NOT_A_MEMBER`, `FORBIDDEN`; 400 `VALIDATION` (`format` khác `xlsx`).
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - name: format
+          in: query
+          schema: { type: string, enum: [xlsx] }
+        - $ref: '#/components/parameters/Q'
+        - name: status
+          in: query
+          description: Lặp lại tham số để lọc nhiều trạng thái.
+          schema:
+            type: array
+            items:
+              type: string
+              enum: [PROBATION, ACTIVE, ON_LEAVE, LEFT]
+          style: form
+          explode: true
+        - name: departmentId
+          in: query
+          description: Ban chính.
+          schema: { type: string }
+        - name: role
+          in: query
+          schema: { $ref: '#/components/schemas/MemberRoleFilter' }
+        - name: joinYear
+          in: query
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Tệp Excel; tên tệp ở `Content-Disposition`.
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema: { type: string, format: binary }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
   /clubs/{clubId}/members/facets:
     get:
       tags: [MEM]
@@ -7894,10 +7938,10 @@ components:
         `VIEW_DUES`: thuộc ban chủ nhiệm, xem tab Đóng quỹ (FR-FIN-09). `OPEN_DUES`: ban chủ nhiệm có `RECORD_LEDGER`, mở đợt đóng quỹ.
         `VIEW_FINANCE_REPORT`: thuộc ban chủ nhiệm, xem tab Báo cáo thu chi (FR-FIN-12).
         `MANAGE_RECRUITMENT`: có quyền Quản lý thành viên, mở và quản lý đợt tuyển (FR-REC-01).
-        `CHANGE_CLUB_STATUS`, `MANAGE_NEWS`: ban chủ nhiệm (FR-CLB-04, 06). `CREATE_RECRUITMENT`: có quyền Quản lý thành viên và CLB đang Hoạt động.
+        `CHANGE_CLUB_STATUS`, `MANAGE_NEWS`, `EXPORT_MEMBERS`: ban chủ nhiệm (FR-CLB-04, 06, FR-MEM-11). `CREATE_RECRUITMENT`: có quyền Quản lý thành viên và CLB đang Hoạt động.
         CLB Tạm ngừng không có `CREATE_EVENT`, `PROPOSE_EVENT`, `CREATE_RECRUITMENT`; CLB Giải thể chỉ còn các hành động `VIEW_*`.
         `VIEW_CLUB_REPORT`, `VIEW_AUDIT_LOG`: ban chủ nhiệm (FR-RPT-04, 06). `VIEW_HIDDEN_DOCUMENTS`: ban chủ nhiệm (FR-DOC-04). `VIEW_WORKLOAD`: có ít nhất một phạm vi xem khối lượng việc (FR-TASK-08). `VIEW_DEPARTMENT_REPORTS`: ban chủ nhiệm, trưởng hoặc phó của một ban đang hoạt động (FR-RPT-03).
-      enum: [CREATE_EVENT, PROPOSE_EVENT, ASSIGN_TASK, MANAGE_MEMBERS, MANAGE_ORG, ASSIGN_PRESIDENCY, EDIT_CLUB, SEND_ANNOUNCEMENT, CREATE_TERM, ASSIGN_POSITION, REQUEST_PRESIDENCY_TRANSFER, VIEW_PERMISSIONS, VIEW_SHARED_EVENTS, VIEW_DUES, OPEN_DUES, VIEW_FINANCE_REPORT, MANAGE_RECRUITMENT, VIEW_CLUB_REPORT, VIEW_DEPARTMENT_REPORTS, VIEW_AUDIT_LOG, VIEW_HIDDEN_DOCUMENTS, VIEW_WORKLOAD, CHANGE_CLUB_STATUS, CREATE_RECRUITMENT, MANAGE_NEWS]
+      enum: [CREATE_EVENT, PROPOSE_EVENT, ASSIGN_TASK, MANAGE_MEMBERS, MANAGE_ORG, ASSIGN_PRESIDENCY, EDIT_CLUB, SEND_ANNOUNCEMENT, CREATE_TERM, ASSIGN_POSITION, REQUEST_PRESIDENCY_TRANSFER, VIEW_PERMISSIONS, VIEW_SHARED_EVENTS, VIEW_DUES, OPEN_DUES, VIEW_FINANCE_REPORT, MANAGE_RECRUITMENT, VIEW_CLUB_REPORT, VIEW_DEPARTMENT_REPORTS, VIEW_AUDIT_LOG, VIEW_HIDDEN_DOCUMENTS, VIEW_WORKLOAD, CHANGE_CLUB_STATUS, CREATE_RECRUITMENT, MANAGE_NEWS, EXPORT_MEMBERS]
     TermSummary:
       type: object
       description: Nhiệm kỳ đang phụ trách CLB (Đang chạy hoặc Đang bàn giao).

@@ -1,4 +1,4 @@
-import { UserPlus, UsersRound } from 'lucide-react'
+import { FileSpreadsheet, UserPlus, UsersRound } from 'lucide-react'
 import { formatNumber } from '@/shared/format/formatMoney'
 import { Button } from '@/shared/ui/Button'
 import { Pagination } from '@/shared/ui/ListControls'
@@ -65,11 +65,21 @@ export function MembersPage() {
         title="Thành viên"
         description="Tên, ban và chức vụ của thành viên. Liên hệ, MSSV chỉ ban chủ nhiệm xem được."
         actions={
-          page.canManage && (
-            <Button onClick={page.openInvitations}>
-              <UserPlus aria-hidden />
-              Mời thành viên
-            </Button>
+          (page.canManage || list.canExport) && (
+            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+              {list.canExport && (
+                <Button variant="outline" onClick={list.exportExcel} loading={list.exporting}>
+                  <FileSpreadsheet aria-hidden />
+                  Xuất Excel
+                </Button>
+              )}
+              {page.canManage && (
+                <Button onClick={page.openInvitations}>
+                  <UserPlus aria-hidden />
+                  Mời thành viên
+                </Button>
+              )}
+            </div>
           )
         }
       />
