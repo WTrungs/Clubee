@@ -68,7 +68,13 @@ export const router = createBrowserRouter([
                     path: '/invite/:token',
                     lazy: () => import('@/features/member/view/InvitationPage').then((module) => ({ Component: module.InvitationPage })),
                   },
+                  {
+                    path: '/recruitments/:recruitmentId',
+                    lazy: () => import('@/features/recruitment/view/ApplyPage').then((module) => ({ Component: module.ApplyPage })),
+                  },
                   { path: '/me/tasks', lazy: () => import('@/features/task/view/MyTasksPage').then((module) => ({ Component: module.MyTasksPage })) },
+                  { path: '/me/activity', lazy: () => import('@/features/report/view/MyActivityPage').then((module) => ({ Component: module.MyActivityPage })) },
+                  { path: '/me/calendar', lazy: () => import('@/features/calendar/view/CalendarPage').then((module) => ({ Component: module.CalendarPage })) },
                   {
                     path: '/scan',
                     lazy: () => import('@/features/attendance/view/AttendanceScanPage').then((module) => ({ Component: module.AttendanceScanPage })),
@@ -80,6 +86,10 @@ export const router = createBrowserRouter([
                       { index: true, lazy: () => import('@/features/club/view/ClubOverviewPage').then((module) => ({ Component: module.ClubOverviewPage })) },
                       { path: 'structure', lazy: () => import('@/features/org/view/OrgStructurePage').then((module) => ({ Component: module.OrgStructurePage })) },
                       { path: 'terms', lazy: () => import('@/features/term/view/TermsPage').then((module) => ({ Component: module.TermsPage })) },
+                      {
+                        path: 'terms/:termId',
+                        lazy: () => import('@/features/term/view/TermDetailPage').then((module) => ({ Component: module.TermDetailPage })),
+                      },
                       {
                         path: 'handovers/:handoverId',
                         lazy: () => import('@/features/term/view/HandoverPage').then((module) => ({ Component: module.HandoverPage })),
@@ -99,7 +109,17 @@ export const router = createBrowserRouter([
                         path: 'sessions/:sessionId',
                         lazy: () => import('@/features/attendance/view/SessionDetailPage').then((module) => ({ Component: module.SessionDetailPage })),
                       },
+                      { path: 'documents', lazy: () => import('@/features/document/view/DocumentsPage').then((module) => ({ Component: module.DocumentsPage })) },
+                      {
+                        path: 'recruitments',
+                        lazy: () => import('@/features/recruitment/view/RecruitmentsPage').then((module) => ({ Component: module.RecruitmentsPage })),
+                      },
+                      {
+                        path: 'recruitments/:recruitmentId',
+                        lazy: () => import('@/features/recruitment/view/RecruitmentDetailPage').then((module) => ({ Component: module.RecruitmentDetailPage })),
+                      },
                       { path: 'finance', lazy: () => import('@/features/finance/view/FinancePage').then((module) => ({ Component: module.FinancePage })) },
+                      { path: 'reports', lazy: () => import('@/features/report/view/ClubReportsPage').then((module) => ({ Component: module.ClubReportsPage })) },
                     ],
                   },
                 ],

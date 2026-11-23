@@ -27,6 +27,14 @@ export type ClubAction =
   | 'OPEN_DUES'
   /** FR-FIN-12: ban chủ nhiệm xem tab Báo cáo thu chi. */
   | 'VIEW_FINANCE_REPORT'
+  /** FR-REC-01: mở và quản lý đợt tuyển (quyền Quản lý thành viên). */
+  | 'MANAGE_RECRUITMENT'
+  /** FR-RPT-04: ban chủ nhiệm xem báo cáo CLB. */
+  | 'VIEW_CLUB_REPORT'
+  /** FR-RPT-03: ban chủ nhiệm, trưởng và phó ban xem báo cáo ban. */
+  | 'VIEW_DEPARTMENT_REPORTS'
+  /** FR-RPT-06: ban chủ nhiệm xem nhật ký thao tác. */
+  | 'VIEW_AUDIT_LOG'
 
 /** Nhiệm kỳ đang phụ trách CLB: Đang chạy hoặc Đang bàn giao. */
 export interface TermSummary {
@@ -97,6 +105,8 @@ export interface ClubSettingsValues {
   attendanceLeadMinutes: number
   /** Chu kỳ đổi mã QR, tính bằng giây. */
   attendanceQrRotateSeconds: number
+  /** Người chốt sửa được điểm danh trong số giờ này sau khi chốt; quá hạn chỉ ban chủ nhiệm (FR-ATT-08). */
+  attendanceEditHours: number
   /** Khoản chi trên ngưỡng này phải có chứng từ (BR-FIN-03). */
   expenseReceiptThreshold: number
   /** Người đã nhận chỗ hủy được tới trước giờ bắt đầu số giờ này. */

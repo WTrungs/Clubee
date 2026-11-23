@@ -4,7 +4,7 @@ import { REASON_MAX, REASON_MIN } from '@/shared/lib/reasonRules'
 import { db, type DbLeaveRequest, type DbMembership } from '../db'
 import { can, forbidden, holdersOf } from '../mockAccess'
 import { API, currentUser, networkDelay, newId, paginate, problem, writer } from '../mockHttp'
-import { canAccessClub, membershipOf, personRef } from '../mockMembers'
+import { canAccessClub, membershipOf, personRef, recordMembershipChange } from '../mockMembers'
 import { latestLeaveRequestOf, leaveBlockers, putOnLeaveBlock, resignBlockers, resignFromClub, toLeaveRequest, toMyMembership } from '../mockMembership'
 import { membersTarget, notify } from '../mockNotifications'
 import { nowIso } from '../mockTime'
@@ -106,7 +106,7 @@ export const leaveHandlers = [
     if (body.action === 'RETURN') {
       // Quay lại sau tạm nghỉ là về Chính thức, không gia nhập lại (FR-MEM-07, ST-MEM).
       if (membership.status !== 'ON_LEAVE') return problem(422, 'Chỉ người đang Tạm nghỉ mới quay lại sinh hoạt được.', 'INVALID_TRANSITION')
-      membership.history.push({ at: nowIso(), actorId: user.value.id, fromStatus: 'ON_LEAVE', toStatus: 'ACTIVE', reason: null })
+      recordMembershipChange(membership, { actorId: user.value.id, fromStatus: 'ON_LEAVE', toStatus: 'ACTIVE', reason: null })
       membership.status = 'ACTIVE'
       membership.version += 1
       notifyManagers(clubId, user.value.id, `${name} đã quay lại sinh hoạt`)
@@ -183,7 +183,7 @@ export const leaveHandlers = [
     if (membership.status !== 'ACTIVE') return problem(422, `${name} không còn là thành viên Chính thức nên không cho tạm nghỉ được.`, 'INVALID_TRANSITION')
     const blocked = putOnLeaveBlock(membership, name)
     if (blocked) return blocked
-    membership.history.push({ at: now, actorId: user.value.id, fromStatus: 'ACTIVE', toStatus: 'ON_LEAVE', reason: leave.reason })
+    recordMembershipChange(membership, { actorId: user.value.id, fromStatus: 'ACTIVE', toStatus: 'ON_LEAVE', reason: leave.reason, at: now })
     membership.status = 'ON_LEAVE'
     membership.version += 1
     Object.assign(leave, { status: 'APPROVED', decidedBy: user.value.id, decidedAt: now, decisionNote: null, version: leave.version + 1 })

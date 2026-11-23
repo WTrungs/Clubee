@@ -19,6 +19,7 @@ const settings: ClubSettings = {
   rescheduleConfirmHours: 48,
   attendanceLeadMinutes: 15,
   attendanceQrRotateSeconds: 30,
+  attendanceEditHours: 48,
   taskReminderDays: 1,
   expenseReceiptThreshold: 1_500_000,
   advanceSettleDays: 14,
@@ -45,6 +46,7 @@ describe('clubSettingsSchema (FR-CLB-03)', () => {
       rescheduleConfirmHours: '48',
       attendanceLeadMinutes: '15',
       attendanceQrRotateSeconds: '30',
+      attendanceEditHours: '48',
       taskReminderDays: '1',
       expenseReceiptThreshold: '1.500.000',
       advanceSettleDays: '14',
@@ -60,6 +62,7 @@ describe('clubSettingsSchema (FR-CLB-03)', () => {
       rescheduleConfirmHours: 48,
       attendanceLeadMinutes: 15,
       attendanceQrRotateSeconds: 30,
+      attendanceEditHours: 48,
       taskReminderDays: 1,
       expenseReceiptThreshold: 0,
       advanceSettleDays: 14,
@@ -92,12 +95,13 @@ describe('clubSettingsSchema (FR-CLB-03)', () => {
   })
 
   it('accepts both ends of each range and rejects values just outside', () => {
-    expect(errorFields(values({ inviteLinkDays: '1', attendanceLeadMinutes: '0', attendanceQrRotateSeconds: '10', expenseReceiptThreshold: '0' }))).toEqual([])
-    expect(errorFields(values({ inviteLinkDays: '30', attendanceLeadMinutes: '120', attendanceQrRotateSeconds: '300', expenseReceiptThreshold: '100.000.000' }))).toEqual([])
-    expect(errorFields(values({ inviteLinkDays: '31', attendanceLeadMinutes: '121', attendanceQrRotateSeconds: '9', expenseReceiptThreshold: '100.000.001' }))).toEqual([
+    expect(errorFields(values({ inviteLinkDays: '1', attendanceLeadMinutes: '0', attendanceQrRotateSeconds: '10', attendanceEditHours: '1', expenseReceiptThreshold: '0' }))).toEqual([])
+    expect(errorFields(values({ inviteLinkDays: '30', attendanceLeadMinutes: '120', attendanceQrRotateSeconds: '300', attendanceEditHours: '720', expenseReceiptThreshold: '100.000.000' }))).toEqual([])
+    expect(errorFields(values({ inviteLinkDays: '31', attendanceLeadMinutes: '121', attendanceQrRotateSeconds: '9', attendanceEditHours: '721', expenseReceiptThreshold: '100.000.001' }))).toEqual([
       'inviteLinkDays',
       'attendanceLeadMinutes',
       'attendanceQrRotateSeconds',
+      'attendanceEditHours',
       'expenseReceiptThreshold',
     ])
   })

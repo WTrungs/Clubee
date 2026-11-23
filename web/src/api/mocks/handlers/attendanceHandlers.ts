@@ -7,14 +7,17 @@ import type {
   MarkAttendanceRequest,
 } from '@/features/attendance/model/attendanceTypes'
 import { formatDateTime } from '@/shared/format/formatDate'
+import { REASON_MAX, REASON_MIN } from '@/shared/lib/reasonRules'
 import { db } from '../db'
 import {
   ATTENDANCE_FILTERS,
   ATTENDANCE_STATUSES,
   buildSheet,
   closeAttendance,
+  closedEditBlocker,
   currentCode,
   defaultDay,
+  editClosedAttendance,
   eventActivity,
   eventAttendanceAvailable,
   isAttendanceOpen,
@@ -37,7 +40,12 @@ function resolveSession(params: Params, userId: string): Resolved {
   if (!canAccessClub(userId, clubId)) return { ok: false, response: problem(403, 'Bạn không phải thành viên của CLB này.', 'NOT_A_MEMBER') }
   const session = db.sessions.find((candidate) => candidate.id === params.sessionId && candidate.clubId === clubId)
   if (!session) return { ok: false, response: problem(404, 'Không tìm thấy buổi sinh hoạt.', 'SESSION_NOT_FOUND') }
-  return { ok: true, activity: sessionActivity(session) }
+  const activity = sessionActivity(session)
+  if (activity.cancelled) {
+    if (!activity.canView(userId)) return { ok: false, response: problem(403, activity.forbidden.view, 'FORBIDDEN') }
+    return { ok: false, response: problem(422, 'Buổi sinh hoạt đã hủy nên không có điểm danh.', 'SESSION_CANCELLED') }
+  }
+  return { ok: true, activity }
 }
 
 function resolveEvent(params: Params, userId: string): Resolved {
@@ -64,6 +72,20 @@ function writeGuard(activity: AttendanceActivity, day: string | null): Response 
   if (!isAttendanceOpen(activity, day)) return problem(422, `Điểm danh mở lúc ${formatDateTime(activity.opensAt(day))}.`, 'ATTENDANCE_NOT_OPEN')
   if (sheetStateOf(activity, day).closedAt) return problem(422, 'Điểm danh đã chốt nên danh sách chỉ xem được.', 'ATTENDANCE_CLOSED')
   return null
+}
+
+/** FR-ATT-08, BR-ATT-04: sửa sau khi chốt; quyền theo hạn sửa → version → trạng thái không đổi → lý do. */
+function editClosed(activity: AttendanceActivity, day: string | null, targetId: string, body: Partial<MarkAttendanceRequest>, actorId: string): Response {
+  const blocker = closedEditBlocker(activity, actorId, day)
+  if (blocker) return problem(403, blocker, 'FORBIDDEN')
+  const current = recordsOf(activity, day).find((record) => record.userId === targetId)
+  if ((current?.version ?? 0) !== body.version) return problem(409, 'Bản ghi vừa được người khác sửa. Tải lại để xem trạng thái mới nhất.', 'VERSION_CONFLICT')
+  if (current?.status === body.status) return problem(422, 'Trạng thái mới trùng trạng thái đang ghi.', 'ATTENDANCE_UNCHANGED')
+  const reason = typeof body.reason === 'string' ? body.reason.trim() : ''
+  if (reason.length < REASON_MIN || reason.length > REASON_MAX) {
+    return problem(400, 'Sửa điểm danh đã chốt cần lý do.', 'VALIDATION', [{ field: 'reason', message: `Nhập lý do từ ${REASON_MIN} đến ${REASON_MAX} ký tự.` }])
+  }
+  return HttpResponse.json(editClosedAttendance(activity, day, targetId, body.status as AttendanceStatus, reason, actorId))
 }
 
 function attendanceRoutes(path: string, resolve: (params: Params, userId: string) => Resolved) {
@@ -104,6 +126,7 @@ function attendanceRoutes(path: string, resolve: (params: Params, userId: string
       const targetId = String(params.userId)
       const expected = sheetEntries(activity, day.day).some((entry) => entry.userId === targetId)
       if (!expected && !canAccessClub(targetId, activity.clubId)) return problem(404, 'Người này không thuộc CLB.', 'MEMBER_NOT_FOUND')
+      if (sheetStateOf(activity, day.day).closedAt) return editClosed(activity, day.day, targetId, body, user.value.id)
       const blocked = writeGuard(activity, day.day)
       if (blocked) return blocked
       const current = recordsOf(activity, day.day).find((record) => record.userId === targetId)
@@ -203,6 +226,7 @@ function checkInRoute(path: string, locate: (params: Params) => AttendanceActivi
     }
     const userId = user.value.id
     if (!canAccessClub(userId, activity.clubId)) return problem(403, 'Chỉ thành viên CLB tự điểm danh được bằng mã QR.', 'NOT_A_MEMBER')
+    if (activity.cancelled) return problem(422, 'Buổi sinh hoạt đã hủy nên không điểm danh được.', 'SESSION_CANCELLED')
     if (activity.readOnlyReason || sheetStateOf(activity, day).closedAt) return problem(422, 'Điểm danh đã chốt, không ghi nhận thêm.', 'ATTENDANCE_CLOSED')
     if (!isAttendanceOpen(activity, day)) return problem(422, `Điểm danh mở lúc ${formatDateTime(activity.opensAt(day))}.`, 'ATTENDANCE_NOT_OPEN')
     const result = (status: AttendanceStatus, recordedAt: string, alreadyRecorded: boolean): AttendanceCheckIn => ({

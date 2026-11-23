@@ -4,10 +4,26 @@ import type { PersonRef } from '@/api/commonTypes'
 export type NotificationKind = 'SYSTEM' | 'MANUAL'
 
 /** Loại để lọc hộp thông báo (FR-NOT-03). */
-export type NotificationCategory = 'MEMBERSHIP' | 'POSITION' | 'TASK' | 'EVENT' | 'SESSION' | 'FINANCE' | 'TERM' | 'ANNOUNCEMENT'
+export type NotificationCategory = 'MEMBERSHIP' | 'POSITION' | 'TASK' | 'EVENT' | 'SESSION' | 'FINANCE' | 'TERM' | 'ANNOUNCEMENT' | 'RECRUITMENT'
 
-/** Nghĩa của `id` theo loại: giao dịch (`FINANCE`), tạm ứng (`ADVANCE`), đợt đóng quỹ (`DUES`), phiên bàn giao, tab trang Thành viên (`MEMBERS`, null là mặc định), mã lời mời. */
-export type NotificationTargetType = 'CLUB' | 'STRUCTURE' | 'MEMBERS' | 'TASK' | 'EVENT' | 'EVENT_SHARED' | 'SESSION' | 'FINANCE' | 'ADVANCE' | 'DUES' | 'TERM' | 'HANDOVER' | 'DIRECTORY' | 'INVITATION'
+/** Nghĩa của `id` theo loại: giao dịch (`FINANCE`), tạm ứng (`ADVANCE`), đợt đóng quỹ (`DUES`), phiên bàn giao, tab trang Thành viên, mã lời mời, đợt tuyển (`APPLICATION` phía ứng viên, `RECRUITMENT` phía ban chủ nhiệm). */
+export type NotificationTargetType =
+  | 'CLUB'
+  | 'STRUCTURE'
+  | 'MEMBERS'
+  | 'TASK'
+  | 'EVENT'
+  | 'EVENT_SHARED'
+  | 'SESSION'
+  | 'FINANCE'
+  | 'ADVANCE'
+  | 'DUES'
+  | 'TERM'
+  | 'HANDOVER'
+  | 'DIRECTORY'
+  | 'INVITATION'
+  | 'APPLICATION'
+  | 'RECRUITMENT'
 
 /** Màn hình liên quan; mở ra thì màn đó tự kiểm tra quyền tại thời điểm mở (BR-SEC-02). */
 export interface NotificationTarget {

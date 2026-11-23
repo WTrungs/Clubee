@@ -2,6 +2,7 @@ import type { EventStatus, MyRegistration, RegistrationAction } from '@/features
 import { formatDateTime } from '@/shared/format/formatDate'
 import { db } from './db'
 import { eventTarget, notify } from './mockNotifications'
+import { byArrival } from './mockQueue'
 import { registerJob, SYSTEM_ACTOR } from './mockSchedule'
 import { nowIso, toVnIso } from './mockTime'
 import { defaultClubSettings } from './seed/clubSeed'
@@ -19,10 +20,10 @@ export const seatsTaken = (eventId: string) => activeRegistrations(eventId).filt
 
 /** Danh sách chờ theo thứ tự thời điểm đăng ký (BR-EVT-03); trùng giây thì ai ghi vào trước đứng trước. */
 export function waitlistOf(eventId: string): DbRegistration[] {
-  const arrival = (registration: DbRegistration) => db.registrations.indexOf(registration)
-  return activeRegistrations(eventId)
-    .filter((registration) => registration.status === 'WAITLISTED')
-    .toSorted((a, b) => Date.parse(a.registeredAt) - Date.parse(b.registeredAt) || arrival(a) - arrival(b))
+  return byArrival(
+    activeRegistrations(eventId).filter((registration) => registration.status === 'WAITLISTED'),
+    db.registrations,
+  )
 }
 
 export function waitlistPosition(registration: DbRegistration): number | null {

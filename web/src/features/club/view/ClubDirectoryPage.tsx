@@ -1,7 +1,9 @@
 import { motion } from 'motion/react'
 import { ArrowRight, Clock, SearchX, UserPlus } from 'lucide-react'
+import { useSearchParams } from 'react-router'
 import { ClubMonogram } from '@/features/account/view/ClubMonogram'
 import { JoinRequestDialog } from '@/features/member/view/JoinRequestDialog'
+import { MyApplicationsPanel, OpenRecruitmentsPanel } from '@/features/recruitment/view/ApplicantPanels'
 import { itemVariants, listVariants } from '@/shared/motion/presets'
 import { Badge } from '@/shared/ui/Badge'
 import { Button } from '@/shared/ui/Button'
@@ -9,6 +11,7 @@ import { Pagination, SearchInput } from '@/shared/ui/ListControls'
 import { PageHeader } from '@/shared/ui/PageHeader'
 import { Skeleton } from '@/shared/ui/Skeleton'
 import { EmptyState, ErrorState } from '@/shared/ui/StateViews'
+import { Tabs, TabsBar, TabsContent } from '@/shared/ui/Tabs'
 import type { ClubDirectoryEntry } from '../model/clubTypes'
 import { directoryState, useClubDirectoryViewModel } from '../viewModel/useClubDirectoryViewModel'
 import { ClubContactList } from './ClubContactList'
@@ -47,13 +50,12 @@ function ClubStatus({ entry, onJoin, onEnter }: { entry: ClubDirectoryEntry; onJ
   )
 }
 
-/** Tìm CLB và gửi yêu cầu gia nhập (FR-MEM-02); chỉ hiện thông tin công khai (SRS 3.5). */
-export function ClubDirectoryPage() {
+/** Danh bạ CLB và gửi yêu cầu gia nhập (FR-MEM-02); chỉ hiện thông tin công khai (SRS 3.5). */
+function DirectoryPanel() {
   const vm = useClubDirectoryViewModel()
 
   return (
     <div>
-      <PageHeader title="Tìm CLB" description="Các CLB, đội, nhóm đang hoạt động. Gửi yêu cầu để ban chủ nhiệm duyệt bạn vào CLB." />
       <SearchInput label="Tìm CLB" placeholder="Tìm theo tên, lĩnh vực…" value={vm.keyword} onValueChange={vm.setKeyword} className="mb-5 sm:max-w-md" />
 
       {vm.loading && (
@@ -92,6 +94,35 @@ export function ClubDirectoryPage() {
       )}
 
       <JoinRequestDialog target={vm.joinTarget} onClose={vm.closeJoin} />
+    </div>
+  )
+}
+
+const TABS = [
+  { value: 'directory', label: 'Danh bạ' },
+  { value: 'recruitments', label: 'Đợt tuyển đang mở' },
+  { value: 'applications', label: 'Đơn của tôi' },
+]
+
+/** Tìm CLB: danh bạ, đợt tuyển đang mở và đơn ứng tuyển của tôi (FR-MEM-02, FR-REC-02); tab giữ trên URL. */
+export function ClubDirectoryPage() {
+  const [searchParams, setSearchParams] = useSearchParams()
+  const tab = TABS.find((candidate) => candidate.value === searchParams.get('tab'))?.value ?? 'directory'
+  return (
+    <div>
+      <PageHeader title="Tìm CLB" description="Các CLB, đội, nhóm đang hoạt động. Gửi yêu cầu gia nhập hoặc nộp đơn vào đợt tuyển đang mở." />
+      <Tabs value={tab} onValueChange={(value) => setSearchParams(value === 'directory' ? {} : { tab: value }, { replace: true })}>
+        <TabsBar aria-label="Tìm CLB" active={tab} items={TABS} />
+        <TabsContent value="directory" className="pt-5">
+          <DirectoryPanel />
+        </TabsContent>
+        <TabsContent value="recruitments" className="pt-5">
+          <OpenRecruitmentsPanel active={tab === 'recruitments'} />
+        </TabsContent>
+        <TabsContent value="applications" className="pt-5">
+          <MyApplicationsPanel active={tab === 'applications'} />
+        </TabsContent>
+      </Tabs>
     </div>
   )
 }

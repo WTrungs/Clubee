@@ -1,8 +1,12 @@
 import {
   CalendarCheck,
+  CalendarClock,
   CalendarDays,
   CalendarRange,
+  ChartNoAxesColumn,
+  ChartPie,
   Compass,
+  FolderOpen,
   Gauge,
   KanbanSquare,
   LayoutDashboard,
@@ -11,13 +15,17 @@ import {
   Network,
   ScanLine,
   Shuffle,
+  type LucideIcon,
   UserCog,
+  UserPlus,
   UsersRound,
   Wallet,
-  type LucideIcon,
 } from 'lucide-react'
 import type { AccountType } from '@/features/account/model/accountTypes'
-import type { ClubViewerRole } from '@/features/club/model/clubTypes'
+import type { ClubAction, ClubViewerRole } from '@/features/club/model/clubTypes'
+
+/** Có một trong các quyền này thì hiện mục Báo cáo (FR-RPT-03, 04, 06). */
+const REPORT_ACTIONS: ClubAction[] = ['VIEW_CLUB_REPORT', 'VIEW_DEPARTMENT_REPORTS', 'VIEW_AUDIT_LOG']
 
 export interface NavItem {
   to: string
@@ -38,6 +46,7 @@ export function buildNavigation(
   clubName: string | undefined,
   accountType: AccountType = 'USER',
   viewerRole: ClubViewerRole = 'MEMBER',
+  clubActions: readonly ClubAction[] = [],
 ): NavSection[] {
   if (accountType === 'ADMIN') {
     return [
@@ -58,6 +67,8 @@ export function buildNavigation(
         { to: '/clubs', label: 'CLB của tôi', icon: LayoutGrid, end: true },
         { to: '/directory', label: 'Tìm CLB', icon: Compass, end: true },
         { to: '/me/tasks', label: 'Công việc của tôi', icon: ListTodo, end: true },
+        { to: '/me/calendar', label: 'Lịch của tôi', icon: CalendarClock, end: true },
+        { to: '/me/activity', label: 'Hoạt động của tôi', icon: ChartNoAxesColumn, end: true },
         { to: '/scan', label: 'Quét mã điểm danh', icon: ScanLine, end: true },
       ],
     },
@@ -75,7 +86,11 @@ export function buildNavigation(
         { to: `/clubs/${clubId}/events`, label: 'Sự kiện', icon: CalendarDays },
         { to: `/clubs/${clubId}/sessions`, label: 'Sinh hoạt', icon: CalendarCheck },
         { to: `/clubs/${clubId}/tasks`, label: 'Công việc', icon: KanbanSquare },
+        { to: `/clubs/${clubId}/documents`, label: 'Tài liệu', icon: FolderOpen },
         { to: `/clubs/${clubId}/finance`, label: 'Tài chính', icon: Wallet },
+        // Mục quản lý chỉ hiện khi máy chủ cho phép; trang vẫn tự kiểm quyền.
+        ...(clubActions.some((action) => REPORT_ACTIONS.includes(action)) ? [{ to: `/clubs/${clubId}/reports`, label: 'Báo cáo', icon: ChartPie }] : []),
+        ...(clubActions.includes('MANAGE_RECRUITMENT') ? [{ to: `/clubs/${clubId}/recruitments`, label: 'Tuyển thành viên', icon: UserPlus }] : []),
       ],
     })
   }

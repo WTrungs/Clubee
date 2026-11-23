@@ -35,17 +35,17 @@ export function coHostCandidates(event: DbEvent, coHost: DbEventCoHost, keyword:
 }
 
 /** Thôi làm nhân sự ngay và kết thúc chức trưởng tiểu ban kèm lý do; việc và dữ liệu họ tạo giữ nguyên (BR-DATA-01). */
-function endRows(rows: DbEventStaff[], reason: string): void {
+function endRows(rows: DbEventStaff[], reason: string, actorId: string): void {
   const at = nowIso()
   for (const row of rows) row.leftAt = at
   const held = new Set(rows.map((row) => `${row.userId}|${row.subcommitteeId}`))
-  endPositions((position) => position.role === 'SUBCOMMITTEE_LEAD' && held.has(`${position.userId}|${position.scopeId}`), { reason })
+  endPositions((position) => position.role === 'SUBCOMMITTEE_LEAD' && held.has(`${position.userId}|${position.scopeId}`), { reason, actorId })
 }
 
 /** Gỡ CLB đồng tổ chức: mọi nhân sự của CLB đó ở sự kiện thôi ngay; trả về những người bị gỡ. */
-export function endCoHostClubStaff(coHost: DbEventCoHost, reason: string): string[] {
+export function endCoHostClubStaff(coHost: DbEventCoHost, reason: string, actorId: string): string[] {
   const rows = coHostRows(coHost)
-  endRows(rows, `${clubNameOf(coHost.clubId)} thôi đồng tổ chức: ${reason}`)
+  endRows(rows, `${clubNameOf(coHost.clubId)} thôi đồng tổ chức: ${reason}`, actorId)
   return [...new Set(rows.map((row) => row.userId))]
 }
 
@@ -54,7 +54,7 @@ export function endCoHostStaffOf(userId: string, homeClubId: string, actorId: st
   const rows = db.eventStaff.filter((staff) => staff.userId === userId && staff.kind === 'CO_HOST' && staff.homeClubId === homeClubId && staff.leftAt === null)
   if (rows.length === 0) return
   const homeName = clubNameOf(homeClubId)
-  endRows(rows, `Đã rời ${homeName}.`)
+  endRows(rows, `Đã rời ${homeName}.`, actorId)
   for (const eventId of new Set(rows.map((row) => row.eventId))) {
     const event = db.events.find((candidate) => candidate.id === eventId)
     if (!event || !EVENT_STAFF_ACTIVE.includes(event.status)) continue

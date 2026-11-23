@@ -39,7 +39,7 @@ describe('starting a handover (FR-TERM-03, ST-TERM)', () => {
   it('lets the treasurer start it: the running term moves to handing over and the new term stays preparing', async () => {
     const handover = await startHandover('u-mai')
     expect(handover).toMatchObject({ status: 'OPEN', fromTerm: { id: 't-guitar-2026', status: 'HANDING_OVER' }, toTerm: { status: 'PREPARING' }, startedBy: { id: 'u-mai' } })
-    expect(handover.allowedActions).toEqual(['EDIT_APPOINTMENTS', 'COMPLETE'])
+    expect(handover.allowedActions).toEqual(['EDIT_APPOINTMENTS', 'SUBSTITUTE_CONFIRM', 'COMPLETE'])
     expect(handover.blockers).toContain('Chưa có Chủ nhiệm đủ điều kiện cho nhiệm kỳ mới.')
 
     const club = await clubRepository.getClub('c-guitar')

@@ -1,5 +1,6 @@
 import { AnimatePresence, motion } from 'motion/react'
 import { Menu } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import { Link, NavLink, ScrollRestoration, useLocation, useMatch, useOutlet } from 'react-router'
 import { ClubSwitcher } from '@/features/account/view/ClubSwitcher'
@@ -7,6 +8,8 @@ import { UserMenu } from '@/features/account/view/UserMenu'
 import { homeOf } from '@/features/account/viewModel/redirect'
 import { pickGuestClub } from '@/features/account/viewModel/useClubSwitcherViewModel'
 import { useCurrentUser } from '@/features/account/viewModel/useSession'
+import { clubRepository } from '@/features/club/model/clubRepository'
+import { clubQueryKeys } from '@/features/club/viewModel/useClubDetail'
 import { NotificationBell } from '@/features/notification/view/NotificationBell'
 import { cn } from '@/shared/lib/cn'
 import { pageVariants, spring } from '@/shared/motion/presets'
@@ -63,7 +66,10 @@ export function AppLayout() {
   // Người ngoài CLB đang làm BTC một sự kiện của CLB này là khách (FR-EVT-07); máy chủ vẫn tự kiểm từng trang.
   const guestClub = pickGuestClub(user.memberships, user.staffEvents, routeClubId)
   const clubName = guestClub?.clubName ?? user.memberships.find((membership) => membership.clubId === routeClubId)?.clubName
-  const sections = buildNavigation(routeClubId, clubName, user.accountType, guestClub ? 'EVENT_GUEST' : 'MEMBER')
+  // Dùng chung bộ nhớ đệm với trang CLB để menu biết mục quản lý nào được hiện.
+  const memberClub = routeClubId !== undefined && !guestClub && user.accountType !== 'ADMIN' && user.memberships.some((membership) => membership.clubId === routeClubId)
+  const club = useQuery({ queryKey: clubQueryKeys.detail(routeClubId ?? ''), queryFn: () => clubRepository.getClub(routeClubId ?? ''), enabled: memberClub })
+  const sections = buildNavigation(routeClubId, clubName, user.accountType, guestClub ? 'EVENT_GUEST' : 'MEMBER', memberClub ? (club.data?.allowedActions ?? []) : [])
   const admin = user.accountType === 'ADMIN'
   const home = homeOf(user.accountType)
 

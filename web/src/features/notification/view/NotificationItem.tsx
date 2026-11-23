@@ -13,6 +13,7 @@ const categoryIcon: Record<NotificationCategory, LucideIcon> = {
   FINANCE: Wallet,
   POSITION: BadgeCheck,
   TERM: CalendarRange,
+  RECRUITMENT: UserPlus,
   MEMBERSHIP: UserPlus,
 }
 

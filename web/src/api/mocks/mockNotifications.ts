@@ -51,3 +51,6 @@ export const taskTarget = (clubId: string, taskId: string): NotificationTarget =
 export const financeTarget = (clubId: string, transactionId: string): NotificationTarget => ({ type: 'FINANCE', clubId, id: transactionId })
 export const termsTarget = (clubId: string): NotificationTarget => ({ type: 'TERM', clubId, id: null })
 export const handoverTarget = (clubId: string, handoverId: string): NotificationTarget => ({ type: 'HANDOVER', clubId, id: handoverId })
+/** Trang đợt tuyển phía ứng viên; mở ra thì máy chủ kiểm lại quyền xem (BR-SEC-02). */
+export const applicationTarget = (recruitmentId: string): NotificationTarget => ({ type: 'APPLICATION', clubId: null, id: recruitmentId })
+export const recruitmentTarget = (clubId: string, recruitmentId: string): NotificationTarget => ({ type: 'RECRUITMENT', clubId, id: recruitmentId })

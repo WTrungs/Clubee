@@ -1,3 +1,4 @@
+import type { AdvanceStatus } from '@/features/finance/model/advanceTypes'
 import type { EventLeadAction, HandoverItemKind, HandoverItemStatus } from '@/features/term/model/handoverTypes'
 import type { StandingRole } from '@/features/org/model/orgTypes'
 
@@ -27,10 +28,12 @@ export interface DbHandover {
 /** Phần dữ liệu mà người xác nhận đã thấy; đổi sau khi xác nhận thì mục phải xác nhận lại. */
 export type DbHandoverSnapshot =
   | { kind: 'FUND'; balance: number; pendingIds: string[] }
+  | { kind: 'ADVANCE'; status: AdvanceStatus; outstanding: number }
   | { kind: 'TASK'; ownerId: string }
+  | { kind: 'DOCUMENTS'; count: number }
   | { kind: 'EVENT'; leadId: string | null; needsLeadDecision: boolean }
 
-/** Mục bàn giao (SRS 4.1, FR-TERM-04): một quỹ, một sự kiện chưa đóng hoặc một việc của ban chưa xong. */
+/** Mục bàn giao (SRS 4.1, FR-TERM-04): một quỹ, một tạm ứng chưa quyết toán, một sự kiện chưa đóng, một việc của ban chưa xong hoặc tài liệu của nhiệm kỳ cũ (`refId` là mã nhiệm kỳ). */
 export interface DbHandoverItem {
   id: string
   handoverId: string
@@ -43,5 +46,7 @@ export interface DbHandoverItem {
   confirmedAt: string | null
   /** Quyết định về Trưởng BTC; giữ thì `userId` là Trưởng BTC lúc xác nhận. */
   eventLead: { action: EventLeadAction; userId: string } | null
+  /** FR-TERM-07: ban chủ nhiệm hiện tại xác nhận thay; `confirmedBy` khi đó là người xác nhận thay. */
+  substitute: { by: string; reason: string } | null
   version: number
 }

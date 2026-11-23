@@ -32,13 +32,27 @@ export function attendanceWindow(sheet: Pick<AttendanceSheet, 'opensAt' | 'close
   return now < Date.parse(sheet.opensAt) ? 'NOT_OPEN' : 'OPEN'
 }
 
+/** FR-ATT-08, BR-ATT-04: hạn sửa sau khi chốt; quá hạn thì chỉ ban chủ nhiệm sửa được. */
+export function editWindowText(sheet: Pick<AttendanceSheet, 'editableUntil' | 'allowedActions'>, now: number): string {
+  const until = sheet.editableUntil ? formatDateTime(sheet.editableUntil) : null
+  const open = sheet.editableUntil !== null && now < Date.parse(sheet.editableUntil)
+  if (sheet.allowedActions.includes('EDIT')) {
+    return open ? `Sửa được đến ${until}, mỗi lần sửa cần lý do.` : `Đã quá hạn sửa (${until}); ban chủ nhiệm vẫn sửa được, mỗi lần sửa cần lý do.`
+  }
+  if (!until) return 'Danh sách chỉ xem được.'
+  return open ? `Danh sách chỉ xem được; người chốt và ban chủ nhiệm sửa được đến ${until}.` : `Đã quá hạn sửa (${until}); chỉ ban chủ nhiệm sửa được.`
+}
+
 /** Câu báo trên đầu danh sách theo khung điểm danh (BR-ATT-02). */
-export function attendanceNotice(sheet: Pick<AttendanceSheet, 'opensAt' | 'closedAt' | 'closedBy' | 'readOnlyReason'>, now: number): string {
+export function attendanceNotice(
+  sheet: Pick<AttendanceSheet, 'opensAt' | 'closedAt' | 'closedBy' | 'readOnlyReason' | 'editableUntil' | 'allowedActions'>,
+  now: number,
+): string {
   switch (attendanceWindow(sheet, now)) {
     case 'READ_ONLY':
       return sheet.readOnlyReason ?? ''
     case 'CLOSED':
-      return `Đã chốt lúc ${formatDateTime(sheet.closedAt ?? '')}${sheet.closedBy ? ` bởi ${sheet.closedBy.fullName}` : ''}. Danh sách chỉ xem được.`
+      return `Đã chốt lúc ${formatDateTime(sheet.closedAt ?? '')}${sheet.closedBy ? ` bởi ${sheet.closedBy.fullName}` : ''}. ${editWindowText(sheet, now)}`
     case 'NOT_OPEN':
       return `Điểm danh mở lúc ${formatTime(sheet.opensAt)}, ${formatDate(sheet.opensAt)}.`
     case 'OPEN':
@@ -47,10 +61,15 @@ export function attendanceNotice(sheet: Pick<AttendanceSheet, 'opensAt' | 'close
 }
 
 /** Nội dung hộp xác nhận chốt, nêu số người sắp bị ghi Vắng không phép. */
-export function closeConfirmText(counts: Pick<AttendanceCounts, 'unmarked'>): string {
+export function closeConfirmText(counts: Pick<AttendanceCounts, 'unmarked' | 'unmarkedExcused'>): string {
   const after = 'Sau khi chốt, danh sách chỉ xem được.'
   if (counts.unmarked === 0) return `Mọi người trong danh sách đã có trạng thái. ${after}`
-  return `${counts.unmarked} người chưa điểm danh sẽ được ghi Vắng không phép. ${after}`
+  const absent = counts.unmarked - counts.unmarkedExcused
+  const parts = [
+    ...(absent > 0 ? [`${absent} người chưa điểm danh sẽ được ghi Vắng không phép`] : []),
+    ...(counts.unmarkedExcused > 0 ? [`${counts.unmarkedExcused} người có đơn xin phép đã duyệt sẽ được ghi Vắng có phép`] : []),
+  ]
+  return `${parts.join('; ')}. ${after}`
 }
 
 /** Số giây còn lại tới mốc `expiresAt` (mili giây), làm tròn lên và không âm. */

@@ -11,9 +11,9 @@ import type {
   HandoverProgress,
 } from '../model/handoverTypes'
 
-export const HANDOVER_ITEM_KINDS: HandoverItemKind[] = ['FUND', 'EVENT', 'TASK']
+export const HANDOVER_ITEM_KINDS: HandoverItemKind[] = ['FUND', 'ADVANCE', 'EVENT', 'TASK', 'DOCUMENTS']
 
-export const handoverItemKindLabel: Record<HandoverItemKind, string> = { FUND: 'Quỹ', EVENT: 'Sự kiện', TASK: 'Công việc' }
+export const handoverItemKindLabel: Record<HandoverItemKind, string> = { FUND: 'Quỹ', ADVANCE: 'Tạm ứng', EVENT: 'Sự kiện', TASK: 'Công việc', DOCUMENTS: 'Tài liệu' }
 
 export const handoverItemStatusDisplay: Record<HandoverItemStatus, { label: string; tone: Tone }> = {
   PENDING: { label: 'Chờ xác nhận', tone: 'warning' },
@@ -53,6 +53,15 @@ export function eventLeadText(decision: EventLeadDecision): string {
 }
 
 export const canConfirmItem = (item: HandoverItem) => item.allowedActions.includes('CONFIRM')
+
+export const canSubstituteItem = (item: HandoverItem) => item.allowedActions.includes('SUBSTITUTE_CONFIRM')
+
+/** FR-TERM-07: mục xác nhận thay nêu rõ ai xác nhận thay và vì sao. */
+export function substituteText(item: Pick<HandoverItem, 'substitute'>): string | null {
+  return item.substitute ? `Xác nhận thay bởi ${item.substitute.by.fullName}: ${item.substitute.reason}` : null
+}
+
+export const substitutedToast = (count: number) => (count > 1 ? `Đã xác nhận thay ${count} mục bàn giao.` : 'Đã xác nhận thay mục bàn giao.')
 
 /** Sự kiện cần chọn giữ hoặc thay Trưởng BTC thì phải xác nhận riêng trong hộp thoại. */
 export const needsDecisionDialog = (item: HandoverItem) => item.event?.needsLeadDecision === true

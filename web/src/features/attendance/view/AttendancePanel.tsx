@@ -14,6 +14,8 @@ import type { AttendanceActivityRef } from '../model/attendanceTypes'
 import { attendanceFilters, attendanceNotice, closeConfirmText, dayLabel } from '../viewModel/attendanceDisplay'
 import { useAttendanceViewModel } from '../viewModel/useAttendanceViewModel'
 import { AddExtraDialog } from './AddExtraDialog'
+import { AttendanceEditDialog } from './AttendanceEditDialog'
+import { AttendanceHistoryDialog } from './AttendanceHistoryDialog'
 import { AttendanceQrDialog } from './AttendanceQrDialog'
 import { AttendanceListItem } from './AttendanceListItem'
 
@@ -24,7 +26,7 @@ const noticeStyle = {
   READ_ONLY: { icon: Lock, className: 'bg-muted text-muted-foreground' },
 } as const
 
-/** Bảng điểm danh dùng chung cho buổi sinh hoạt và sự kiện (FR-ATT-05, 07, phần chốt của FR-ATT-08). */
+/** Bảng điểm danh dùng chung cho buổi sinh hoạt và sự kiện (FR-ATT-05, 07, 08: chốt và sửa sau khi chốt). */
 export function AttendancePanel({ activity }: { activity: AttendanceActivityRef }) {
   const vm = useAttendanceViewModel(activity)
   const sheet = vm.sheet
@@ -63,7 +65,7 @@ export function AttendancePanel({ activity }: { activity: AttendanceActivityRef 
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <SearchInput label="Tìm người trong danh sách" placeholder="Tìm theo họ tên…" value={vm.keyword} onValueChange={vm.setKeyword} className="sm:max-w-sm sm:flex-1" />
-        {(vm.canMark || vm.canShowQr || vm.canClose) && (
+        {(vm.canMark || vm.canShowQr || vm.canClose || vm.canEdit) && (
           <div className="flex flex-wrap gap-2">
             {vm.canShowQr && (
               <Button variant="outline" onClick={() => vm.setQrOpen(true)}>
@@ -71,7 +73,7 @@ export function AttendancePanel({ activity }: { activity: AttendanceActivityRef 
                 Mã QR
               </Button>
             )}
-            {vm.canMark && (
+            {(vm.canMark || vm.canEdit) && (
               <Button variant="outline" onClick={() => vm.setExtraOpen(true)}>
                 <UserPlus aria-hidden />
                 Thêm người phát sinh
@@ -119,6 +121,9 @@ export function AttendancePanel({ activity }: { activity: AttendanceActivityRef 
               pending={vm.pendingUserIds.has(row.person.id)}
               now={vm.now}
               onMark={(status) => void vm.markStatus({ userId: row.person.id, fullName: row.person.fullName, status, version: row.record?.version ?? 0 })}
+              canEdit={vm.canEdit}
+              onEdit={() => vm.openEdit({ userId: row.person.id, fullName: row.person.fullName, record: row.record })}
+              onShowHistory={() => vm.setHistoryRow(row)}
             />
           ))}
         </motion.ul>
@@ -131,6 +136,8 @@ export function AttendancePanel({ activity }: { activity: AttendanceActivityRef 
 
       <AddExtraDialog activity={activity} vm={vm} />
       <AttendanceQrDialog activity={activity} vm={vm} />
+      <AttendanceEditDialog vm={vm} />
+      <AttendanceHistoryDialog vm={vm} />
       <ConfirmDialog
         open={vm.closeOpen}
         onOpenChange={vm.setCloseOpen}

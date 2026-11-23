@@ -66,12 +66,12 @@ describe('manual attendance (FR-ATT-07)', () => {
   })
 
   it('counts only members who had joined by the session day, and rejects an unknown filter', async () => {
-    const long = db.memberships.find((membership) => membership.userId === 'u-long' && membership.clubId === 'c-guitar')
-    if (long) long.joinedOn = vnDate(-1)
+    // Buổi không giới hạn chỗ tính cả phạm vi; người gia nhập sau ngày diễn ra buổi không thuộc đối tượng.
+    const nam = db.memberships.find((membership) => membership.userId === 'u-nam' && membership.clubId === 'c-guitar')
+    if (nam) nam.joinedOn = vnDate(1)
     signInAs('u-anh')
-    const fingerstyle = await attendanceRepository.sheet(session('s-fingerstyle'), {})
-    expect(fingerstyle.rows.content.map((row) => row.person.id)).not.toContain('u-long')
-    expect((await attendanceRepository.sheet(weekly, {})).rows.content.map((row) => row.person.id)).toContain('u-long')
+    expect((await attendanceRepository.sheet(weekly, {})).rows.content.map((row) => row.person.id)).not.toContain('u-nam')
+    expect((await attendanceRepository.sheet(session('s-music-rehearsal'), {})).rows.content.map((row) => row.person.id)).toContain('u-nam')
     expect((await fail(attendanceRepository.sheet(weekly, { status: 'MAYBE' as never })))?.status).toBe(400)
   })
 
@@ -96,7 +96,8 @@ describe('closing attendance (FR-ATT-08, closing part)', () => {
 
     expect(after.closedAt).not.toBeNull()
     expect(after.closedBy?.id).toBe('u-anh')
-    expect(after.allowedActions).toEqual([])
+    // Đã chốt: chỉ còn sửa có lý do (FR-ATT-08).
+    expect(after.allowedActions).toEqual(['EDIT'])
     expect(after.counts).toMatchObject({ unmarked: 0, absent: before.counts.absent + unmarked, present: before.counts.present, excused: 1 })
     expect(recordsOf('s-weekly-now', 'u-ha')[0]?.status).toBe('EXCUSED')
     expect(recordsOf('s-weekly-now', 'u-yen')).toEqual([])
@@ -105,7 +106,7 @@ describe('closing attendance (FR-ATT-08, closing part)', () => {
     const again = await fail(attendanceRepository.close(weekly, { action: 'CLOSE', day: null, version: after.version }))
     expect(again).toMatchObject({ status: 422, code: 'ATTENDANCE_CLOSED' })
     const edit = await fail(attendanceRepository.mark(weekly, 'u-bao', { day: null, status: 'LATE', version: 1 }))
-    expect(edit).toMatchObject({ status: 422, code: 'ATTENDANCE_CLOSED' })
+    expect(edit).toMatchObject({ status: 400, fieldErrors: [{ field: 'reason' }] })
   })
 
   it('refuses to close when the list changed since it was read, so the absent count stays right', async () => {

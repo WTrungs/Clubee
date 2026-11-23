@@ -98,7 +98,7 @@ test.describe('Ban tổ chức sự kiện', () => {
     await expect(card.getByText('Dương Thanh Tâm')).toHaveCount(0)
   })
 
-  test('Ban chủ nhiệm CLB đồng tổ chức mở sự kiện chung, chỉ xem tiến độ, nhân sự, quỹ', async ({ page }, testInfo) => {
+  test('Ban chủ nhiệm CLB đồng tổ chức mở sự kiện chung, chỉ xem báo cáo, nhân sự, quỹ', async ({ page }, testInfo) => {
     await loginAs(page, 'tu.chau@demo.test')
     await page.goto('/clubs/c-english/events?tab=shared')
     await page.getByRole('button', { name: 'Chấp nhận đồng tổ chức Đêm nhạc Mùa đông' }).click()
@@ -108,10 +108,12 @@ test.describe('Ban tổ chức sự kiện', () => {
     await expect(page.getByRole('heading', { name: 'Đêm nhạc Mùa đông', level: 1 })).toBeVisible()
     await expect(page.getByRole('note')).toContainText('ban chủ nhiệm CLB Tiếng Anh Giao tiếp, CLB đồng tổ chức')
     const tabs = page.getByRole('tablist', { name: 'Nội dung sự kiện' })
-    await expect(tabs.getByRole('tab', { name: 'Tiến độ' })).toBeVisible()
+    await expect(tabs.getByRole('tab', { name: 'Báo cáo' })).toBeVisible()
     await expect(tabs.getByRole('tab', { name: 'Điểm danh' })).toHaveCount(0)
-    await tabs.getByRole('tab', { name: 'Tiến độ' }).click()
+    await tabs.getByRole('tab', { name: 'Báo cáo' }).click()
     await expect(page.getByRole('region', { name: 'Tiến độ chung' })).toBeVisible()
+    // Ban chủ nhiệm CLB đồng tổ chức chỉ thấy số tổng hợp, không thấy phần theo người (FR-RPT-05).
+    await expect(page.getByRole('region', { name: 'Theo người' })).toHaveCount(0)
     await expectNoHorizontalScroll(page)
     await snap(page, testInfo, 'sharedEventProgress')
 

@@ -1,12 +1,11 @@
 import { http, HttpResponse } from 'msw'
-import { formatDateTime, formatTimeRange } from '@/shared/format/formatDate'
+import { formatDateTime, formatTimeRange, toVnDateKey } from '@/shared/format/formatDate'
 import { REASON_MAX, REASON_MIN } from '@/shared/lib/reasonRules'
 import type {
   CreateEventRequest,
   CreateSubcommitteeRequest,
   EventAction,
   EventDetail,
-  EventProgress,
   EventStatus,
   EventSummary,
   EventTransitionAction,
@@ -19,7 +18,6 @@ import type {
   StaffCandidate,
   Subcommittee,
   SubcommitteeAction,
-  TaskProgressCounts,
 } from '@/features/event/model/eventTypes'
 import { db } from '../db'
 import { API, currentUser, matchesKeyword, networkDelay, newId, paginate, problem, writer } from '../mockHttp'
@@ -57,8 +55,7 @@ import {
 import { acceptedCoHost, clubNameOf, coHostCandidates, hasAcceptedCoHost } from '../mockCoHosts'
 import { isBoardAppointee, openHandoverOf } from '../mockTerms'
 import { nowIso } from '../mockTime'
-import { isTaskOverdue } from '../mockScopes'
-import type { DbTask } from '../seed/taskSeed'
+import { eventReport } from '../mockEventReport'
 import type { DbEvent, DbEventStaff, DbRegistration, DbScheduleChange, DbSubcommittee } from '../seed/eventSeed'
 
 const CANCELLABLE: EventStatus[] = ['DRAFT', 'PENDING_APPROVAL', 'APPROVED', 'REGISTRATION_OPEN']
@@ -110,8 +107,8 @@ function eventActions(userId: string, event: DbEvent): EventAction[] {
   if (closable(event) && runs) actions.push('CLOSE')
   if (STAFF_ACTIVE.includes(event.status) && can(userId, event.clubId, 'MANAGE_EVENT_STAFF', eventScope(event))) actions.push('MANAGE_SUBCOMMITTEES')
   if (registrationOpen(event) && isActiveMember(userId, event.clubId) && !myRegistration(userId, event)) actions.push('REGISTER')
-  // Ban chủ nhiệm CLB đồng tổ chức xem cơ cấu và tiến độ, không xem danh sách tham dự (FR-EVT-09, chốt bản hẹp).
-  if (canViewStaff(userId, event)) actions.push('VIEW_STAFF', 'VIEW_PROGRESS')
+  // Ban chủ nhiệm CLB đồng tổ chức xem cơ cấu và báo cáo, không xem danh sách tham dự (FR-EVT-09, FR-RPT-05).
+  if (canViewStaff(userId, event)) actions.push('VIEW_STAFF', 'VIEW_REPORT')
   if (isOrganizer(userId, event)) actions.push('VIEW_REGISTRATIONS')
   const fund = eventFundOf(event.id)
   if (fund && canViewFund(userId, fund)) actions.push('VIEW_FUND')
@@ -171,33 +168,6 @@ function viewingAsCoHost(userId: string, event: DbEvent): { id: string; name: st
   return clubId ? { id: clubId, name: clubNameOf(clubId) } : null
 }
 
-const emptyCounts = (): TaskProgressCounts => ({ total: 0, assigned: 0, inProgress: 0, pendingReview: 0, done: 0, overdue: 0 })
-
-/** Đếm việc theo trạng thái, bỏ việc Đã hủy; quá hạn tính theo BR-TASK-03. */
-function countTasks(tasks: DbTask[]): TaskProgressCounts {
-  const counts = emptyCounts()
-  for (const task of tasks) {
-    if (task.status === 'CANCELLED') continue
-    counts.total += 1
-    if (task.status === 'ASSIGNED') counts.assigned += 1
-    if (task.status === 'IN_PROGRESS') counts.inProgress += 1
-    if (task.status === 'PENDING_REVIEW') counts.pendingReview += 1
-    if (task.status === 'DONE') counts.done += 1
-    if (isTaskOverdue(task)) counts.overdue += 1
-  }
-  return counts
-}
-
-/** FR-EVT-09: tiến độ là số việc theo tiểu ban, không lộ nội dung việc cho người không được xem việc. */
-function eventProgress(event: DbEvent): EventProgress {
-  const subcommittees = db.subcommittees.filter((subcommittee) => subcommittee.eventId === event.id)
-  const tasksOf = (subcommitteeId: string) => db.tasks.filter((task) => task.scopeType === 'SUBCOMMITTEE' && task.scopeId === subcommitteeId)
-  return {
-    total: countTasks(subcommittees.flatMap((subcommittee) => tasksOf(subcommittee.id))),
-    subcommittees: subcommittees.map((subcommittee) => ({ id: subcommittee.id, name: subcommittee.name, counts: countTasks(tasksOf(subcommittee.id)) })),
-  }
-}
-
 function toScheduleChange(change: DbScheduleChange | undefined): ScheduleChange | null {
   if (!change) return null
   const { actorId, actorName, ...rest } = change
@@ -246,9 +216,9 @@ function findEvent(params: Record<string, string | readonly string[] | undefined
 }
 
 /** Chức vụ sự kiện hết hiệu lực khi sự kiện Đã hủy hoặc Đã đóng; bản ghi giữ lại (BR-ORG-03, BR-DATA-01). */
-function endEventPositions(eventId: string, reason: string) {
+function endEventPositions(eventId: string, reason: string, actorId: string) {
   const subcommitteeIds = db.subcommittees.filter((subcommittee) => subcommittee.eventId === eventId).map((subcommittee) => subcommittee.id)
-  endPositions((position) => position.scopeId === eventId || subcommitteeIds.includes(position.scopeId), { reason })
+  endPositions((position) => position.scopeId === eventId || subcommitteeIds.includes(position.scopeId), { reason, actorId })
 }
 
 /** FR-NOT-02: báo người được giao vai trò trong ban tổ chức sự kiện. */
@@ -349,8 +319,13 @@ export const eventHandlers = [
     const url = new URL(request.url)
     const statuses = url.searchParams.getAll('status')
     const keyword = url.searchParams.get('q')
+    // FR-TERM-08: sự kiện bắt đầu trong khoảng nhiệm kỳ.
+    const termId = url.searchParams.get('termId')
+    const term = termId === null ? undefined : db.terms.find((candidate) => candidate.id === termId && candidate.clubId === clubId)
+    if (termId !== null && !term) return problem(400, 'Nhiệm kỳ không hợp lệ.', 'VALIDATION', [{ field: 'termId', message: 'Chọn nhiệm kỳ của CLB này.' }])
     const visible = db.events
       .filter((event) => event.clubId === clubId && canViewEvent(user.value.id, event))
+      .filter((event) => !term || (toVnDateKey(event.startAt) >= term.startOn && toVnDateKey(event.startAt) <= term.endOn))
       .filter((event) => statuses.length === 0 || statuses.includes(event.status))
       .filter((event) => matchesKeyword(`${event.name} ${event.location ?? ''}`, keyword))
     const page = paginate(sortForList(visible), url, 12)
@@ -503,7 +478,7 @@ export const eventHandlers = [
         event.statusBeforeCancel = event.status
         event.status = 'CANCELLED'
         event.cancellationReason = reason
-        endEventPositions(event.id, 'Sự kiện đã hủy.')
+        endEventPositions(event.id, 'Sự kiện đã hủy.', user.value.id)
         break
       case 'CLOSE': {
         if (event.status !== 'ENDED') return invalid()
@@ -515,7 +490,7 @@ export const eventHandlers = [
         }
         if (!fundSettled(event)) return problem(422, 'Quỹ sự kiện chưa quyết toán nên chưa đóng được sự kiện.', 'FUND_NOT_SETTLED')
         event.status = 'CLOSED'
-        endEventPositions(event.id, 'Sự kiện đã đóng.')
+        endEventPositions(event.id, 'Sự kiện đã đóng.', user.value.id)
         break
       }
       default:
@@ -525,16 +500,16 @@ export const eventHandlers = [
     return HttpResponse.json(toDetail(event, user.value.id))
   }),
 
-  http.get(`${API}/clubs/:clubId/events/:eventId/progress`, async ({ params }) => {
+  http.get(`${API}/clubs/:clubId/events/:eventId/report`, async ({ params }) => {
     await networkDelay()
     const user = currentUser()
     if (!user.ok) return user.response
     const event = findEvent(params)
     if (!event || !canViewEvent(user.value.id, event)) return problem(404, 'Không tìm thấy sự kiện.', 'EVENT_NOT_FOUND')
-    if (!eventActions(user.value.id, event).includes('VIEW_PROGRESS')) {
-      return problem(403, 'Chỉ ban tổ chức, ban chủ nhiệm và ban chủ nhiệm CLB đồng tổ chức xem được tiến độ.', 'FORBIDDEN')
+    if (!eventActions(user.value.id, event).includes('VIEW_REPORT')) {
+      return problem(403, 'Chỉ ban tổ chức, ban chủ nhiệm và ban chủ nhiệm CLB đồng tổ chức xem được báo cáo sự kiện.', 'FORBIDDEN')
     }
-    return HttpResponse.json(eventProgress(event))
+    return HttpResponse.json(eventReport(event, user.value.id))
   }),
 
   http.get(`${API}/clubs/:clubId/events/:eventId/subcommittees`, async ({ params }) => {
@@ -704,7 +679,7 @@ export const eventHandlers = [
     if (errors.length > 0) return problem(400, 'Thông tin đổi trưởng tiểu ban chưa hợp lệ.', 'VALIDATION', errors)
     const endReason = currentLeadId ? reason : 'Trưởng tiểu ban mới được chọn khi người giữ chức không còn đủ tư cách.'
     // Trưởng cũ kết thúc chức kèm lý do, vẫn ở lại làm nhân sự của tiểu ban (BR-DATA-01).
-    const ended = endPositions((position) => position.role === 'SUBCOMMITTEE_LEAD' && position.scopeId === subcommittee.id, { reason: endReason })
+    const ended = endPositions((position) => position.role === 'SUBCOMMITTEE_LEAD' && position.scopeId === subcommittee.id, { reason: endReason, actorId: user.value.id })
     notify(
       ended.map((position) => position.userId),
       {

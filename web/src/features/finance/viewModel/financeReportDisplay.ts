@@ -1,16 +1,4 @@
-import type { ReportPeriodKind } from '../model/financeReportTypes'
-
-export const reportPeriodKindLabel: Record<ReportPeriodKind, string> = {
-  MONTH: 'Tháng',
-  SEMESTER: 'Học kỳ',
-  TERM: 'Nhiệm kỳ',
-  CUSTOM: 'Khoảng ngày',
-}
-
-/** Khoảng ngày tự chọn dài nhất, khớp với máy chủ. */
-export const CUSTOM_MAX_YEARS = 5
-
-export const REPORT_PERIOD_KINDS: ReportPeriodKind[] = ['MONTH', 'SEMESTER', 'TERM', 'CUSTOM']
+export { CUSTOM_MAX_YEARS, REPORT_PERIOD_KINDS, reportPeriodKindLabel } from '@/features/report/viewModel/reportPeriodDisplay'
 
 /** `yyyy-mm` thành `mm/yyyy`. */
 export const reportMonthLabel = (month: string) => `${month.slice(5, 7)}/${month.slice(0, 4)}`

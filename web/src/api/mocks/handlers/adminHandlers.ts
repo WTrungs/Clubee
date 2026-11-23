@@ -13,6 +13,9 @@ import { endPositions, grantPosition, hasPosition, isPositionOpen } from '../moc
 import { nowIso } from '../mockTime'
 import { boardCheck, toAdminTransferRequest } from '../mockTransfers'
 
+const accountLabel = (user: Pick<DbUser, 'fullName'>) => `Tài khoản của ${user.fullName}`
+const transferLabel = (clubId: string) => `Yêu cầu chuyển quyền Chủ nhiệm ${db.clubs.find((club) => club.id === clubId)?.name ?? 'CLB'}`
+
 const DAY_MS = 24 * 60 * 60 * 1000
 
 /** SRS 3.4: route Admin chỉ dành cho tài khoản Admin. */
@@ -130,7 +133,7 @@ export const adminHandlers = [
     if (body.action === 'LOCK') Object.assign(target, { status: 'LOCKED', lockReason: reason, lockedAt: now, lockedBy: user.value.id })
     else Object.assign(target, { status: 'ACTIVE', lockReason: null, lockedAt: null, lockedBy: null })
     target.version += 1
-    audit({ actorId: user.value.id, clubId: null, action: body.action === 'LOCK' ? 'LOCK_ACCOUNT' : 'UNLOCK_ACCOUNT', objectType: 'ACCOUNT', objectId: target.id, before, after: snapshot(target), reason })
+    audit({ actorId: user.value.id, clubId: null, action: body.action === 'LOCK' ? 'LOCK_ACCOUNT' : 'UNLOCK_ACCOUNT', objectType: 'ACCOUNT', objectId: target.id, objectLabel: accountLabel(target), before, after: snapshot(target), reason })
     return HttpResponse.json(toAdminAccount(target, user.value.id))
   }),
 
@@ -143,7 +146,7 @@ export const adminHandlers = [
     if (target.status === 'LOCKED') return problem(422, 'Tài khoản đang bị khóa. Mở khóa trước khi gửi liên kết đặt mật khẩu.', 'ACCOUNT_LOCKED')
     if (target.status === 'PENDING_VERIFICATION') return problem(422, 'Tài khoản chưa xác thực email nên chưa đặt lại mật khẩu được.', 'INVALID_TRANSITION')
     // Mock không gửi thư (IF-03 thuộc máy chủ); chỉ ghi nhật ký.
-    audit({ actorId: user.value.id, clubId: null, action: 'SEND_PASSWORD_RESET', objectType: 'ACCOUNT', objectId: target.id, before: null, after: null, reason: null })
+    audit({ actorId: user.value.id, clubId: null, action: 'SEND_PASSWORD_RESET', objectType: 'ACCOUNT', objectId: target.id, objectLabel: accountLabel(target), before: null, after: null, reason: null })
     return new HttpResponse(null, { status: 202 })
   }),
 
@@ -176,7 +179,7 @@ export const adminHandlers = [
       .filter((membership) => membership.clubId === transfer.clubId && membership.status === 'ACTIVE' && !hasPosition(membership.userId, 'PRESIDENT', transfer.clubId))
       .map((membership) => ({ id: membership.userId, fullName: personRef(membership.userId).fullName, departmentName: departmentNameOf(membership.userId, transfer.clubId), joinedOn: membership.joinedOn }))
       .toSorted((a, b) => a.fullName.localeCompare(b.fullName, 'vi'))
-    audit({ actorId: user.value.id, clubId: transfer.clubId, action: 'VIEW_TRANSFER_CANDIDATES', objectType: 'TRANSFER_REQUEST', objectId: transfer.id, before: null, after: null, reason: null })
+    audit({ actorId: user.value.id, clubId: transfer.clubId, action: 'VIEW_TRANSFER_CANDIDATES', objectType: 'TRANSFER_REQUEST', objectId: transfer.id, objectLabel: transferLabel(transfer.clubId), before: null, after: null, reason: null })
     return HttpResponse.json(candidates)
   }),
 
@@ -211,16 +214,16 @@ export const adminHandlers = [
     const now = nowIso()
     if (body.action === 'REJECT') {
       Object.assign(transfer, { status: 'REJECTED', handledBy: user.value.id, handledAt: now, decisionNote: note, version: transfer.version + 1 })
-      audit({ actorId: user.value.id, clubId: club.id, action: 'REJECT_PRESIDENCY_TRANSFER', objectType: 'TRANSFER_REQUEST', objectId: transfer.id, before: { status: 'PENDING' }, after: { status: 'REJECTED' }, reason: note })
+      audit({ actorId: user.value.id, clubId: club.id, action: 'REJECT_PRESIDENCY_TRANSFER', objectType: 'TRANSFER_REQUEST', objectId: transfer.id, objectLabel: transferLabel(club.id), before: { status: 'PENDING' }, after: { status: 'REJECTED' }, reason: note })
       notify([transfer.requesterId], { clubId: club.id, category: 'POSITION', title: 'Yêu cầu chuyển quyền Chủ nhiệm bị từ chối', body: `Lý do: ${note}`, target: structureTarget(club.id), actorId: user.value.id })
       return HttpResponse.json(toAdminTransferRequest(transfer))
     }
     // Ngoại lệ của Admin (FR-ACC-08): không xét nhiệm kỳ quá hạn hay đang bàn giao; chỉ thu hồi Chủ nhiệm cũ, các chức khác giữ nguyên.
     const before = { presidents: db.positions.filter((position) => position.clubId === club.id && position.role === 'PRESIDENT' && isPositionOpen(position)).map((position) => position.userId) }
-    endPositions((position) => position.clubId === club.id && position.role === 'PRESIDENT', { reason: `Quản trị hệ thống chuyển quyền Chủ nhiệm: ${note}` })
+    endPositions((position) => position.clubId === club.id && position.role === 'PRESIDENT', { reason: `Quản trị hệ thống chuyển quyền Chủ nhiệm: ${note}`, actorId: user.value.id })
     grantPosition({ userId: newPresidentId, clubId: club.id, role: 'PRESIDENT', scopeId: club.id, assignedBy: user.value.id })
     Object.assign(transfer, { status: 'APPROVED', handledBy: user.value.id, handledAt: now, newPresidentId, decisionNote: note, version: transfer.version + 1 })
-    audit({ actorId: user.value.id, clubId: club.id, action: 'APPROVE_PRESIDENCY_TRANSFER', objectType: 'TRANSFER_REQUEST', objectId: transfer.id, before, after: { presidents: [newPresidentId] }, reason: note })
+    audit({ actorId: user.value.id, clubId: club.id, action: 'APPROVE_PRESIDENCY_TRANSFER', objectType: 'TRANSFER_REQUEST', objectId: transfer.id, objectLabel: transferLabel(club.id), before, after: { presidents: [newPresidentId] }, reason: note })
     const members = db.memberships.filter((membership) => membership.clubId === club.id && ROSTER_STATUSES.includes(membership.status)).map((membership) => membership.userId)
     notify(members, {
       clubId: club.id,

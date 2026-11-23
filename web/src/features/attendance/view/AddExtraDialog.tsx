@@ -18,10 +18,19 @@ interface AddExtraDialogProps {
 export function AddExtraDialog({ activity, vm }: AddExtraDialogProps) {
   const candidates = useAttendanceCandidates(activity, vm.day, vm.extraOpen)
   const busy = vm.extraPendingId !== null
+  // Sau khi chốt, thêm người là một lần sửa có lý do (FR-ATT-08).
+  const closed = vm.canEdit && !vm.canMark
 
   return (
     <Dialog open={vm.extraOpen} onOpenChange={vm.setExtraOpen}>
-      <DialogContent title="Thêm người phát sinh" description="Thành viên CLB không có trong danh sách mà vẫn đến; người được thêm ghi Có mặt.">
+      <DialogContent
+        title="Thêm người phát sinh"
+        description={
+          closed
+            ? 'Đã chốt điểm danh: chọn người, rồi chọn trạng thái và ghi lý do (ví dụ nhập lại từ danh sách giấy).'
+            : 'Thành viên CLB không có trong danh sách mà vẫn đến; người được thêm ghi Có mặt.'
+        }
+      >
         <div className="space-y-3">
           <SearchInput label="Tìm thành viên" placeholder="Tìm theo họ tên…" value={candidates.keyword} onValueChange={candidates.setKeyword} />
           <FormAlert message={vm.extraError} />
@@ -54,9 +63,9 @@ export function AddExtraDialog({ activity, vm }: AddExtraDialogProps) {
                   size="sm"
                   variant="outline"
                   loading={vm.extraPendingId === candidate.id}
-                  disabled={busy || !vm.canMark}
+                  disabled={busy || !(vm.canMark || vm.canEdit)}
                   aria-label={`Thêm ${candidate.fullName}`}
-                  onClick={() => vm.addExtra(candidate.id, candidate.fullName)}
+                  onClick={() => (closed ? vm.openEdit({ userId: candidate.id, fullName: candidate.fullName, record: null }) : vm.addExtra(candidate.id, candidate.fullName))}
                 >
                   <UserPlus aria-hidden />
                   Thêm

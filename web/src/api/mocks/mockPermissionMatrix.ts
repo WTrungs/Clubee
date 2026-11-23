@@ -69,6 +69,7 @@ function writeCell(clubId: string, actorId: string, change: PermissionChange, re
     action: reset ? 'RESET_PERMISSION' : 'CHANGE_PERMISSION',
     objectType: 'PERMISSION',
     objectId: `${change.role}:${change.permission}`,
+    objectLabel: `${positionTitles[change.role]}: ${PERMISSION_CATALOG[change.permission].label}`,
     before: { enabled: before },
     after: { enabled: change.enabled },
     reason: null,

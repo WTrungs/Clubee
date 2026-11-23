@@ -60,8 +60,13 @@ describe('handover catalog (FR-TERM-04)', () => {
     expect(tasks.map((item) => item.title).toSorted()).toEqual(expected.map((task) => task.title).toSorted())
     expect(tasks[0]?.task).toMatchObject({ owner: { id: expect.any(String) }, assigner: { id: expect.any(String) } })
 
+    // Tạm ứng mẫu còn Chờ duyệt nên chưa vào danh mục; tài liệu của nhiệm kỳ cũ gộp thành một mục.
+    expect(await list(handover.id, 'ADVANCE')).toHaveLength(0)
+    const documents = await list(handover.id, 'DOCUMENTS')
+    expect(documents).toEqual([expect.objectContaining({ title: 'Tài liệu Nhiệm kỳ 2026–2027', documents: { termName: 'Nhiệm kỳ 2026–2027', count: 3 } })])
+
     const fresh = await termRepository.handover('c-guitar', handover.id)
-    expect(fresh.counts).toMatchObject({ pending: funds.length + events.length + tasks.length, confirmed: 0, resolved: 0 })
+    expect(fresh.counts).toMatchObject({ pending: funds.length + events.length + tasks.length + documents.length, confirmed: 0, resolved: 0 })
     expect(fresh.counts.byKind.EVENT.pending).toBe(events.length)
     expect(fresh.blockers).toContain(`Còn ${fresh.counts.pending} mục bàn giao chờ ban chủ nhiệm mới xác nhận.`)
   })
@@ -74,8 +79,10 @@ describe('handover catalog (FR-TERM-04)', () => {
     expect(current?.handoverProgress).toEqual({ pending: handover.counts.pending, confirmed: 0 })
 
     signInAs('u-anh')
+    // Ban chủ nhiệm cũ không xác nhận trực tiếp, chỉ xác nhận thay (FR-TERM-07).
     const asOldBoard = await list(handover.id)
-    expect(asOldBoard.every((item) => item.allowedActions.length === 0)).toBe(true)
+    expect(asOldBoard.every((item) => !item.allowedActions.includes('CONFIRM'))).toBe(true)
+    expect(asOldBoard.filter((item) => item.allowedActions.includes('SUBSTITUTE_CONFIRM')).length).toBeGreaterThan(0)
     signInAs('u-linh')
     expect((await termRepository.handover('c-guitar', handover.id)).allowedActions).toEqual(['CONFIRM'])
     expect((await list(handover.id)).every((item) => item.allowedActions.includes('CONFIRM'))).toBe(true)

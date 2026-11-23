@@ -1,19 +1,26 @@
 import type { PermissionKey } from '@/features/org/model/permissionTypes'
 import type { DbAuditLog } from './mockAudit'
 import { createAdvanceSeed, type DbAdvance } from './seed/advanceSeed'
+import { createAuditSeed } from './seed/auditSeed'
 import { createDuesSeed, type DbDuesCampaign, type DbDuesItem } from './seed/duesSeed'
 import type { DbPermissionMatrixMeta } from './mockPermissionMatrix'
 import type { DbTransferRequest } from './mockTransfers'
 import {
+  createAbsenceRequestSeed,
   createAttendanceSeed,
   createAttendanceSheetSeed,
+  createSessionRegistrationSeed,
   createSessionSeed,
+  type DbAbsenceRequest,
   type DbAttendance,
   type DbAttendanceCode,
   type DbAttendanceSheet,
   type DbSession,
+  type DbSessionRegistration,
 } from './seed/attendanceSeed'
 import { createClubSeed, type DbClub } from './seed/clubSeed'
+import { createDocumentSeed, type DbDocument, type DbDocumentFile } from './seed/documentSeed'
+import { createApplicationSeed, createRecruitmentSeed, type DbApplication, type DbRecruitment } from './seed/recruitmentSeed'
 import {
   createCoHostSeed,
   createEventSeed,
@@ -35,8 +42,10 @@ import { createAttachmentSeed, createTaskSeed, type DbAttachment, type DbTask } 
 import type { DbHandover, DbHandoverItem } from './seed/termSeed'
 
 /** Dữ liệu tổng hợp, không phải người thật (security.md); bản ghi ở dạng phía máy chủ, handler map sang DTO. */
-export type { DbAttendance, DbAttendanceCode, DbAttendanceSheet, DbSession } from './seed/attendanceSeed'
+export type { DbAbsenceRequest, DbAttendance, DbAttendanceCode, DbAttendanceSheet, DbSession, DbSessionRegistration } from './seed/attendanceSeed'
 export type { DbClub } from './seed/clubSeed'
+export type { DbDocument, DbDocumentFile } from './seed/documentSeed'
+export type { DbApplication, DbRecruitment } from './seed/recruitmentSeed'
 export type { DbAdvance } from './seed/advanceSeed'
 export type { DbDuesCampaign, DbDuesItem } from './seed/duesSeed'
 export type { DbFund, DbTransaction } from './seed/financeSeed'
@@ -101,6 +110,12 @@ export interface MockDb {
   duesCampaigns: DbDuesCampaign[]
   duesItems: DbDuesItem[]
   sessions: DbSession[]
+  sessionRegistrations: DbSessionRegistration[]
+  absenceRequests: DbAbsenceRequest[]
+  documents: DbDocument[]
+  documentFiles: DbDocumentFile[]
+  recruitments: DbRecruitment[]
+  applications: DbApplication[]
   attendance: DbAttendance[]
   attendanceSheets: DbAttendanceSheet[]
   attendanceCodes: DbAttendanceCode[]
@@ -113,7 +128,7 @@ export function createSeed(): MockDb {
   const users = createUserSeed()
   const departments = createDepartmentSeed()
   const memberships = createMembershipSeed()
-  return {
+  const seed: MockDb = {
     users,
     clubs: createClubSeed(),
     terms: createTermSeed(),
@@ -142,12 +157,21 @@ export function createSeed(): MockDb {
     advances: createAdvanceSeed(),
     ...createDuesSeed({ memberships, users, departments }),
     sessions: createSessionSeed(),
+    sessionRegistrations: [],
+    absenceRequests: createAbsenceRequestSeed(),
+    documents: createDocumentSeed(),
+    recruitments: createRecruitmentSeed(),
+    applications: createApplicationSeed(),
+    documentFiles: [],
     attendance: createAttendanceSeed(),
     attendanceSheets: createAttendanceSheetSeed(),
     attendanceCodes: [],
     auditLogs: [],
     transferRequests: [],
   }
+  seed.sessionRegistrations = createSessionRegistrationSeed(seed)
+  seed.auditLogs = createAuditSeed(seed)
+  return seed
 }
 
 export const db: MockDb = createSeed()

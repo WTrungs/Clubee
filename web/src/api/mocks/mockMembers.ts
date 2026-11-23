@@ -2,8 +2,10 @@ import type { PersonRef } from '@/api/commonTypes'
 import type { MemberStatus } from '@/features/account/model/accountTypes'
 import type { MyClubMembership } from '@/features/club/model/clubTypes'
 import { matchesKeyword } from '@/shared/lib/searchText'
+import { membershipAuditLabel } from './auditLabels'
 import { db, type DbDepartment, type DbMembership } from './db'
-import { shiftDate } from './mockTime'
+import { audit } from './mockAudit'
+import { nowIso, shiftDate } from './mockTime'
 
 /** Nguồn chung về tư cách thành viên cho mọi handler (Công việc, Sự kiện, Thành viên, Cơ cấu). */
 export const ROSTER_STATUSES: MemberStatus[] = ['PROBATION', 'ACTIVE', 'ON_LEAVE']
@@ -48,6 +50,32 @@ export function memberCountOf(clubId: string): number {
 /** Số người có ban chính là ban này; ban còn người thì chưa đóng, chưa bỏ được (BR-MEM-06). */
 export function departmentMemberCount(departmentId: string): number {
   return db.memberships.filter((membership) => membership.departmentId === departmentId && ROSTER_STATUSES.includes(membership.status)).length
+}
+
+export interface MembershipChangeInput {
+  actorId: string
+  fromStatus: MemberStatus | null
+  toStatus: MemberStatus
+  reason: string | null
+  /** Mốc của lần đổi; mặc định là bây giờ. */
+  at?: string
+}
+
+/** Ghi một lần chuyển trạng thái tư cách vào lịch sử của tư cách và vào nhật ký thao tác (BR-MEM-02, BR-DATA-03). */
+export function recordMembershipChange(membership: DbMembership, { actorId, fromStatus, toStatus, reason, at = nowIso() }: MembershipChangeInput): void {
+  membership.history.push({ at, actorId, fromStatus, toStatus, reason })
+  audit({
+    at,
+    actorId,
+    clubId: membership.clubId,
+    action: 'CHANGE_MEMBER_STATUS',
+    objectType: 'MEMBERSHIP',
+    objectId: membership.id,
+    objectLabel: membershipAuditLabel(db, membership),
+    before: fromStatus ? { status: fromStatus } : null,
+    after: { status: toStatus },
+    reason,
+  })
 }
 
 /** Đóng khoảng ban chính đang mở ở ngày cuối cho trước; ngày cuối trước ngày bắt đầu là khoảng bị hủy trong ngày. */
