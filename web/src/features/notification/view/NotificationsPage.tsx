@@ -12,6 +12,7 @@ import { NOTIFICATION_CATEGORIES, notificationCategoryDisplay } from '../viewMod
 import { useNotificationInboxViewModel } from '../viewModel/useNotificationInboxViewModel'
 import { NotificationDetailSheet } from './NotificationDetailSheet'
 import { NotificationItem } from './NotificationItem'
+import { SentAnnouncementsPanel } from './SentAnnouncementsPanel'
 
 /** FR-NOT-03: hộp thông báo gộp mọi CLB. */
 export function NotificationsPage() {
@@ -44,9 +45,15 @@ export function NotificationsPage() {
           items={[
             { value: 'all', label: 'Tất cả' },
             { value: 'unread', label: 'Chưa đọc', count: vm.unreadCount },
+            ...(vm.hasSent || vm.tab === 'sent' ? [{ value: 'sent', label: 'Đã gửi' }] : []),
           ]}
         />
       </Tabs>
+
+      {vm.tab === 'sent' ? (
+        <SentAnnouncementsPanel />
+      ) : (
+        <>
 
       <div className="mt-4 flex flex-col gap-3 lg:flex-row lg:items-center">
         <SearchInput label="Tìm thông báo" placeholder="Tìm theo tiêu đề, tên CLB…" value={vm.keyword} onValueChange={vm.setKeyword} className="w-full lg:w-72" />
@@ -86,6 +93,8 @@ export function NotificationsPage() {
       </section>
 
       <Pagination className="mt-4" page={vm.page} totalPages={vm.totalPages} totalElements={vm.totalElements} pageSize={vm.pageSize} onPageChange={vm.setPage} />
+        </>
+      )}
       <NotificationDetailSheet id={vm.openedId} onClose={vm.closeDetail} />
     </div>
   )

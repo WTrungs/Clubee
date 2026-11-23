@@ -2,6 +2,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 import { useForm, useWatch } from 'react-hook-form'
+import { useNavigate } from 'react-router'
 import { toast } from 'sonner'
 import { ApiError, getErrorMessage, isForbidden } from '@/api/apiError'
 import { useCurrentClub } from '@/features/club/viewModel/clubContext'
@@ -16,6 +17,7 @@ const SERVER_FIELDS = ['audience', 'title', 'body'] as const
 
 /** FR-NOT-01: gửi thông báo cho một nhóm thuộc phạm vi chức vụ ở CLB hiện hành; chỉ báo thành công khi máy chủ xác nhận. */
 export function useComposeAnnouncementViewModel(onDone: () => void) {
+  const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { clubId, club } = useCurrentClub()
   const audiences = useQuery({ queryKey: notificationQueryKeys.audiences(clubId), queryFn: () => notificationRepository.audiences(clubId), staleTime: 0 })
@@ -39,7 +41,10 @@ export function useComposeAnnouncementViewModel(onDone: () => void) {
     meta: { silentError: true },
     onMutate: () => setFieldErrorsApplied(false),
     onSuccess: (result) => {
-      toast.success(`Đã gửi thông báo tới ${result.recipientCount} người.`)
+      void queryClient.invalidateQueries({ queryKey: notificationQueryKeys.all })
+      toast.success(`Đã gửi thông báo tới ${result.recipientCount} người.`, {
+        action: { label: 'Xem ai đã đọc', onClick: () => void navigate('/notifications?tab=sent') },
+      })
       onDone()
     },
     onError: (error) => {

@@ -16,6 +16,8 @@ export interface DbNotification {
   createdAt: string
   /** Nhóm nhận của thông báo gửi tay; bản ghi cũ không có thì chỉ kiểm còn là thành viên CLB (BR-SEC-02). */
   audience?: AnnouncementAudienceRef
+  /** FR-NOT-05: người gửi ghim lên đầu hộp thư người nhận. */
+  pinned?: { by: string; at: string } | null
 }
 
 export interface DbNotificationRecipient {

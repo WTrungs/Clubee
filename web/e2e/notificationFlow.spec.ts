@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { loginAs, snap } from './helpers.ts'
+import { loginAs, snap, switchUser } from './helpers.ts'
 
 test.describe('Thông báo', () => {
   test('mở thông báo CLB trong sheet, mở việc được giao tới đúng việc', async ({ page }, testInfo) => {
@@ -118,5 +118,50 @@ test.describe('Thông báo', () => {
     await expect(page.getByRole('switch', { name: 'Email: Công việc' })).not.toBeChecked()
     await expect(page.getByRole('switch', { name: 'Push: Sinh hoạt' })).not.toBeChecked()
     await expect(page.getByRole('switch', { name: 'Push: Công việc' })).toBeChecked()
+  })
+
+  test('chủ nhiệm gửi rồi ghim thông báo; thành viên thấy tin ghim đầu hộp thư; chủ nhiệm xem ai đã đọc (FR-NOT-05)', async ({ page }, testInfo) => {
+    const goTo = (path: string) =>
+      page.evaluate((target) => {
+        window.history.pushState({}, '', target)
+        window.dispatchEvent(new PopStateEvent('popstate'))
+      }, path)
+    await loginAs(page, 'anh.nguyen@demo.test')
+    await page.goto('/clubs/c-guitar')
+    await page.getByRole('button', { name: 'Gửi thông báo' }).click()
+    const sheet = page.getByRole('dialog', { name: 'Gửi thông báo' })
+    await sheet.getByRole('combobox', { name: 'Gửi tới' }).selectOption('CLUB:c-guitar')
+    await sheet.getByRole('textbox', { name: 'Tiêu đề' }).fill('Họp toàn CLB tối thứ Sáu')
+    await sheet.getByRole('textbox', { name: 'Nội dung' }).fill('Mọi người có mặt lúc 19:00 tại phòng B2.04.')
+    await sheet.getByRole('button', { name: 'Gửi thông báo' }).click()
+    await page.getByRole('button', { name: 'Xem ai đã đọc' }).click()
+    await page.waitForURL('**/notifications?tab=sent')
+    const sent = page.getByRole('list', { name: 'Thông báo đã gửi' })
+    await sent.getByRole('button', { name: /Họp toàn CLB tối thứ Sáu/ }).click()
+    const detail = page.getByRole('dialog', { name: 'Họp toàn CLB tối thứ Sáu' })
+    await expect(detail.getByText(/^0\/\d+ đã đọc$/).first()).toBeVisible()
+    await detail.getByRole('button', { name: 'Ghim lên đầu' }).click()
+    await expect(detail.getByText('Đang ghim')).toBeVisible()
+    await page.keyboard.press('Escape')
+    await goTo('/clubs')
+
+    await switchUser(page, 'Nguyễn Minh Anh', 'ha.le@demo.test')
+    await page.getByRole('link', { name: /^Thông báo/ }).click()
+    const first = page.getByRole('listitem').filter({ has: page.getByRole('button') }).first()
+    await expect(first).toContainText('Đã ghim')
+    await expect(first).toContainText('Họp toàn CLB tối thứ Sáu')
+    await snap(page, testInfo, 'pinnedInbox')
+    await first.getByRole('button').click()
+    await expect(page.getByRole('dialog', { name: 'Họp toàn CLB tối thứ Sáu' })).toBeVisible()
+    await page.keyboard.press('Escape')
+    await goTo('/clubs')
+
+    await switchUser(page, 'Lê Thu Hà', 'anh.nguyen@demo.test')
+    await page.getByRole('link', { name: /^Thông báo/ }).click()
+    await page.getByRole('tab', { name: 'Đã gửi' }).click()
+    await page.getByRole('list', { name: 'Thông báo đã gửi' }).getByRole('button', { name: /Họp toàn CLB tối thứ Sáu/ }).click()
+    await expect(detail.getByText(/^1\/\d+ đã đọc$/).first()).toBeVisible()
+    await expect(detail.getByRole('list', { name: 'Người đã đọc' })).toContainText('Lê Thu Hà')
+    await snap(page, testInfo, 'announcementReceipts', { fullPage: false })
   })
 })

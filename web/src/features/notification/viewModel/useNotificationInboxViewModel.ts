@@ -1,6 +1,6 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
-import { useNavigate } from 'react-router'
+import { useNavigate, useSearchParams } from 'react-router'
 import { toast } from 'sonner'
 import { useClampPage } from '@/shared/hooks/useClampPage'
 import { useDebouncedValue } from '@/shared/hooks/useDebouncedValue'
@@ -8,11 +8,12 @@ import { notificationRepository } from '../model/notificationRepository'
 import type { NotificationCategory, NotificationQuery, NotificationSummary } from '../model/notificationTypes'
 import { notificationPath, opensInSheet } from './notificationDisplay'
 import { notificationQueryKeys } from './notificationQueryKeys'
+import { useHasSentAnnouncements } from './useSentAnnouncementsViewModel'
 import { useUnreadCount } from './useUnreadCount'
 
 const PAGE_SIZE = 20
 
-export type InboxTab = 'all' | 'unread'
+export type InboxTab = 'all' | 'unread' | 'sent'
 
 /** Nội dung chỉ tải khi mở, máy chủ kiểm tra lại quyền lúc đó (BR-SEC-02). */
 export function useNotificationDetail(id: string | null) {
@@ -30,7 +31,10 @@ export function useNotificationDetail(id: string | null) {
 export function useNotificationInboxViewModel() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const [tab, setTab] = useState<InboxTab>('all')
+  const [searchParams] = useSearchParams()
+  // Gửi thông báo xong có thể mở thẳng tab Đã gửi (`?tab=sent`, FR-NOT-05).
+  const [tab, setTab] = useState<InboxTab>(searchParams.get('tab') === 'sent' ? 'sent' : 'all')
+  const hasSent = useHasSentAnnouncements()
   const [category, setCategory] = useState<NotificationCategory | null>(null)
   const [keyword, setKeyword] = useState('')
   const debouncedKeyword = useDebouncedValue(keyword.trim(), 300)
@@ -54,8 +58,9 @@ export function useNotificationInboxViewModel() {
 
   return {
     tab,
+    hasSent,
     setTab: (value: string) => {
-      setTab(value === 'unread' ? 'unread' : 'all')
+      setTab(value === 'unread' || value === 'sent' ? value : 'all')
       setPage(0)
     },
     category,

@@ -24,6 +24,7 @@ function toSummary(notification: DbNotification, recipient: DbNotificationRecipi
     createdAt: notification.createdAt,
     readAt: recipient.readAt,
     target: notification.target,
+    pinned: Boolean(notification.pinned),
   }
 }
 
@@ -36,7 +37,13 @@ function inboxOf(userId: string): Array<{ notification: DbNotification; recipien
       const notification = db.notifications.find((candidate) => candidate.id === recipient.notificationId)
       return notification ? [{ notification, recipient }] : []
     })
-    .toSorted((a, b) => b.notification.createdAt.localeCompare(a.notification.createdAt) || order(b.notification) - order(a.notification))
+    // FR-NOT-05: tin được ghim đứng đầu, ghim sau đứng trước; còn lại theo thời gian.
+    .toSorted(
+      (a, b) =>
+        (b.notification.pinned?.at ?? '').localeCompare(a.notification.pinned?.at ?? '') ||
+        b.notification.createdAt.localeCompare(a.notification.createdAt) ||
+        order(b.notification) - order(a.notification),
+    )
 }
 
 /** Thông báo chỉ người nhận thấy; người khác nhận 404 như không tồn tại. */
