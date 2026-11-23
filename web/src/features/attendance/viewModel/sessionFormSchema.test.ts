@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { formatDate } from '@/shared/format/formatDate'
-import { scopeKeyOf, sessionFormSchema, toCreateSessionRequest, type SessionFormValues } from './sessionFormSchema'
+import { previewSeriesDays, scopeKeyOf, sessionFormSchema, toCreateSeriesRequest, toCreateSessionRequest, type SessionFormValues } from './sessionFormSchema'
 
 const DAY_MS = 24 * 60 * 60 * 1000
 const nextWeek = formatDate(new Date(Date.now() + 7 * DAY_MS))
@@ -16,6 +16,8 @@ const values = (fields: Partial<SessionFormValues> = {}): SessionFormValues => (
   capacity: '',
   deadlineDate: '',
   deadlineTime: '',
+  repeat: 'NONE',
+  untilDate: '',
   ...fields,
 })
 const issuesOf = (input: SessionFormValues) => {
@@ -52,5 +54,29 @@ describe('sessionFormSchema (FR-ATT-01)', () => {
     expect(department.startAt).toMatch(/T18:00:00\+07:00$/)
     expect(department.registrationDeadline).toMatch(/T12:00:00\+07:00$/)
     expect(toCreateSessionRequest(values({ scopeKey: 'CLUB' }))).toMatchObject({ scopeType: 'CLUB', departmentId: null, capacity: null, registrationDeadline: null })
+  })
+})
+
+describe('repeating sessions (FR-ATT-02)', () => {
+  const inWeeks = (weeks: number) => formatDate(new Date(Date.now() + (7 + 7 * weeks) * DAY_MS))
+
+  it('ignores the last day when the session does not repeat', () => {
+    expect(issuesOf(values({ untilDate: 'rác' }))).toEqual({})
+    expect(previewSeriesDays(values())).toEqual([])
+  })
+
+  it('needs a valid last day that gives at least two sessions', () => {
+    expect(issuesOf(values({ repeat: 'WEEKLY' }))).toHaveProperty('untilDate', 'Nhập ngày kết thúc chuỗi dạng dd/mm/yyyy.')
+    expect(issuesOf(values({ repeat: 'WEEKLY', untilDate: nextWeek }))).toHaveProperty('untilDate', 'Ngày kết thúc chuỗi phải sau ngày của buổi đầu.')
+    expect(issuesOf(values({ repeat: 'MONTHLY', untilDate: inWeeks(2) }))).toHaveProperty('untilDate', 'Chuỗi cần ít nhất 2 buổi; chọn ngày kết thúc xa hơn.')
+    expect(issuesOf(values({ repeat: 'WEEKLY', untilDate: inWeeks(3) }))).toEqual({})
+  })
+
+  it('previews every day and sends the recurrence with the first session', () => {
+    expect(previewSeriesDays(values({ repeat: 'WEEKLY', untilDate: inWeeks(3) }))).toHaveLength(4)
+    const request = toCreateSeriesRequest(values({ repeat: 'WEEKLY', untilDate: inWeeks(3) }))
+    expect(request.recurrence.frequency).toBe('WEEKLY')
+    expect(request.recurrence.until).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+    expect(request.startAt).toMatch(/T18:00:00\+07:00$/)
   })
 })

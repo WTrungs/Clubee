@@ -5,7 +5,7 @@ import { getErrorMessage, isConflict } from '@/api/apiError'
 import { useDebouncedValue } from '@/shared/hooks/useDebouncedValue'
 import { useNow } from '@/shared/hooks/useNow'
 import { attendanceRepository } from '../model/attendanceRepository'
-import type { AttendanceActivityRef, AttendanceFilter, AttendanceRow, AttendanceSheet, AttendanceSheetQuery, AttendanceStatus } from '../model/attendanceTypes'
+import type { AttendanceActivityRef, AttendanceFilter, AttendanceRecord, AttendanceRow, AttendanceSheet, AttendanceSheetQuery, AttendanceStatus } from '../model/attendanceTypes'
 import { attendanceStatusDisplay, attendanceWindow } from './attendanceDisplay'
 import { attendanceQueryKeys } from './attendanceQueryKeys'
 
@@ -23,9 +23,21 @@ export interface MarkVariables {
   day: string | null
 }
 
+/** Người đang được sửa sau khi chốt (FR-ATT-08); `record` là `null` khi người này chưa có bản ghi (nhập lại từ danh sách giấy). */
+export interface EditTarget {
+  userId: string
+  fullName: string
+  record: AttendanceRecord | null
+}
+
 /** Chưa tới giờ mở thì tự tải lại đúng lúc mở, để nút điểm danh hiện ra mà không cần tải lại trang. */
 function untilOpen(sheet: AttendanceSheet | undefined): number | false {
-  if (!sheet || sheet.closedAt || sheet.readOnlyReason) return false
+  if (!sheet || sheet.readOnlyReason) return false
+  // Đã chốt: tải lại đúng lúc hết hạn sửa để nút Sửa và câu báo khớp máy chủ (FR-ATT-08).
+  if (sheet.closedAt) {
+    const left = sheet.editableUntil && sheet.allowedActions.includes('EDIT') ? Date.parse(sheet.editableUntil) - Date.now() : 0
+    return left > 0 ? Math.min(Math.max(left + 500, 1000), MAX_WAIT_MS) : false
+  }
   const wait = Date.parse(sheet.opensAt) - Date.now()
   return wait > 0 ? Math.min(Math.max(wait + 500, 1000), MAX_WAIT_MS) : false
 }
@@ -51,6 +63,8 @@ export function useAttendanceViewModel(activity: AttendanceActivityRef) {
   const [closeOpen, setCloseOpen] = useState(false)
   const [closeNotice, setCloseNotice] = useState<string | null>(null)
   const [qrOpen, setQrOpen] = useState(false)
+  const [editTarget, setEditTarget] = useState<EditTarget | null>(null)
+  const [historyRow, setHistoryRow] = useState<AttendanceRow | null>(null)
 
   const query: AttendanceSheetQuery = { day, q: debouncedKeyword || undefined, status: filter || undefined, page, size: PAGE_SIZE }
   const sheetQuery = useQuery({
@@ -99,6 +113,26 @@ export function useAttendanceViewModel(activity: AttendanceActivityRef) {
     },
     // Người đó vừa được điểm danh ở nơi khác (409) hoặc lỗi khác: tải lại để danh sách và ứng viên khớp máy chủ.
     onError: () => void Promise.all([refreshSheets(), refreshCandidates()]),
+  })
+
+  // FR-ATT-08: sửa sau khi chốt, kèm lý do; lỗi hiện trong hộp để người dùng sửa lại lý do hoặc tải lại.
+  const editRecord = useMutation({
+    mutationFn: ({ target, status, reason }: { target: EditTarget; status: AttendanceStatus; reason: string }) =>
+      attendanceRepository.mark(activity, target.userId, { day: sheet?.day ?? null, status, reason, version: target.record?.version ?? 0 }),
+    meta: { silentError: true },
+    onSuccess: async (row, { target, status }) => {
+      applyRow(row, sheet?.day ?? null)
+      setEditTarget(null)
+      toast.success(`Đã sửa thành ${attendanceStatusDisplay[status].label} cho ${target.fullName}.`)
+      await Promise.all([refreshSheets(), refreshCandidates()])
+    },
+    onError: (error) => {
+      if (isConflict(error)) {
+        setEditTarget(null)
+        setConflict(true)
+      }
+      void refreshSheets()
+    },
   })
 
   const close = useMutation({
@@ -154,6 +188,23 @@ export function useAttendanceViewModel(activity: AttendanceActivityRef) {
     canMark: allowed.includes('MARK'),
     canShowQr: allowed.includes('SHOW_QR'),
     canClose: allowed.includes('CLOSE'),
+    canEdit: allowed.includes('EDIT'),
+    editTarget,
+    openEdit: (target: EditTarget) => {
+      editRecord.reset()
+      setExtraOpen(false)
+      setEditTarget(target)
+    },
+    closeEdit: () => {
+      if (!editRecord.isPending) setEditTarget(null)
+    },
+    submitEdit: (status: AttendanceStatus, reason: string) => {
+      if (editTarget) editRecord.mutate({ target: editTarget, status, reason })
+    },
+    editPending: editRecord.isPending,
+    editError: editRecord.error && !isConflict(editRecord.error) ? getErrorMessage(editRecord.error) : null,
+    historyRow,
+    setHistoryRow,
     qrOpen,
     setQrOpen,
     /** Lỗi đã được báo trong onError nên promise không bao giờ bị từ chối. */

@@ -1,6 +1,17 @@
 import { describe, expect, it } from 'vitest'
 import type { Term } from '../model/termTypes'
-import { groupTerms, isTermOverdue, planEntryKind, planSummary, termLifecycleSteps, termPeriod, termRemainingText, termStatusDisplay } from './termDisplay'
+import {
+  extensionPreviewText,
+  groupTerms,
+  isTermOverdue,
+  overdueHintText,
+  planEntryKind,
+  planSummary,
+  termLifecycleSteps,
+  termPeriod,
+  termRemainingText,
+  termStatusDisplay,
+} from './termDisplay'
 
 const term = (overrides: Partial<Term>): Term => ({
   id: 't',
@@ -14,6 +25,8 @@ const term = (overrides: Partial<Term>): Term => ({
   departmentPlan: null,
   handoverId: null,
   handoverProgress: null,
+  extensions: [],
+  positionsEndingWithTerm: null,
   allowedActions: [],
   version: 1,
   ...overrides,
@@ -73,5 +86,20 @@ describe('department plan summary (FR-TERM-01)', () => {
     expect(planSummary([kept, renamed, fresh, dropped])).toBe('Giữ 2 ban · đổi tên 1 · thêm 1 · bỏ 1')
     expect(planSummary([kept, kept])).toBe('Giữ 2 ban')
     expect(planSummary([])).toBe('Giữ 0 ban')
+  })
+})
+
+describe('term extension texts (FR-TERM-02)', () => {
+  it('tells how many standing positions move, with the date once it is valid', () => {
+    expect(extensionPreviewText(5, '2027-12-31')).toBe('5 chức vụ thường trực dời hạn tới 31/12/2027.')
+    expect(extensionPreviewText(5, null)).toBe('5 chức vụ thường trực hết hạn cùng nhiệm kỳ sẽ dời theo ngày mới.')
+    expect(extensionPreviewText(0, '2027-12-31')).toContain('Không có chức vụ thường trực nào')
+  })
+
+  it('suggests only what the viewer can do on an overdue term', () => {
+    expect(overdueHintText({ create: true, startHandover: false, extend: true })).toBe('Hãy khai báo nhiệm kỳ mới rồi bàn giao. Chưa bầu được ban chủ nhiệm mới thì gia hạn nhiệm kỳ.')
+    expect(overdueHintText({ create: false, startHandover: true, extend: false })).toBe('Hãy bắt đầu bàn giao sang nhiệm kỳ kế tiếp.')
+    expect(overdueHintText({ create: false, startHandover: false, extend: true })).toBe('Chưa bầu được ban chủ nhiệm mới thì gia hạn nhiệm kỳ.')
+    expect(overdueHintText({ create: false, startHandover: false, extend: false })).toBeNull()
   })
 })

@@ -28,14 +28,17 @@ describe('co-host board viewing the shared event (FR-EVT-09, SRS 3.5)', () => {
     await acceptAsTu()
     const event = await eventRepository.get('c-guitar', 'e-winter')
     expect(event.viewingAsCoHost).toEqual({ id: 'c-english', name: 'CLB Tiếng Anh Giao tiếp' })
-    expect(event.allowedActions).toEqual(['VIEW_STAFF', 'VIEW_PROGRESS', 'VIEW_FUND'])
+    expect(event.allowedActions).toEqual(['VIEW_STAFF', 'VIEW_REPORT', 'VIEW_FUND'])
 
     const subcommittees = await eventRepository.subcommittees('c-guitar', 'e-winter')
     expect(subcommittees).toHaveLength(3)
     expect(subcommittees.every((subcommittee) => subcommittee.allowedActions.length === 0)).toBe(true)
     expect((await eventRepository.coHosts('c-guitar', 'e-winter')).every((coHost) => coHost.allowedActions.length === 0)).toBe(true)
 
-    const progress = await eventRepository.progress('c-guitar', 'e-winter')
+    const report = await eventRepository.report('c-guitar', 'e-winter')
+    // Số tổng hợp, không có phần theo người (FR-RPT-05).
+    expect(report.staff).toBeNull()
+    const progress = report.tasks
     expect(progress.subcommittees.map((subcommittee) => subcommittee.name)).toEqual(['Hậu cần', 'Truyền thông', 'Chương trình'])
     expect(progress.total.total).toBe(progress.subcommittees.reduce((sum, subcommittee) => sum + subcommittee.counts.total, 0))
 
@@ -73,7 +76,7 @@ describe('co-host board viewing the shared event (FR-EVT-09, SRS 3.5)', () => {
     await acceptAsTu()
     signInAs('u-tam')
     expect((await fail(eventRepository.get('c-guitar', 'e-winter')))?.status).toBe(404)
-    expect((await fail(eventRepository.progress('c-guitar', 'e-winter')))?.status).toBe(404)
+    expect((await fail(eventRepository.report('c-guitar', 'e-winter')))?.status).toBe(404)
 
     signInAs('u-bao')
     await eventRepository.removeCoHost('c-guitar', 'e-winter', 'ch-winter-english', { reason: 'Đổi kế hoạch chương trình.', version: coHostRecord().version })
@@ -84,10 +87,10 @@ describe('co-host board viewing the shared event (FR-EVT-09, SRS 3.5)', () => {
 
   it('shows progress to the event organisers too, but not to an ordinary host member', async () => {
     signInAs('u-long')
-    expect((await eventRepository.get('c-guitar', 'e-winter')).allowedActions).toContain('VIEW_PROGRESS')
-    expect((await eventRepository.progress('c-guitar', 'e-winter')).subcommittees).toHaveLength(3)
+    expect((await eventRepository.get('c-guitar', 'e-winter')).allowedActions).toContain('VIEW_REPORT')
+    expect((await eventRepository.report('c-guitar', 'e-winter')).tasks.subcommittees).toHaveLength(3)
     signInAs('u-hieu')
     expect((await eventRepository.get('c-guitar', 'e-winter')).viewingAsCoHost).toBeNull()
-    expect((await fail(eventRepository.progress('c-guitar', 'e-winter')))?.status).toBe(403)
+    expect((await fail(eventRepository.report('c-guitar', 'e-winter')))?.status).toBe(403)
   })
 })

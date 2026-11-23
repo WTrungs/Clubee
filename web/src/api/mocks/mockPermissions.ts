@@ -1,8 +1,13 @@
 import type { EventStatus } from '@/features/event/model/eventTypes'
+import { positionAuditLabel } from './auditLabels'
 import { db, type DbPosition, type PositionRole } from './db'
+import { audit } from './mockAudit'
 import { newId } from './mockHttp'
 import { membershipOf } from './mockMembers'
 import { nowIso, shiftDate, vnToday } from './mockTime'
+import { positionTitles } from './seed/orgSeed'
+
+export { positionTitles }
 
 /** Tính quyền giống máy chủ (SRS 3): chức vụ còn hiệu lực, phạm vi và trạng thái thành viên tại thời điểm truy cập. */
 export const BOARD_ROLES: PositionRole[] = ['PRESIDENT', 'VICE_PRESIDENT', 'TREASURER']
@@ -11,16 +16,6 @@ export const DEPARTMENT_ROLES: PositionRole[] = ['DEPARTMENT_HEAD', 'DEPARTMENT_
 export const STANDING_ROLES: PositionRole[] = [...BOARD_ROLES, ...DEPARTMENT_ROLES]
 /** Chức vụ trong sự kiện có hiệu lực từ Đã duyệt đến trước Đã đóng, Đã hủy (SRS 4.2, BR-ORG-03). */
 export const EVENT_STAFF_ACTIVE: EventStatus[] = ['APPROVED', 'REGISTRATION_OPEN', 'ONGOING', 'ENDED']
-
-export const positionTitles: Record<PositionRole, string> = {
-  PRESIDENT: 'Chủ nhiệm',
-  VICE_PRESIDENT: 'Phó chủ nhiệm',
-  TREASURER: 'Thủ quỹ',
-  DEPARTMENT_HEAD: 'Trưởng ban',
-  DEPARTMENT_VICE_HEAD: 'Phó ban',
-  EVENT_LEAD: 'Trưởng BTC',
-  SUBCOMMITTEE_LEAD: 'Trưởng tiểu ban',
-}
 
 /** Ngày hiệu lực cuối thật sự, null là chưa có hạn: chức vụ hết hạn cùng nhiệm kỳ chưa đóng thì giữ tới khi bàn giao xong (BR-TERM-02). */
 export function effectiveEndOf(position: DbPosition, day: string = vnToday()): string | null {
@@ -62,6 +57,11 @@ export function positionsIn(userId: string, clubId: string): DbPosition[] {
 
 export function isBoardMember(userId: string, clubId: string): boolean {
   return positionsIn(userId, clubId).some((position) => BOARD_ROLES.includes(position.role))
+}
+
+/** Người đang ở ban chủ nhiệm của CLB (Chủ nhiệm, Phó chủ nhiệm, Thủ quỹ còn hiệu lực). */
+export function boardMembersOf(clubId: string): string[] {
+  return [...new Set(db.positions.filter((position) => position.clubId === clubId && BOARD_ROLES.includes(position.role) && isPositionEffective(position)).map((position) => position.userId))]
 }
 
 export const PRESIDENCY_ROLES: PositionRole[] = ['PRESIDENT', 'VICE_PRESIDENT']
@@ -155,6 +155,17 @@ export function grantPosition(input: GrantPositionInput): DbPosition {
     version: 1,
   }
   db.positions.push(position)
+  audit({
+    actorId: input.assignedBy,
+    clubId: input.clubId,
+    action: 'GRANT_POSITION',
+    objectType: 'POSITION',
+    objectId: position.id,
+    objectLabel: positionAuditLabel(db, position),
+    before: null,
+    after: { startOn: position.startOn, endOn: position.endOn },
+    reason: null,
+  })
   return position
 }
 
@@ -167,17 +178,29 @@ export function isPositionOpen(position: DbPosition, day: string = vnToday()): b
 /** Kết thúc các chức vụ chưa hết hạn khớp điều kiện từ ngày chuyển giao; bản ghi giữ lại kèm lý do (BR-DATA-01, BR-DATA-03). */
 export function endPositions(
   matches: (position: DbPosition) => boolean,
-  { reason, handoverOn = vnToday() }: { reason: string; handoverOn?: string },
+  { reason, actorId, handoverOn = vnToday() }: { reason: string; actorId: string; handoverOn?: string },
 ): DbPosition[] {
   const ended = db.positions.filter((position) => matches(position) && isPositionOpen(position))
   for (const position of ended) {
     // Ngày hiệu lực cuối là trước ngày chuyển giao, không kéo dài quá hạn cũ; chuyển giao không muộn hơn ngày bắt đầu thì chức vụ bị hủy hẳn.
     const lastDay = shiftDate(handoverOn, -1)
     const end = effectiveEndOf(position)
+    const before = { endOn: position.endOn }
     position.endOn = end !== null && end < lastDay ? end : lastDay
     position.revokedAt = nowIso()
     position.revokeReason = reason
     position.version += 1
+    audit({
+      actorId,
+      clubId: position.clubId,
+      action: 'END_POSITION',
+      objectType: 'POSITION',
+      objectId: position.id,
+      objectLabel: positionAuditLabel(db, position),
+      before,
+      after: { endOn: position.endOn },
+      reason,
+    })
   }
   return ended
 }

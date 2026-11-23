@@ -23,7 +23,7 @@ export function assignSubcommitteeLead(event: DbEvent, subcommittee: DbSubcommit
 export function replaceEventLead(event: DbEvent, newLeadId: string, actorId: string, reason: string): void {
   const previousId = positionHolderOf('EVENT_LEAD', event.id)
   if (previousId === newLeadId) return
-  endPositions((position) => position.role === 'EVENT_LEAD' && position.scopeId === event.id, { reason })
+  endPositions((position) => position.role === 'EVENT_LEAD' && position.scopeId === event.id, { reason, actorId })
   grantPosition({ userId: newLeadId, clubId: event.clubId, role: 'EVENT_LEAD', scopeId: event.id, assignedBy: actorId })
   const target = eventTarget(event.clubId, event.id)
   notify([previousId], { clubId: event.clubId, category: 'EVENT', title: `Bạn thôi làm Trưởng BTC ${event.name}`, body: `Lý do: ${reason}`, target, actorId })

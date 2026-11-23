@@ -14,9 +14,14 @@ import type {
   HandoverItemStatus,
   SaveAppointmentsRequest,
   StartHandoverRequest,
+  SubstituteConfirmRequest,
 } from '@/features/term/model/handoverTypes'
-import type { CreateTermRequest, DepartmentPlanEntryRequest, Term, TermAction, TermStatus, UpdateTermRequest } from '@/features/term/model/termTypes'
+import type { CreateTermRequest, DepartmentPlanEntryRequest, ExtendTermRequest, Term, TermAction, TermStatus, UpdateTermRequest } from '@/features/term/model/termTypes'
+import { REASON_MAX, REASON_MIN } from '@/shared/lib/reasonRules'
+import { termExtensionProblem } from '@/shared/lib/termExtensionRules'
 import { db, type DbAppointment, type DbHandover, type DbHandoverItem, type DbPlanEntry, type DbTerm } from '../db'
+import { isAdvanceOverdue } from '../mockAdvances'
+import { audit } from '../mockAudit'
 import { eventOfFund, fundBalance, fundName, pendingCountOf } from '../mockFinance'
 import { API, currentUser, networkDelay, newId, paginate, problem, writer } from '../mockHttp'
 import { canAccessClub, personRef } from '../mockMembers'
@@ -33,6 +38,9 @@ import {
   completionPreview,
   copyDepartmentPlan,
   dropBlockedReason,
+  extendTerm,
+  advanceOutstanding,
+  termDocumentCount,
   handoverBlockers,
   handoverCounts,
   handoverItemsOf,
@@ -43,9 +51,11 @@ import {
   keptEntry,
   openHandoverOf,
   planEntryIdOf,
+  positionsEndingWith,
   preparingTermOf,
   resolvedPlan,
   syncHandoverItems,
+  termOverview,
   toPlanEntries,
 } from '../mockTerms'
 import { isRealDate, nowIso, vnToday } from '../mockTime'
@@ -58,7 +68,8 @@ const PLAN_DESCRIPTION_MAX = 500
 const PLAN_MAX_ENTRIES = 50
 const APPOINTMENTS_MAX = 60
 const CONFIRMATIONS_MAX = 100
-const ITEM_KINDS: HandoverItemKind[] = ['FUND', 'EVENT', 'TASK']
+const ITEM_KINDS: HandoverItemKind[] = ['FUND', 'ADVANCE', 'EVENT', 'TASK', 'DOCUMENTS']
+const ITEM_KIND_LABEL: Record<HandoverItemKind, string> = { FUND: 'Quỹ', ADVANCE: 'Tạm ứng', EVENT: 'Sự kiện', TASK: 'Công việc', DOCUMENTS: 'Tài liệu' }
 const ITEM_STATUSES: HandoverItemStatus[] = ['PENDING', 'CONFIRMED', 'RESOLVED']
 const LIST_ORDER: Record<TermStatus, number> = { PREPARING: 0, RUNNING: 1, HANDING_OVER: 1, CLOSED: 2 }
 
@@ -74,6 +85,7 @@ function termActions(term: DbTerm, viewerId: string, handover: DbHandover | unde
   return [
     ...(preparing && managesTerms ? (['EDIT'] as const) : []),
     ...(preparing && managesTerms && currentTermOf(term.clubId)?.status === 'RUNNING' ? (['START_HANDOVER'] as const) : []),
+    ...(term.status === 'RUNNING' && managesTerms ? (['EXTEND'] as const) : []),
     ...(handover && canViewHandover(viewerId, handover) ? (['VIEW_HANDOVER'] as const) : []),
   ]
 }
@@ -84,6 +96,7 @@ function toTerm(term: DbTerm, viewerId: string): Term {
   const open = handover?.status === 'OPEN'
   if (handover && open) syncHandoverItems(handover)
   const counts = handover && open ? handoverCounts(handover.id) : null
+  const actions = termActions(term, viewerId, handover)
   return {
     id: term.id,
     name: term.name,
@@ -96,12 +109,25 @@ function toTerm(term: DbTerm, viewerId: string): Term {
     departmentPlan: preparing ? toPlanEntries(term) : null,
     handoverId: handover?.id ?? null,
     handoverProgress: counts ? { pending: counts.pending, confirmed: counts.confirmed } : null,
-    allowedActions: termActions(term, viewerId, handover),
+    extensions: term.extensions.map((extension) => ({
+      fromEndOn: extension.fromEndOn,
+      toEndOn: extension.toEndOn,
+      reason: extension.reason,
+      extendedBy: personRef(extension.by),
+      extendedAt: extension.at,
+      movedPositions: extension.movedPositions,
+    })),
+    positionsEndingWithTerm: actions.includes('EXTEND') ? positionsEndingWith(term).length : null,
+    allowedActions: actions,
     version: term.version,
   }
 }
 
 const termSummary = (term: DbTerm): TermSummary => ({ id: term.id, name: term.name, startOn: term.startOn, endOn: term.endOn, status: term.status })
+
+/** FR-TERM-07: ban chủ nhiệm hiện tại xác nhận thay; người được bầu thì xác nhận trực tiếp nên không dùng đường này. */
+const canSubstitute = (viewerId: string, handover: DbHandover) =>
+  handover.status === 'OPEN' && can(viewerId, handover.clubId, 'MANAGE_TERMS') && !isEligibleBoardAppointee(viewerId, handover)
 
 function handoverActions(handover: DbHandover, viewerId: string): HandoverAction[] {
   if (handover.status !== 'OPEN') return []
@@ -109,6 +135,7 @@ function handoverActions(handover: DbHandover, viewerId: string): HandoverAction
   return [
     ...(managesTerms ? (['EDIT_APPOINTMENTS'] as const) : []),
     ...(isEligibleBoardAppointee(viewerId, handover) ? (['CONFIRM'] as const) : []),
+    ...(canSubstitute(viewerId, handover) ? (['SUBSTITUTE_CONFIRM'] as const) : []),
     ...(managesTerms ? (['COMPLETE'] as const) : []),
   ]
 }
@@ -146,8 +173,21 @@ function toHandover(handover: DbHandover, viewerId: string): Handover {
 /** Sự kiện đã duyệt, chưa đóng thì ban chủ nhiệm mới phải chọn giữ hoặc thay Trưởng BTC (FR-TERM-05). */
 const needsLeadDecision = (item: DbHandoverItem) => item.snapshot.kind === 'EVENT' && item.snapshot.needsLeadDecision
 
-function toHandoverItem(item: DbHandoverItem, canConfirm: boolean): HandoverItem {
+/** Xác nhận thay giữ nguyên Trưởng BTC hiện tại, nên sự kiện cần quyết định mà chưa có Trưởng BTC thì chỉ ban chủ nhiệm mới chọn được. */
+const substitutable = (item: DbHandoverItem) => item.status === 'PENDING' && !(item.snapshot.kind === 'EVENT' && item.snapshot.needsLeadDecision && item.snapshot.leadId === null)
+
+interface ItemViewer {
+  canConfirm: boolean
+  canSubstitute: boolean
+}
+
+const NO_ACTIONS: ItemViewer = { canConfirm: false, canSubstitute: false }
+
+function toHandoverItem(item: DbHandoverItem, viewer: ItemViewer): HandoverItem {
   const fund = item.kind === 'FUND' ? db.funds.find((candidate) => candidate.id === item.refId) : undefined
+  const advance = item.kind === 'ADVANCE' ? db.advances.find((candidate) => candidate.id === item.refId) : undefined
+  const advanceFund = advance ? db.funds.find((candidate) => candidate.id === advance.fundId) : undefined
+  const documentsTerm = item.kind === 'DOCUMENTS' ? db.terms.find((term) => term.id === item.refId) : undefined
   const task = item.kind === 'TASK' ? db.tasks.find((candidate) => candidate.id === item.refId) : undefined
   const event = item.kind === 'EVENT' ? db.events.find((candidate) => candidate.id === item.refId) : undefined
   const leadId = event ? positionHolderOf('EVENT_LEAD', event.id) : null
@@ -157,8 +197,20 @@ function toHandoverItem(item: DbHandoverItem, canConfirm: boolean): HandoverItem
     id: item.id,
     kind: item.kind,
     status: item.status,
-    title: fund ? fundName(fund) : (task?.title ?? event?.name ?? ''),
+    title: fund ? fundName(fund) : advance ? advance.purpose : documentsTerm ? `Tài liệu ${documentsTerm.name}` : (task?.title ?? event?.name ?? ''),
     fund: fund ? { fundKind: fund.kind, balance: fundBalance(fund.id), pendingCount: pendingCountOf(fund.id), eventName: eventOfFund(fund)?.name ?? null } : null,
+    advance: advance
+      ? {
+          fundName: advanceFund ? fundName(advanceFund) : '',
+          requester: personRef(advance.requesterId),
+          amount: advance.amount,
+          status: advance.status,
+          outstanding: advanceOutstanding(advance),
+          settleBy: advance.settleBy,
+          overdue: isAdvanceOverdue(advance),
+        }
+      : null,
+    documents: documentsTerm ? { termName: documentsTerm.name, count: termDocumentCount(documentsTerm.id) } : null,
     task: task
       ? {
           departmentName: db.departments.find((department) => department.id === task.scopeId)?.name ?? '',
@@ -189,7 +241,8 @@ function toHandoverItem(item: DbHandoverItem, canConfirm: boolean): HandoverItem
     note: item.note,
     confirmedBy: item.confirmedBy ? personRef(item.confirmedBy) : null,
     confirmedAt: item.confirmedAt,
-    allowedActions: canConfirm && confirmable ? ['CONFIRM'] : [],
+    substitute: item.substitute ? { by: personRef(item.substitute.by), reason: item.substitute.reason } : null,
+    allowedActions: [...(viewer.canConfirm && confirmable ? (['CONFIRM'] as const) : []), ...(viewer.canSubstitute && substitutable(item) ? (['SUBSTITUTE_CONFIRM'] as const) : [])],
     version: item.version,
   }
 }
@@ -397,6 +450,7 @@ export const termHandlers = [
       closedAt: null,
       departmentPlan: copyDepartmentPlan(clubId),
       closedDepartments: null,
+      extensions: [],
       version: 1,
     }
     db.terms.push(term)
@@ -428,6 +482,44 @@ export const termHandlers = [
     term.endOn = endOn
     if (planned) term.departmentPlan = planned.plan
     term.version += 1
+    return HttpResponse.json(toTerm(term, user.value.id))
+  }),
+
+  http.get(`${API}/clubs/:clubId/terms/:termId/overview`, async ({ params }) => {
+    await networkDelay()
+    const user = currentUser()
+    if (!user.ok) return user.response
+    const clubId = String(params.clubId)
+    if (!canAccessClub(user.value.id, clubId)) return notMember()
+    const term = db.terms.find((candidate) => candidate.id === params.termId && candidate.clubId === clubId)
+    if (!term) return problem(404, 'Không tìm thấy nhiệm kỳ.', 'TERM_NOT_FOUND')
+    if (term.status === 'PREPARING') return problem(422, 'Nhiệm kỳ chưa bắt đầu nên chưa có gì để tra cứu.', 'TERM_NOT_STARTED')
+    return HttpResponse.json(termOverview(term))
+  }),
+
+  http.post(`${API}/clubs/:clubId/terms/:termId/extensions`, async ({ request, params }) => {
+    await networkDelay()
+    const user = writer(request)
+    if (!user.ok) return user.response
+    const clubId = String(params.clubId)
+    if (!canAccessClub(user.value.id, clubId)) return notMember()
+    const term = db.terms.find((candidate) => candidate.id === params.termId && candidate.clubId === clubId)
+    if (!term) return problem(404, 'Không tìm thấy nhiệm kỳ.', 'TERM_NOT_FOUND')
+    if (!can(user.value.id, clubId, 'MANAGE_TERMS')) return boardOnly(clubId, 'gia hạn nhiệm kỳ')
+    const body = (await request.json()) as Partial<ExtendTermRequest>
+    if (body.version !== term.version) return problem(409, 'Nhiệm kỳ vừa được người khác cập nhật. Tải lại để xem ngày kết thúc mới nhất.', 'VERSION_CONFLICT')
+    if (term.status !== 'RUNNING') {
+      const detail = term.status === 'HANDING_OVER' ? 'Nhiệm kỳ đang bàn giao nên không gia hạn được nữa.' : 'Chỉ gia hạn được nhiệm kỳ đang chạy.'
+      return problem(422, detail, 'TERM_NOT_RUNNING')
+    }
+    const reason = text(body.reason)
+    const endProblem = isRealDate(body.endOn) ? termExtensionProblem(term.endOn, body.endOn, vnToday()) : 'Ngày kết thúc mới không hợp lệ.'
+    const errors: FieldError[] = [
+      ...(endProblem ? [{ field: 'endOn', message: endProblem }] : []),
+      ...(reason.length < REASON_MIN || reason.length > REASON_MAX ? [{ field: 'reason', message: `Nhập lý do từ ${REASON_MIN} đến ${REASON_MAX} ký tự.` }] : []),
+    ]
+    if (errors.length > 0) return problem(400, 'Thông tin gia hạn chưa hợp lệ.', 'VALIDATION', errors)
+    extendTerm(term, { endOn: String(body.endOn), reason, actorId: user.value.id })
     return HttpResponse.json(toTerm(term, user.value.id))
   }),
 
@@ -531,12 +623,12 @@ export const termHandlers = [
       return problem(400, 'Bộ lọc danh mục không hợp lệ.', 'VALIDATION')
     }
     syncHandoverItems(handover)
-    const canConfirm = handover.status === 'OPEN' && isEligibleBoardAppointee(user.value.id, handover)
+    const viewer = { canConfirm: handover.status === 'OPEN' && isEligibleBoardAppointee(user.value.id, handover), canSubstitute: canSubstitute(user.value.id, handover) }
     const items = handoverItemsOf(handover.id)
       .filter((item) => (kind === null || item.kind === kind) && (status === null || item.status === status))
       .toSorted(compareHandoverItems)
     const page = paginate(items, url, 50)
-    return HttpResponse.json({ ...page, content: page.content.map((item) => toHandoverItem(item, canConfirm)) })
+    return HttpResponse.json({ ...page, content: page.content.map((item) => toHandoverItem(item, viewer)) })
   }),
 
   http.post(`${API}/clubs/:clubId/handovers/:handoverId/confirmations`, async ({ request, params }) => {
@@ -572,14 +664,14 @@ export const termHandlers = [
     syncHandoverItems(handover)
     const stale = requests.flatMap((row, index) => {
       const item = own.get(row.itemId) as DbHandoverItem
-      return item.version === row.version ? [] : [{ field: `items[${index}]`, message: `Mục ${toHandoverItem(item, false).title} vừa thay đổi.` }]
+      return item.version === row.version ? [] : [{ field: `items[${index}]`, message: `Mục ${toHandoverItem(item, NO_ACTIONS).title} vừa thay đổi.` }]
     })
     if (stale.length > 0) return problem(409, `${stale.length} mục vừa thay đổi sau khi bạn mở danh mục. Tải lại để xem số liệu mới rồi xác nhận lại.`, 'VERSION_CONFLICT', stale)
     if (handover.status !== 'OPEN') return handoverClosed()
 
     const closed = requests.flatMap((row, index) => {
       const item = own.get(row.itemId) as DbHandoverItem
-      const title = toHandoverItem(item, false).title
+      const title = toHandoverItem(item, NO_ACTIONS).title
       if (item.status === 'RESOLVED') return [{ field: `items[${index}].itemId`, message: `Mục ${title} không cần bàn giao nữa.` }]
       if (item.status === 'CONFIRMED' && !needsLeadDecision(item)) return [{ field: `items[${index}].itemId`, message: `Mục ${title} đã được xác nhận.` }]
       return []
@@ -599,10 +691,98 @@ export const termHandlers = [
 
     const confirmedAt = nowIso()
     for (const { item, eventLead } of plans) {
-      Object.assign(item, { status: 'CONFIRMED' as const, note: null, confirmedBy: user.value.id, confirmedAt, eventLead })
+      Object.assign(item, { status: 'CONFIRMED' as const, note: null, confirmedBy: user.value.id, confirmedAt, eventLead, substitute: null })
       item.version += 1
     }
     handover.version += 1
+    return HttpResponse.json(toHandover(handover, user.value.id))
+  }),
+
+  http.post(`${API}/clubs/:clubId/handovers/:handoverId/substitute-confirmations`, async ({ request, params }) => {
+    await networkDelay()
+    const user = writer(request)
+    if (!user.ok) return user.response
+    const clubId = String(params.clubId)
+    if (!canAccessClub(user.value.id, clubId)) return notMember()
+    const handover = findHandover(params)
+    if (!handover) return problem(404, 'Không tìm thấy phiên bàn giao.', 'HANDOVER_NOT_FOUND')
+    if (!can(user.value.id, clubId, 'MANAGE_TERMS')) return boardOnly(clubId, 'xác nhận thay mục bàn giao')
+    if (isEligibleBoardAppointee(user.value.id, handover)) {
+      return problem(403, 'Bạn được bầu vào ban chủ nhiệm mới nên hãy xác nhận trực tiếp từng mục, không dùng xác nhận thay.', 'FORBIDDEN')
+    }
+    const body = (await request.json()) as Partial<SubstituteConfirmRequest>
+    const rows: unknown[] = Array.isArray(body.items) ? body.items : []
+    const own = new Map(handoverItemsOf(handover.id).map((item) => [item.id, item]))
+    // Dòng sai dạng hoặc mục lạ là lỗi 400, nhưng chỉ báo sau khi đã kiểm version và trạng thái của các dòng hợp lệ.
+    const shapeErrors: FieldError[] = []
+    const requests: Array<{ item: DbHandoverItem; version: number; index: number }> = []
+    const seen = new Set<string>()
+    rows.forEach((value, index) => {
+      const row = (typeof value === 'object' && value !== null ? value : {}) as Partial<SubstituteConfirmRequest['items'][number]>
+      const item = typeof row.itemId === 'string' ? own.get(row.itemId) : undefined
+      if (!item) shapeErrors.push({ field: `items[${index}].itemId`, message: 'Mục không thuộc phiên bàn giao này.' })
+      else if (seen.has(item.id)) shapeErrors.push({ field: `items[${index}].itemId`, message: 'Mục này đã có ở dòng khác.' })
+      else if (typeof row.version !== 'number') shapeErrors.push({ field: `items[${index}].version`, message: 'Thiếu version của mục.' })
+      else requests.push({ item, version: row.version, index })
+      if (item) seen.add(item.id)
+    })
+
+    syncHandoverItems(handover)
+    const stale = requests.flatMap(({ item, version, index }) =>
+      item.version === version ? [] : [{ field: `items[${index}]`, message: `Mục ${toHandoverItem(item, NO_ACTIONS).title} vừa thay đổi.` }],
+    )
+    if (stale.length > 0) return problem(409, `${stale.length} mục vừa thay đổi sau khi bạn mở danh mục. Tải lại để xem số liệu mới rồi xác nhận thay lại.`, 'VERSION_CONFLICT', stale)
+    if (handover.status !== 'OPEN') return handoverClosed()
+    const blocked = requests.flatMap(({ item, index }) => {
+      if (substitutable(item)) return []
+      const title = toHandoverItem(item, NO_ACTIONS).title
+      const message =
+        item.status === 'RESOLVED'
+          ? `Mục ${title} không cần bàn giao nữa.`
+          : item.status === 'CONFIRMED'
+            ? `Mục ${title} đã được xác nhận.`
+            : `Sự kiện ${title} chưa có Trưởng BTC đang hiệu lực; ban chủ nhiệm mới phải chọn người.`
+      return [{ field: `items[${index}].itemId`, message }]
+    })
+    if (blocked.length > 0) return problem(422, 'Có mục không xác nhận thay được. Tải lại danh mục rồi thử lại.', 'ITEM_NOT_CONFIRMABLE', blocked)
+
+    const reason = text(body.reason)
+    const errors: FieldError[] = [
+      ...(rows.length === 0 || rows.length > CONFIRMATIONS_MAX ? [{ field: 'items', message: `Chọn từ 1 đến ${CONFIRMATIONS_MAX} mục để xác nhận thay.` }] : []),
+      ...shapeErrors,
+      ...(reason.length < REASON_MIN || reason.length > REASON_MAX ? [{ field: 'reason', message: `Nhập lý do từ ${REASON_MIN} đến ${REASON_MAX} ký tự.` }] : []),
+    ]
+    if (errors.length > 0) return problem(400, 'Chưa xác nhận thay được các mục đã chọn.', 'VALIDATION', errors)
+
+    const confirmedAt = nowIso()
+    for (const { item } of requests) {
+      // Sự kiện cần quyết định thì giữ Trưởng BTC hiện tại (quyết định 20/11).
+      const eventLead = item.snapshot.kind === 'EVENT' && item.snapshot.needsLeadDecision && item.snapshot.leadId ? { action: 'KEEP' as const, userId: item.snapshot.leadId } : null
+      const before = { status: item.status }
+      Object.assign(item, { status: 'CONFIRMED' as const, note: null, confirmedBy: user.value.id, confirmedAt, eventLead, substitute: { by: user.value.id, reason } })
+      item.version += 1
+      audit({
+        actorId: user.value.id,
+        clubId,
+        action: 'HANDOVER_SUBSTITUTE_CONFIRM',
+        objectType: 'HANDOVER_ITEM',
+        objectId: item.id,
+        objectLabel: `${ITEM_KIND_LABEL[item.kind]}: ${toHandoverItem(item, NO_ACTIONS).title}`,
+        before,
+        after: { status: 'CONFIRMED', eventLead: eventLead?.userId ?? null },
+        reason,
+      })
+    }
+    handover.version += 1
+    const newBoard = handover.appointments.filter((appointment) => BOARD_ROLES.includes(appointment.role)).map((appointment) => appointment.userId)
+    notify(newBoard, {
+      clubId,
+      category: 'TERM',
+      title: `${requests.length} mục bàn giao được xác nhận thay`,
+      body: `${personRef(user.value.id).fullName} xác nhận thay vì người cũ không bàn giao. Lý do: ${reason}`,
+      target: handoverTarget(clubId, handover.id),
+      actorId: user.value.id,
+    })
     return HttpResponse.json(toHandover(handover, user.value.id))
   }),
 

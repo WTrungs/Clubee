@@ -1,7 +1,7 @@
 import type { Tone } from '@/shared/ui/tone'
 import type { NotificationCategory, NotificationSummary, NotificationTarget } from '../model/notificationTypes'
 
-export const NOTIFICATION_CATEGORIES: NotificationCategory[] = ['ANNOUNCEMENT', 'TASK', 'EVENT', 'SESSION', 'FINANCE', 'POSITION', 'TERM', 'MEMBERSHIP']
+export const NOTIFICATION_CATEGORIES: NotificationCategory[] = ['ANNOUNCEMENT', 'TASK', 'EVENT', 'SESSION', 'FINANCE', 'POSITION', 'TERM', 'MEMBERSHIP', 'RECRUITMENT']
 
 export const notificationCategoryDisplay: Record<NotificationCategory, { label: string; tone: Tone }> = {
   ANNOUNCEMENT: { label: 'Thông báo CLB', tone: 'info' },
@@ -12,6 +12,7 @@ export const notificationCategoryDisplay: Record<NotificationCategory, { label: 
   POSITION: { label: 'Chức vụ', tone: 'progress' },
   TERM: { label: 'Nhiệm kỳ', tone: 'warning' },
   MEMBERSHIP: { label: 'Tư cách thành viên', tone: 'neutral' },
+  RECRUITMENT: { label: 'Tuyển thành viên', tone: 'success' },
 }
 
 /** Trang đích của thông báo; trang đó tự kiểm tra quyền khi mở (BR-SEC-02). `null` khi không có trang riêng. */
@@ -50,6 +51,10 @@ export function notificationPath(target: NotificationTarget | null): string | nu
       return club && id ? `/clubs/${club}/handovers/${id}` : null
     case 'INVITATION':
       return id ? `/invite/${id}` : null
+    case 'APPLICATION':
+      return id ? `/recruitments/${id}` : null
+    case 'RECRUITMENT':
+      return club && id ? `/clubs/${club}/recruitments/${id}?tab=results` : null
   }
 }
 

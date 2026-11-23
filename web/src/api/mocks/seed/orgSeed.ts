@@ -24,7 +24,19 @@ export interface DbTerm {
   departmentPlan: DbPlanEntry[] | null
   /** Tên các ban lúc nhiệm kỳ đóng, vì ban giữ lại có thể đổi tên ở nhiệm kỳ sau (để dành cho FR-TERM-08). */
   closedDepartments: Array<{ id: string; name: string }> | null
+  /** Lịch sử gia hạn khi nhiệm kỳ đang chạy (FR-TERM-02), cũ trước. */
+  extensions: DbTermExtension[]
   version: number
+}
+
+export interface DbTermExtension {
+  fromEndOn: string
+  toEndOn: string
+  reason: string
+  by: string
+  at: string
+  /** Số chức vụ thường trực được dời hạn theo. */
+  movedPositions: number
 }
 
 export type DepartmentStatus = 'ACTIVE' | 'CLOSED'
@@ -51,6 +63,17 @@ export type PositionRole =
   | 'DEPARTMENT_VICE_HEAD'
   | 'EVENT_LEAD'
   | 'SUBCOMMITTEE_LEAD'
+
+/** Tên chức vụ; đặt ở seed (không đọc `db`) để cả nhãn nhật ký lúc dựng seed cũng dùng được. */
+export const positionTitles: Record<PositionRole, string> = {
+  PRESIDENT: 'Chủ nhiệm',
+  VICE_PRESIDENT: 'Phó chủ nhiệm',
+  TREASURER: 'Thủ quỹ',
+  DEPARTMENT_HEAD: 'Trưởng ban',
+  DEPARTMENT_VICE_HEAD: 'Phó ban',
+  EVENT_LEAD: 'Trưởng BTC',
+  SUBCOMMITTEE_LEAD: 'Trưởng tiểu ban',
+}
 
 /** Chức vụ được gán (SRS 4.1). Thu hồi hoặc hết hạn chỉ ghi ngày kết thúc, bản ghi giữ nguyên (BR-ORG-03). */
 export interface DbPosition {
@@ -82,6 +105,7 @@ export function createTermSeed(): DbTerm[] {
     closedAt: null,
     departmentPlan: null,
     closedDepartments: null,
+    extensions: [],
     version: 1,
   })
   // Nhiệm kỳ đang chạy đứng trước nhiệm kỳ cũ cùng CLB vì chức vụ mẫu lấy hạn theo nhiệm kỳ đầu tiên tìm thấy.
@@ -143,10 +167,12 @@ export function createDepartmentSeed(): DbDepartment[] {
     createdAt: vnDayAt(-64, 9),
     version: 1,
   })
+  // Ba ban có từ nhiệm kỳ 2025–2026 (có trước chức vụ của nhiệm kỳ đó, FR-TERM-08).
+  const fromLastTerm = (fields: DbDepartment): DbDepartment => ({ ...fields, termId: 't-guitar-2025', createdAt: vnDayAt(-430, 9) })
   return [
-    department('d-media', 'c-guitar', 't-guitar-2026', 'Truyền thông', 'Fanpage, poster, ảnh và video của CLB.'),
-    department('d-logistics', 'c-guitar', 't-guitar-2026', 'Hậu cần', 'Phòng tập, nhạc cụ, âm thanh và đi lại.'),
-    department('d-music', 'c-guitar', 't-guitar-2026', 'Chuyên môn', 'Dạy đàn, phối khí và tiết mục biểu diễn.'),
+    fromLastTerm(department('d-media', 'c-guitar', 't-guitar-2026', 'Truyền thông', 'Fanpage, poster, ảnh và video của CLB.')),
+    fromLastTerm(department('d-logistics', 'c-guitar', 't-guitar-2026', 'Hậu cần', 'Phòng tập, nhạc cụ, âm thanh và đi lại.')),
+    fromLastTerm(department('d-music', 'c-guitar', 't-guitar-2026', 'Chuyên môn', 'Dạy đàn, phối khí và tiết mục biểu diễn.')),
     department('d-external', 'c-guitar', 't-guitar-2026', 'Đối ngoại', 'Liên hệ nhà tài trợ, CLB bạn và đơn vị đồng hành.'),
     department('d-design', 'c-guitar', 't-guitar-2026', 'Thiết kế', 'Nhận diện, ấn phẩm in và trang trí sân khấu.'),
     {
@@ -155,8 +181,8 @@ export function createDepartmentSeed(): DbDepartment[] {
       closedOn: vnDate(-30),
       closeReason: 'Gộp vào ban Truyền thông cho gọn đầu mối.',
     },
-    department('d-en-content', 'c-english', 't-english-2026', 'Nội dung', 'Chủ đề sinh hoạt, tài liệu luyện nói.'),
-    department('d-vol-field', 'c-volunteer', 't-volunteer-2025', 'Hiện trường', 'Tổ chức các chiến dịch tại địa phương.'),
+    { ...department('d-en-content', 'c-english', 't-english-2026', 'Nội dung', 'Chủ đề sinh hoạt, tài liệu luyện nói.'), createdAt: vnDayAt(-300, 9) },
+    { ...department('d-vol-field', 'c-volunteer', 't-volunteer-2025', 'Hiện trường', 'Tổ chức các chiến dịch tại địa phương.'), createdAt: vnDayAt(-400, 9) },
   ]
 }
 

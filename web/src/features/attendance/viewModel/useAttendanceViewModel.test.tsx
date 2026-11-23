@@ -91,6 +91,7 @@ describe('useAttendanceViewModel', () => {
       extra: true,
       recordedBy: 'u-huy',
       recordedAt: '2026-11-07T18:00:00+07:00',
+      changes: [],
       version: 1,
     })
 

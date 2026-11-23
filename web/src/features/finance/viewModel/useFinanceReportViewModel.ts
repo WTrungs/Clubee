@@ -3,17 +3,16 @@ import { useState } from 'react'
 import { useSearchParams } from 'react-router'
 import { ApiError, getErrorMessage } from '@/api/apiError'
 import { useCurrentClub } from '@/features/club/viewModel/clubContext'
-import { formatDate, parseVnDate } from '@/shared/format/formatDate'
+import { useReportPeriodParams } from '@/features/report/viewModel/useReportPeriodParams'
 import { advanceRepository } from '../model/advanceRepository'
 import { duesRepository } from '../model/duesRepository'
 import { financeReportRepository } from '../model/financeReportRepository'
-import type { FinanceReportQuery, ReportPeriodKind, ReportPeriodOption } from '../model/financeReportTypes'
+import type { FinanceReportQuery } from '../model/financeReportTypes'
 import type { FinanceCategory } from '../model/financeTypes'
-import { CUSTOM_MAX_YEARS, REPORT_PERIOD_KINDS } from './financeReportDisplay'
 import { financeQueryKeys } from './financeQueryKeys'
 
 const LIST_SIZE = 5
-const URL_KEYS = ['period', 'key', 'from', 'to', 'category', 'eventId'] as const
+const FILTER_KEYS = ['category', 'eventId'] as const
 
 /** Lỗi 400 của báo cáo: nêu lý do theo từng tham số, không mời thử lại vì gửi lại vẫn sai. */
 function invalidReasons(error: unknown): string[] | null {
@@ -25,26 +24,16 @@ function invalidReasons(error: unknown): string[] | null {
 export function useFinanceReportViewModel(enabled: boolean) {
   const { clubId } = useCurrentClub()
   const [searchParams, setSearchParams] = useSearchParams()
-  const requested = searchParams.get('period') as ReportPeriodKind | null
-  const period: ReportPeriodKind = requested && REPORT_PERIOD_KINDS.includes(requested) ? requested : 'MONTH'
-  const from = searchParams.get('from') ?? ''
-  const to = searchParams.get('to') ?? ''
   const category = (searchParams.get('category') as FinanceCategory | null) ?? undefined
   const eventId = searchParams.get('eventId') ?? undefined
-  const [customFrom, setCustomFrom] = useState(from ? formatDate(from) : '')
-  const [customTo, setCustomTo] = useState(to ? formatDate(to) : '')
-  const [customError, setCustomError] = useState<{ field: 'from' | 'to'; message: string } | null>(null)
   const [unpaidPage, setUnpaidPage] = useState(0)
   const [unpaidCampaign, setUnpaidCampaign] = useState('')
   const [overduePage, setOverduePage] = useState(0)
 
   const periods = useQuery({ queryKey: financeQueryKeys.reportPeriods(clubId), queryFn: () => financeReportRepository.periods(clubId), enabled })
-  const options: ReportPeriodOption[] =
-    period === 'MONTH' ? (periods.data?.months ?? []) : period === 'SEMESTER' ? (periods.data?.semesters ?? []) : period === 'TERM' ? (periods.data?.terms ?? []) : []
-  const key = period === 'CUSTOM' ? undefined : (searchParams.get('key') ?? options[0]?.key)
-
-  const query: FinanceReportQuery = period === 'CUSTOM' ? { period, from, to, category, eventId } : { period, key, category, eventId }
-  const ready = period === 'CUSTOM' ? from !== '' && to !== '' : key !== undefined
+  const periodParams = useReportPeriodParams(periods.data)
+  const { period, ready } = periodParams
+  const query: FinanceReportQuery = { ...periodParams.query, category, eventId }
   const report = useQuery({
     queryKey: financeQueryKeys.report(clubId, query),
     queryFn: () => financeReportRepository.get(clubId, query),
@@ -69,10 +58,10 @@ export function useFinanceReportViewModel(enabled: boolean) {
     placeholderData: keepPreviousData,
   })
 
-  /** Ghi các tham số báo cáo lên URL, giữ `view`; giá trị rỗng thì bỏ. */
-  const write = (patch: Partial<Record<(typeof URL_KEYS)[number], string | undefined>>) => {
+  /** Ghi bộ lọc lên URL, giữ kỳ và `view`; giá trị rỗng thì bỏ. */
+  const write = (patch: Partial<Record<(typeof FILTER_KEYS)[number], string | undefined>>) => {
     const next = new URLSearchParams(searchParams)
-    for (const name of URL_KEYS) {
+    for (const name of FILTER_KEYS) {
       if (!(name in patch)) continue
       const value = patch[name]
       if (value) next.set(name, value)
@@ -83,33 +72,21 @@ export function useFinanceReportViewModel(enabled: boolean) {
 
   const reasons = invalidReasons(report.error)
   return {
+    periodParams,
     period,
-    setPeriod: (value: ReportPeriodKind) => {
-      setCustomError(null)
-      write({ period: value === 'MONTH' ? undefined : value, key: undefined, from: undefined, to: undefined })
-    },
-    options,
+    setPeriod: periodParams.setPeriod,
+    options: periodParams.options,
     periodsLoading: periods.isPending && enabled,
     periodsError: periods.error,
     retryPeriods: () => void periods.refetch(),
-    key,
-    setKey: (value: string) => write({ key: value }),
-    customFrom,
-    setCustomFrom,
-    customTo,
-    setCustomTo,
-    customError,
-    applyCustom: () => {
-      const start = parseVnDate(customFrom)
-      const end = parseVnDate(customTo)
-      if (!start) return setCustomError({ field: 'from', message: 'Nhập ngày dạng dd/mm/yyyy.' })
-      if (!end) return setCustomError({ field: 'to', message: 'Nhập ngày dạng dd/mm/yyyy.' })
-      if (start > end) return setCustomError({ field: 'to', message: 'Ngày kết thúc không trước ngày bắt đầu.' })
-      const limit = `${Number(start.slice(0, 4)) + CUSTOM_MAX_YEARS}${start.slice(4)}`
-      if (end > limit) return setCustomError({ field: 'to', message: `Khoảng ngày tối đa ${CUSTOM_MAX_YEARS} năm.` })
-      setCustomError(null)
-      write({ from: start, to: end })
-    },
+    key: periodParams.key,
+    setKey: periodParams.setKey,
+    customFrom: periodParams.customFrom,
+    setCustomFrom: periodParams.setCustomFrom,
+    customTo: periodParams.customTo,
+    setCustomTo: periodParams.setCustomTo,
+    customError: periodParams.customError,
+    applyCustom: periodParams.applyCustom,
     category,
     eventId,
     filterByCategory: (value: FinanceCategory) => write({ category: value }),

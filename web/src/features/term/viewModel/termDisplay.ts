@@ -115,3 +115,16 @@ export function groupAppointments(appointments: Appointment[]): AppointmentGroup
 export function isTermOverdue(term: Pick<Term, 'status' | 'endOn'>, now: Date): boolean {
   return term.status === 'RUNNING' && daysUntil(term.endOn, now) < 0
 }
+
+/** FR-TERM-02: câu nêu trước khi gia hạn; `endOn` null khi ô ngày chưa hợp lệ. */
+export function extensionPreviewText(positionCount: number, endOn: string | null): string {
+  if (positionCount === 0) return 'Không có chức vụ thường trực nào hết hạn cùng nhiệm kỳ; chỉ ngày kết thúc nhiệm kỳ đổi.'
+  return endOn ? `${positionCount} chức vụ thường trực dời hạn tới ${formatDate(endOn)}.` : `${positionCount} chức vụ thường trực hết hạn cùng nhiệm kỳ sẽ dời theo ngày mới.`
+}
+
+/** Gợi ý ở dải báo nhiệm kỳ quá hạn, chỉ nêu việc người xem làm được. */
+export function overdueHintText(can: { create: boolean; startHandover: boolean; extend: boolean }): string | null {
+  const next = can.create ? 'Hãy khai báo nhiệm kỳ mới rồi bàn giao.' : can.startHandover ? 'Hãy bắt đầu bàn giao sang nhiệm kỳ kế tiếp.' : null
+  if (!can.extend) return next
+  return next ? `${next} Chưa bầu được ban chủ nhiệm mới thì gia hạn nhiệm kỳ.` : 'Chưa bầu được ban chủ nhiệm mới thì gia hạn nhiệm kỳ.'
+}

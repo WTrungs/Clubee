@@ -5,8 +5,8 @@ import type { Page } from '@/api/pagination'
 export type AttendanceStatus = 'PRESENT' | 'LATE' | 'EXCUSED' | 'ABSENT'
 export type AttendanceMethod = 'MANUAL' | 'QR'
 export type AttendanceActivityType = 'SESSION' | 'EVENT'
-/** Điểm danh tay, mở mã QR và chốt; máy chủ chỉ trả khi khung điểm danh đang mở và người gọi có quyền. */
-export type AttendanceAction = 'MARK' | 'SHOW_QR' | 'CLOSE'
+/** Điểm danh tay, mở mã QR, chốt khi khung đang mở; `EDIT` (sửa có lý do, FR-ATT-08) sau khi chốt, chỉ khi người gọi có quyền. */
+export type AttendanceAction = 'MARK' | 'SHOW_QR' | 'CLOSE' | 'EDIT'
 /** Lọc theo trạng thái, cộng hai nhóm: chưa có bản ghi và người phát sinh. */
 export type AttendanceFilter = AttendanceStatus | 'UNMARKED' | 'EXTRA'
 
@@ -17,11 +17,22 @@ export interface AttendanceActivityRef {
   id: string
 }
 
+/** Một lần sửa sau khi chốt (FR-ATT-08, BR-ATT-04); `from` là `null` khi người đó chưa có bản ghi. */
+export interface AttendanceChange {
+  by: PersonRef
+  at: string
+  from: AttendanceStatus | null
+  to: AttendanceStatus
+  reason: string
+}
+
 export interface AttendanceRecord {
   status: AttendanceStatus
   method: AttendanceMethod
   recordedAt: string
   recordedBy: PersonRef
+  /** Các lần sửa sau khi chốt, cũ trước. */
+  changes: AttendanceChange[]
   version: number
 }
 
@@ -31,6 +42,13 @@ export interface AttendanceRow {
   /** Người phát sinh: không thuộc đối tượng của buổi mà vẫn đến (FR-ATT-07). */
   extra: boolean
   record: AttendanceRecord | null
+  /** Đơn xin phép vắng đang chờ hoặc đã duyệt của người này (FR-ATT-04); sự kiện luôn `null`. */
+  absenceRequest: AttendanceAbsenceNote | null
+}
+
+export interface AttendanceAbsenceNote {
+  status: 'PENDING' | 'APPROVED'
+  reason: string
 }
 
 export interface AttendanceCounts {
@@ -42,6 +60,8 @@ export interface AttendanceCounts {
   absent: number
   /** Người thuộc đối tượng mà chưa có bản ghi. */
   unmarked: number
+  /** Trong số chưa có bản ghi, người có đơn xin phép đã duyệt: lúc chốt được ghi Vắng có phép (FR-ATT-04). */
+  unmarkedExcused: number
   extra: number
 }
 
@@ -56,6 +76,8 @@ export interface AttendanceSheet {
   closedBy: PersonRef | null
   /** Câu máy chủ giải thích vì sao chỉ xem được, ví dụ sự kiện đã đóng. */
   readOnlyReason: string | null
+  /** Sau khi chốt: người chốt sửa được tới mốc này, quá hạn chỉ ban chủ nhiệm (FR-ATT-08). Chưa chốt thì `null`. */
+  editableUntil: string | null
   counts: AttendanceCounts
   allowedActions: AttendanceAction[]
   version: number
@@ -73,6 +95,8 @@ export interface AttendanceSheetQuery {
 export interface MarkAttendanceRequest {
   day: string | null
   status: AttendanceStatus
+  /** Bắt buộc khi sửa sau khi chốt (FR-ATT-08). */
+  reason?: string
   /** Phiên bản bản ghi đang thấy; người chưa có bản ghi gửi 0. */
   version: number
 }

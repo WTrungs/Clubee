@@ -73,10 +73,38 @@ async function request<T>(method: Method, path: string, options: RequestOptions 
   return (text ? JSON.parse(text) : undefined) as T
 }
 
+/** Tên tệp trong `Content-Disposition`: ưu tiên `filename*` (UTF-8, RFC 5987), không có thì `filename`. */
+export function fileNameFromDisposition(header: string | null): string | null {
+  if (!header) return null
+  const encoded = /filename\*=UTF-8''([^;]+)/i.exec(header)?.[1]
+  if (encoded) {
+    try {
+      return decodeURIComponent(encoded.trim())
+    } catch {
+      return null
+    }
+  }
+  return /filename="?([^";]+)"?/i.exec(header)?.[1]?.trim() ?? null
+}
+
+/** Tải tệp: vẫn gửi cookie phiên, lỗi trả Problem Details như các request khác. */
+async function download(path: string, options: Omit<RequestOptions, 'body'> = {}): Promise<{ blob: Blob; fileName: string | null }> {
+  let response: Response
+  try {
+    response = await fetch(buildUrl(path, options.query), { method: 'GET', credentials: 'include', signal: options.signal })
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') throw error
+    throw new ApiError(0)
+  }
+  if (!response.ok) throw new ApiError(response.status, await readProblem(response))
+  return { blob: await response.blob(), fileName: fileNameFromDisposition(response.headers.get('Content-Disposition')) }
+}
+
 /** Lớp duy nhất gọi mạng (rule frontend.md). Không có DELETE vì dữ liệu nghiệp vụ không bị xóa (BR-DATA-01). */
 export const httpClient = {
   get: <T>(path: string, options?: Omit<RequestOptions, 'body'>) => request<T>('GET', path, options),
   post: <T>(path: string, body?: unknown, options?: Omit<RequestOptions, 'body'>) => request<T>('POST', path, { ...options, body }),
   put: <T>(path: string, body?: unknown, options?: Omit<RequestOptions, 'body'>) => request<T>('PUT', path, { ...options, body }),
   patch: <T>(path: string, body?: unknown, options?: Omit<RequestOptions, 'body'>) => request<T>('PATCH', path, { ...options, body }),
+  download,
 }

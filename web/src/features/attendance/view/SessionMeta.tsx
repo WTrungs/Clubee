@@ -5,7 +5,7 @@ import { Badge } from '@/shared/ui/Badge'
 import type { SessionSummary } from '../model/sessionTypes'
 import { sessionTiming, sessionTimingDisplay } from '../viewModel/sessionDisplay'
 
-export function SessionTimingBadge({ session }: { session: Pick<SessionSummary, 'startAt' | 'endAt' | 'attendanceClosed'> }) {
+export function SessionTimingBadge({ session }: { session: Pick<SessionSummary, 'startAt' | 'endAt' | 'attendanceClosed' | 'cancelled'> }) {
   const now = useNow(30_000)
   const display = sessionTimingDisplay[sessionTiming(session, now)]
   return (

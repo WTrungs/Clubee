@@ -1,5 +1,7 @@
 import { z } from 'zod'
 import { formatDate, parseVnDate } from '@/shared/format/formatDate'
+import { REASON_MAX, REASON_MIN } from '@/shared/lib/reasonRules'
+import { termExtensionProblem } from '@/shared/lib/termExtensionRules'
 import type { DepartmentPlanEntry, DepartmentPlanEntryRequest, Term } from '../model/termTypes'
 
 export const TERM_NAME_MAX = 80
@@ -38,6 +40,29 @@ export function toTermFormValues(term: Pick<Term, 'name' | 'startOn' | 'endOn'> 
 /** Chỉ gọi sau khi schema đã chấp nhận, nên hai ngày luôn đọc được. */
 export function toTermDates(values: TermFormValues): { name: string; startOn: string; endOn: string } {
   return { name: values.name, startOn: parseVnDate(values.startDate) ?? '', endOn: parseVnDate(values.endDate) ?? '' }
+}
+
+/** FR-TERM-02: ngày mới sau ngày kết thúc hiện tại và hôm nay, dời tối đa 365 ngày; bắt buộc lý do. */
+export function termExtensionSchema(today: string, currentEndOn: string) {
+  return z
+    .object({
+      endDate: dateText,
+      reason: z.string().trim().min(REASON_MIN, `Vui lòng nhập ít nhất ${REASON_MIN} ký tự.`).max(REASON_MAX, `Lý do tối đa ${REASON_MAX} ký tự.`),
+    })
+    .superRefine((values, context) => {
+      if (!DATE_TEXT.test(values.endDate)) return
+      const end = parseVnDate(values.endDate)
+      const problem = end ? termExtensionProblem(currentEndOn, end, today) : 'Ngày này không tồn tại.'
+      if (problem) context.addIssue({ code: 'custom', path: ['endDate'], message: problem })
+    })
+}
+
+export type TermExtensionValues = z.infer<ReturnType<typeof termExtensionSchema>>
+
+/** Ngày mới đọc được để nêu trước số chức vụ dời theo; null khi ô ngày chưa hợp lệ. */
+export function extensionEndOn(values: Pick<TermExtensionValues, 'endDate'>, today: string, currentEndOn: string): string | null {
+  const end = DATE_TEXT.test(values.endDate.trim()) ? parseVnDate(values.endDate.trim()) : null
+  return end && termExtensionProblem(currentEndOn, end, today) === null ? end : null
 }
 
 /** Kế hoạch ban (FR-TERM-01): ban không bị bỏ cần tên 2–80 ký tự và không trùng nhau. */

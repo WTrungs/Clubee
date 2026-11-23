@@ -35,7 +35,7 @@ describe('position validity (BR-ORG-03)', () => {
   it('ends the day before handover, so the next holder starts that day without overlap', () => {
     const held = position({ id: 'p-handover', endOn: vnDate(30) })
     db.positions.push(held)
-    endPositions((candidate) => candidate.id === 'p-handover', { reason: 'Bàn giao cho người mới.', handoverOn: vnDate(3) })
+    endPositions((candidate) => candidate.id === 'p-handover', { reason: 'Bàn giao cho người mới.', handoverOn: vnDate(3), actorId: 'u-anh' })
     expect(held.endOn).toBe(vnDate(2))
     expect(isPositionActive(held, vnDate(2))).toBe(true)
     expect(isPositionActive(held, vnDate(3))).toBe(false)
@@ -44,7 +44,7 @@ describe('position validity (BR-ORG-03)', () => {
   it('never extends a position past its original last day', () => {
     const short = position({ id: 'p-short', endOn: vnDate(1) })
     db.positions.push(short)
-    endPositions((candidate) => candidate.id === 'p-short', { reason: 'Bàn giao muộn.', handoverOn: vnDate(10) })
+    endPositions((candidate) => candidate.id === 'p-short', { reason: 'Bàn giao muộn.', handoverOn: vnDate(10), actorId: 'u-anh' })
     expect(short.endOn).toBe(vnDate(1))
   })
 
@@ -56,7 +56,7 @@ describe('position validity (BR-ORG-03)', () => {
   it('never activates a position that is ended before its start date', () => {
     const upcoming = position({ id: 'p-upcoming', startOn: vnDate(5) })
     db.positions.push(upcoming)
-    expect(endPositions((candidate) => candidate.id === 'p-upcoming', { reason: 'Đổi kế hoạch.' })).toHaveLength(1)
+    expect(endPositions((candidate) => candidate.id === 'p-upcoming', { reason: 'Đổi kế hoạch.', actorId: 'u-anh' })).toHaveLength(1)
     expect(isPositionActive(upcoming, vnDate(5))).toBe(false)
   })
 
@@ -82,7 +82,7 @@ describe('position validity (BR-ORG-03)', () => {
 
   it('ends positions without deleting them and keeps the last holder for history', () => {
     const before = db.positions.length
-    const ended = endPositions((candidate) => candidate.userId === 'u-long', { reason: 'Kiểm thử kết thúc chức vụ.' })
+    const ended = endPositions((candidate) => candidate.userId === 'u-long', { reason: 'Kiểm thử kết thúc chức vụ.', actorId: 'u-anh' })
     expect(ended.map((candidate) => candidate.role).sort()).toEqual(['DEPARTMENT_HEAD', 'SUBCOMMITTEE_LEAD'])
     expect(db.positions).toHaveLength(before)
     expect(ended.every((candidate) => candidate.revokeReason === 'Kiểm thử kết thúc chức vụ.')).toBe(true)
@@ -107,7 +107,7 @@ describe('events read leads from positions', () => {
   })
 
   it('drops a subcommittee lead once the position ends', async () => {
-    endPositions((candidate) => candidate.scopeId === 'sc-winter-logistics', { reason: 'Kiểm thử.' })
+    endPositions((candidate) => candidate.scopeId === 'sc-winter-logistics', { reason: 'Kiểm thử.', actorId: 'u-anh' })
     signInAs('u-bao')
     const logistics = (await eventRepository.subcommittees('c-guitar', 'e-winter')).find((subcommittee) => subcommittee.id === 'sc-winter-logistics')
     expect(logistics?.lead).toBeNull()

@@ -12,7 +12,7 @@ import type {
 import { CLUB_SETTING_MESSAGES, inRange, NUMERIC_CLUB_SETTINGS, semesterErrors } from '@/shared/lib/clubSettingsRules'
 import { isContactPhone, isEmail, normalizePhone, safeHttpUrl } from '@/shared/lib/contactRules'
 import { imageContentType, validateImageFile } from '@/shared/lib/validateImageFile'
-import { db, type DbClub } from '../db'
+import { db, type DbClub, type DbMembership } from '../db'
 import { announcementAudiences } from '../mockAnnouncements'
 import { createGeneralFund, keepsLedger } from '../mockFinance'
 import { publicClubInfo } from '../mockInvitations'
@@ -20,7 +20,7 @@ import { generalFundId } from '../seed/financeSeed'
 import { defaultClubSettings } from '../seed/clubSeed'
 import { blankMemberInfo } from '../seed/memberSeed'
 import { API, currentUser, fileToDataUrl, matchesKeyword, networkDelay, newId, paginate, problem, writer } from '../mockHttp'
-import { canAccessClub, isActiveMember, memberCountOf, membershipOf, myMembershipIn, personRef } from '../mockMembers'
+import { canAccessClub, isActiveMember, memberCountOf, membershipOf, myMembershipIn, personRef, recordMembershipChange } from '../mockMembers'
 import { can, forbidden } from '../mockAccess'
 import { currentTermOf, grantPosition, isBoardMember, isPresidency, positionTitlesOf } from '../mockPermissions'
 import { assignableScopes } from '../mockScopes'
@@ -28,12 +28,13 @@ import { isEventGuest } from '../mockStaffEvents'
 import { canAssignStanding, canCreateTerm } from '../mockTerms'
 import { nowIso, vnToday } from '../mockTime'
 import { canRequestTransfer } from '../mockTransfers'
+import { reportDepartmentsOf } from '../mockClubReport'
 
 
 function clubActionsFor(userId: string, clubId: string): ClubAction[] {
   const actions: ClubAction[] = []
   if (can(userId, clubId, 'CREATE_EVENT')) actions.push('CREATE_EVENT')
-  if (can(userId, clubId, 'MANAGE_MEMBERS')) actions.push('MANAGE_MEMBERS')
+  if (can(userId, clubId, 'MANAGE_MEMBERS')) actions.push('MANAGE_MEMBERS', 'MANAGE_RECRUITMENT')
   if (can(userId, clubId, 'MANAGE_DEPARTMENTS')) actions.push('MANAGE_ORG')
   if (can(userId, clubId, 'CONFIGURE_CLUB')) actions.push('EDIT_CLUB')
   const assigns = can(userId, clubId, 'ASSIGN_POSITIONS')
@@ -49,6 +50,8 @@ function clubActionsFor(userId: string, clubId: string): ClubAction[] {
   if (canRequestTransfer(userId, clubId)) actions.push('REQUEST_PRESIDENCY_TRANSFER')
   if (isBoardMember(userId, clubId)) actions.push('VIEW_PERMISSIONS', 'VIEW_SHARED_EVENTS', 'VIEW_DUES', 'VIEW_FINANCE_REPORT')
   if (isBoardMember(userId, clubId) && keepsLedger(userId, clubId)) actions.push('OPEN_DUES')
+  if (isBoardMember(userId, clubId)) actions.push('VIEW_CLUB_REPORT', 'VIEW_AUDIT_LOG')
+  if (reportDepartmentsOf(userId, clubId).length > 0) actions.push('VIEW_DEPARTMENT_REPORTS')
   return actions
 }
 
@@ -154,6 +157,7 @@ const SETTING_KEYS = [
   'rescheduleConfirmHours',
   'attendanceLeadMinutes',
   'attendanceQrRotateSeconds',
+  'attendanceEditHours',
   'taskReminderDays',
   'expenseReceiptThreshold',
   'advanceSettleDays',
@@ -170,6 +174,7 @@ function toClubSettings(club: DbClub): ClubSettings {
     rescheduleConfirmHours: club.rescheduleConfirmHours,
     attendanceLeadMinutes: club.attendanceLeadMinutes,
     attendanceQrRotateSeconds: club.attendanceQrRotateSeconds,
+    attendanceEditHours: club.attendanceEditHours,
     taskReminderDays: club.taskReminderDays,
     expenseReceiptThreshold: club.expenseReceiptThreshold,
     advanceSettleDays: club.advanceSettleDays,
@@ -284,9 +289,10 @@ export const clubHandlers = [
       closedAt: null,
       departmentPlan: null,
       closedDepartments: null,
+      extensions: [],
       version: 1,
     })
-    db.memberships.push({
+    const membership: DbMembership = {
       id: newId('m'),
       userId: user.value.id,
       clubId: club.id,
@@ -301,9 +307,11 @@ export const clubHandlers = [
       introduction: null,
       studentId: null,
       ...blankMemberInfo(),
-      history: [{ at: now, actorId: user.value.id, fromStatus: null, toStatus: 'ACTIVE', reason: null }],
+      history: [],
       version: 1,
-    })
+    }
+    db.memberships.push(membership)
+    recordMembershipChange(membership, { actorId: user.value.id, fromStatus: null, toStatus: 'ACTIVE', reason: null, at: now })
     grantPosition({ userId: user.value.id, clubId: club.id, role: 'PRESIDENT', scopeId: club.id, assignedBy: user.value.id })
     return HttpResponse.json(toClubDetail(club, user.value.id), { status: 201 })
   }),

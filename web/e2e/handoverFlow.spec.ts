@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
-import { loginAs, openNavLink, openNotification, snap, switchUser } from './helpers.ts'
+import { expectNoHorizontalScroll, loginAs, openNavLink, openNotification, settleToast, snap, switchUser } from './helpers.ts'
 
 const year = new Date().getFullYear() + 1
 const nextTerm = { name: `Nhiệm kỳ ${year}–${year + 1}`, start: `01/09/${year}`, end: `31/08/${year + 1}` }
@@ -84,10 +84,11 @@ test.describe('Bàn giao nhiệm kỳ', () => {
     await addAppointment(page, 'Chủ nhiệm', 'Đặng Khánh Linh · Ban Truyền thông')
     await page.getByRole('dialog', { name: 'Kết quả bầu' }).getByRole('button', { name: 'Lưu kết quả bầu' }).click()
     await expect(page.getByText('Đã lưu kết quả bầu.')).toBeVisible()
-    // Ban chủ nhiệm cũ xem được danh mục nhưng không xác nhận thay.
+    // Ban chủ nhiệm cũ không xác nhận trực tiếp từng mục, chỉ có lối xác nhận thay (FR-TERM-07).
     const catalog = page.getByRole('region', { name: 'Danh mục bàn giao' })
     await expect(catalog.getByText('Quỹ chung')).toBeVisible()
-    await expect(catalog.getByRole('button', { name: /^Xác nhận/ })).toHaveCount(0)
+    await expect(catalog.getByRole('button', { name: /^Xác nhận: / })).toHaveCount(0)
+    await expect(catalog.getByRole('button', { name: 'Xác nhận thay' })).toBeVisible()
 
     await switchUser(page, 'Nguyễn Minh Anh', 'linh.dang@demo.test')
     await openNotification(page, /Bạn được bầu làm Chủ nhiệm/)
@@ -179,6 +180,8 @@ test.describe('Bàn giao nhiệm kỳ', () => {
     await confirmPage()
     await catalog.getByRole('tab', { name: /Công việc/ }).click()
     await confirmPage()
+    await catalog.getByRole('tab', { name: /Tài liệu/ }).click()
+    await confirmPage()
     await expect(catalog.getByText(/^Đã xác nhận đủ \d+ mục bàn giao\.$/)).toBeVisible()
     await expect(page.getByText('Kết quả bầu, kế hoạch ban và danh mục bàn giao đã đủ điều kiện.')).toBeVisible()
     await expect(page.getByRole('button', { name: 'Hoàn tất bàn giao' })).toHaveCount(0)
@@ -212,6 +215,45 @@ test.describe('Bàn giao nhiệm kỳ', () => {
     await expect(page.getByRole('button', { name: 'Thêm ban' })).toHaveCount(0)
     await expect(page.getByRole('button', { name: 'Gán chức vụ' })).toHaveCount(0)
     await snap(page, testInfo, 'orgAfterHandover')
+  })
+
+  test('ban chủ nhiệm cũ xác nhận thay các mục khi người cũ không bàn giao; ban chủ nhiệm mới được báo', async ({ page }, testInfo) => {
+    await loginAs(page, 'anh.nguyen@demo.test')
+    await startHandover(page)
+    await page.getByRole('button', { name: 'Sửa kết quả bầu' }).click()
+    await addAppointment(page, 'Chủ nhiệm', 'Đặng Khánh Linh · Ban Truyền thông')
+    await page.getByRole('dialog', { name: 'Kết quả bầu' }).getByRole('button', { name: 'Lưu kết quả bầu' }).click()
+    await expect(page.getByText('Đã lưu kết quả bầu.')).toBeVisible()
+
+    const catalog = page.getByRole('region', { name: 'Danh mục bàn giao' })
+    await catalog.getByRole('tab', { name: /Tài liệu/ }).click()
+    const documents = catalog.getByRole('listitem').filter({ hasText: 'Tài liệu Nhiệm kỳ 2026–2027' })
+    await expect(documents.getByText('3 tài liệu')).toBeVisible()
+    await catalog.getByRole('tab', { name: /Quỹ/ }).click()
+    await catalog.getByRole('button', { name: 'Xác nhận thay' }).click()
+    await expect(catalog.getByText(/^Đã chọn 0/)).toBeVisible()
+    await catalog.getByRole('checkbox', { name: 'Chọn tất cả đang hiện' }).check()
+    await expect(catalog.getByRole('checkbox', { name: 'Chọn để xác nhận thay: Quỹ chung' })).toBeChecked()
+    await expectNoHorizontalScroll(page)
+    await snap(page, testInfo, 'handoverSubstituteMode')
+    const submit = catalog.getByRole('button', { name: /^Xác nhận thay \d+ mục$/ })
+    const chosen = Number((await submit.textContent())?.match(/\d+/)?.[0] ?? 0)
+    await submit.click()
+    const dialog = page.getByRole('dialog', { name: /^Xác nhận thay \d+ mục$/ })
+    await dialog.getByRole('textbox', { name: 'Lý do xác nhận thay' }).fill('Thủ quỹ cũ đã rời CLB, không liên lạc được.')
+    await dialog.getByRole('button', { name: 'Xác nhận thay' }).click()
+    await settleToast(page, chosen > 1 ? `Đã xác nhận thay ${chosen} mục bàn giao.` : 'Đã xác nhận thay mục bàn giao.')
+    const general = catalog.getByRole('listitem').filter({ hasText: 'Quỹ chung' })
+    await expect(general.getByText('Đã xác nhận', { exact: true })).toBeVisible()
+    await expect(general.getByText(/^Xác nhận thay bởi Nguyễn Minh Anh: Thủ quỹ cũ đã rời CLB, không liên lạc được\./)).toBeVisible()
+    await expect(catalog.getByRole('checkbox')).toHaveCount(0)
+    await expectNoHorizontalScroll(page)
+    await snap(page, testInfo, 'handoverSubstituted')
+
+    await switchUser(page, 'Nguyễn Minh Anh', 'linh.dang@demo.test')
+    await openNotification(page, /mục bàn giao được xác nhận thay/)
+    await page.waitForURL('**/handovers/**')
+    await expect(catalog.getByRole('listitem').filter({ hasText: 'Quỹ chung' }).getByText(/^Xác nhận thay bởi Nguyễn Minh Anh/)).toBeVisible()
   })
 
   test('thành viên thường không mở được phiên bàn giao', async ({ page }) => {

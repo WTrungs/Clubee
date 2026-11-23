@@ -1,4 +1,5 @@
 import type { PersonRef } from '@/api/commonTypes'
+import type { AttendanceTally } from '@/features/report/model/myReportTypes'
 import type { FundStatus } from '@/features/finance/model/financeTypes'
 
 /** ST-EVT theo báo cáo 17/11: quyết toán là trạng thái của quỹ, không phải của sự kiện. */
@@ -20,8 +21,8 @@ export type EventCapability =
   | 'REGISTER'
   | 'RESCHEDULE'
   | 'VIEW_STAFF'
-  /** FR-EVT-09: số việc theo tiểu ban; ban chủ nhiệm CLB đồng tổ chức cũng xem được. */
-  | 'VIEW_PROGRESS'
+  /** FR-RPT-05: báo cáo sự kiện (gồm số việc theo tiểu ban của FR-EVT-09); ban chủ nhiệm CLB đồng tổ chức cũng xem được. */
+  | 'VIEW_REPORT'
   | 'VIEW_REGISTRATIONS'
   | 'VIEW_FUND'
   | 'VIEW_ATTENDANCE'
@@ -107,6 +108,53 @@ export interface TaskProgressCounts {
 export interface EventProgress {
   total: TaskProgressCounts
   subcommittees: Array<{ id: string; name: string; counts: TaskProgressCounts }>
+}
+
+export interface EventRegistrationStats {
+  capacity: number | null
+  confirmed: number
+  waitlisted: number
+  reconfirmPending: number
+  cancelled: number
+}
+
+/** Điểm danh một ngày của sự kiện; `expected` là người giữ chỗ, sau khi chốt là người có bản ghi. */
+export interface EventAttendanceDay {
+  day: string
+  closed: boolean
+  expected: number
+  tally: AttendanceTally
+}
+
+/** Một người trong BTC: việc mình làm chính trong các tiểu ban; `days` là số ngày đã mở điểm danh. */
+export interface EventStaffStats {
+  person: PersonRef
+  subcommitteeName: string | null
+  role: 'LEAD' | StaffKind
+  open: number
+  done: number
+  overdue: number
+  presentDays: number
+  days: number
+}
+
+export interface EventFundStats {
+  balance: number
+  income: number
+  expense: number
+  /** Chỉ ban chủ nhiệm và Trưởng BTC; người khác nhận null. */
+  pendingCount: number | null
+  pendingAmount: number | null
+  openAdvanceCount: number
+}
+
+/** FR-RPT-05: `staff` chỉ Trưởng BTC và ban chủ nhiệm CLB chủ trì; `fund` chỉ người xem được quỹ sự kiện. */
+export interface EventReport {
+  registrations: EventRegistrationStats
+  attendance: EventAttendanceDay[]
+  tasks: EventProgress
+  staff: EventStaffStats[] | null
+  fund: EventFundStats | null
 }
 
 export interface ScheduleChange {
@@ -269,6 +317,8 @@ export interface CreateSubcommitteeRequest {
 export interface EventQuery {
   status?: EventStatus[]
   q?: string
+  /** FR-TERM-08: sự kiện bắt đầu trong khoảng nhiệm kỳ. */
+  termId?: string
   page?: number
   size?: number
 }

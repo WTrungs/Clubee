@@ -24,7 +24,7 @@ import { can, forbidden } from '../mockAccess'
 import { backlogState } from '../mockBacklog'
 import { API, currentUser, matchesKeyword, networkDelay, newId, paginate, problem, writer } from '../mockHttp'
 import { invitationIsFor, invitationStatus } from '../mockInvitations'
-import { canAccessClub, closeDepartmentStint, membershipOf, openDepartmentStint, personRef, ROSTER_STATUSES, transferDepartment } from '../mockMembers'
+import { canAccessClub, closeDepartmentStint, membershipOf, openDepartmentStint, personRef, recordMembershipChange, ROSTER_STATUSES, transferDepartment } from '../mockMembers'
 import { DEPARTMENT_ROLES, endPositions, isBoardMember, isPositionOpen, positionsIn, positionTitleOf, positionTitlesOf, presidentsCoverTerm, STANDING_ROLES } from '../mockPermissions'
 import { endCoHostStaffOf } from '../mockCoHosts'
 import { closePendingLeaveRequest, putOnLeaveBlock } from '../mockMembership'
@@ -210,7 +210,7 @@ function removeFromClub(membership: DbMembership, reason: string, actorId: strin
   const createdAt = nowIso()
   const backlog = (kind: DbBacklogItem['kind'], refId: string) =>
     db.backlogItems.push({ id: newId('b'), clubId, membershipId: membership.id, formerMemberId: userId, kind, refId, createdAt, resolution: null, version: 1 })
-  for (const position of endPositions((candidate) => candidate.userId === userId && candidate.clubId === clubId, { reason: `Bị đưa ra khỏi CLB: ${reason}` })) {
+  for (const position of endPositions((candidate) => candidate.userId === userId && candidate.clubId === clubId, { reason: `Bị đưa ra khỏi CLB: ${reason}`, actorId })) {
     backlog('POSITION', position.id)
   }
   const clubEvents = new Set(db.events.filter((event) => event.clubId === clubId).map((event) => event.id))
@@ -345,11 +345,12 @@ export const memberHandlers = [
       introduction,
       studentId: club.collectsStudentId ? studentId : null,
       ...blankMemberInfo(),
-      history: [{ at: requestedAt, actorId: user.value.id, fromStatus: null, toStatus: 'PENDING', reason: null }],
+      history: [],
       ...(invitation ? { invitationId: invitation.id } : {}),
       version: 1,
     }
     db.memberships.push(membership)
+    recordMembershipChange(membership, { actorId: user.value.id, fromStatus: null, toStatus: 'PENDING', reason: null, at: requestedAt })
     if (invitation) invitation.useCount += 1
     const receipt: JoinRequestReceipt = { membershipId: membership.id, status: membership.status, requestedAt }
     return HttpResponse.json(receipt, { status: 201 })
@@ -521,7 +522,7 @@ export const memberHandlers = [
     // Ban chủ nhiệm xử lý tư cách trực tiếp thì yêu cầu tạm nghỉ đang chờ (nếu có) không còn cần duyệt (FR-MEM-07).
     if (action === 'PUT_ON_LEAVE') closePendingLeaveRequest(membership.id, 'APPROVED', user.value.id, reason)
     if (action === 'REMOVE') closePendingLeaveRequest(membership.id, 'CLOSED', user.value.id, 'Thành viên đã bị đưa ra khỏi CLB.')
-    membership.history.push({ at: nowIso(), actorId: user.value.id, fromStatus, toStatus: rule.to, reason: reason || null })
+    recordMembershipChange(membership, { actorId: user.value.id, fromStatus, toStatus: rule.to, reason: reason || null })
     membership.version += 1
     notifyMembershipChange(membership, action, reason, user.value.id)
     return HttpResponse.json(toDetail(membership, user.value.id))

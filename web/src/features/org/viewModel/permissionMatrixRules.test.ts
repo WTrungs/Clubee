@@ -13,6 +13,8 @@ import { orgRepository } from '../model/orgRepository'
 import type { PermissionChange } from '../model/permissionTypes'
 
 const fail = (promise: Promise<unknown>) => promise.then(() => null).catch((caught: unknown) => caught as ApiError)
+/** Nhật ký sửa bảng phân quyền; seed có sẵn nhật ký loại khác (gán chức vụ, giao dịch). */
+const permissionLogs = () => db.auditLogs.filter((log) => log.objectType === 'PERMISSION')
 const cell = (matrix: Awaited<ReturnType<typeof orgRepository.permissionMatrix>>, role: string, permission: string) =>
   matrix.cells.find((candidate) => candidate.role === role && candidate.permission === permission)
 const save = async (userId: string, changes: PermissionChange[]) => {
@@ -28,7 +30,7 @@ describe('viewing the permission matrix (FR-ORG-05)', () => {
     signInAs('u-anh')
     const matrix = await orgRepository.permissionMatrix('c-guitar')
     expect(matrix).toMatchObject({ version: 1, changedFromDefault: 0, allowedActions: ['EDIT', 'RESET'] })
-    expect(matrix.cells).toHaveLength(16 * 7)
+    expect(matrix.cells).toHaveLength(17 * 7)
     expect(cell(matrix, 'PRESIDENT', 'MANAGE_MEMBERS')).toMatchObject({ state: 'OWN_ROLE', enabled: true })
     expect(cell(matrix, 'PRESIDENT', 'EDIT_PERMISSIONS')).toMatchObject({ state: 'LOCKED', lockReason: expect.stringContaining('Chủ nhiệm luôn giữ') })
     expect(cell(matrix, 'EVENT_LEAD', 'APPROVE_EXPENSE')).toMatchObject({ state: 'LOCKED', enabled: false })
@@ -43,7 +45,7 @@ describe('viewing the permission matrix (FR-ORG-05)', () => {
     expect(await fail(orgRepository.resetPermissionMatrix('c-guitar', 1))).toMatchObject({ status: 403 })
     // NFR-SEC-03: bị từ chối thì dữ liệu không đổi.
     expect(db.permissionOverrides).toEqual([])
-    expect(db.auditLogs).toEqual([])
+    expect(permissionLogs()).toEqual([])
     expect((await orgRepository.permissionMatrix('c-guitar')).version).toBe(1)
     signInAs('u-ha')
     expect(await fail(orgRepository.permissionMatrix('c-guitar'))).toMatchObject({ status: 403, detail: 'Chỉ ban chủ nhiệm xem được bảng phân quyền.' })
@@ -121,7 +123,7 @@ describe('editing the matrix (FR-ORG-05, BR-ACL-01..05)', () => {
     const put = (changes: unknown[]) => fail(orgRepository.updatePermissionMatrix('c-guitar', { changes: changes as PermissionChange[], version: 1 }))
     const one: PermissionChange = { role: 'TREASURER', permission: 'MANAGE_MEMBERS', enabled: false }
     expect(await put([])).toMatchObject({ status: 400, detail: 'Chưa có thay đổi nào để lưu.' })
-    expect(await put(Array.from({ length: 113 }, () => one))).toMatchObject({ status: 400, detail: 'Mỗi lần lưu tối đa 112 ô.' })
+    expect(await put(Array.from({ length: 120 }, () => one))).toMatchObject({ status: 400, detail: 'Mỗi lần lưu tối đa 119 ô.' })
     expect(await put([one, one])).toMatchObject({ status: 400, fieldErrors: [{ field: 'changes', message: 'Có ô bị lặp.' }] })
     expect(await put([one, { role: 'MEMBER', permission: 'MANAGE_MEMBERS', enabled: true }])).toMatchObject({ status: 400, fieldErrors: [{ field: 'changes[1]' }] })
     expect(db.permissionOverrides).toEqual([])
@@ -130,7 +132,7 @@ describe('editing the matrix (FR-ORG-05, BR-ACL-01..05)', () => {
   it('does not bump the version when nothing changes', async () => {
     const saved = await save('u-anh', [{ role: 'TREASURER', permission: 'MANAGE_MEMBERS', enabled: true }])
     expect(saved.version).toBe(1)
-    expect(db.auditLogs).toEqual([])
+    expect(permissionLogs()).toEqual([])
   })
 })
 

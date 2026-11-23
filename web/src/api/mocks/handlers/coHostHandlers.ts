@@ -107,7 +107,7 @@ export const coHostHandlers = [
     const reason = (body.reason ?? '').trim()
     if (!reasonOk(reason)) return problem(400, 'Vui lòng nhập lý do.', 'VALIDATION', [{ field: 'reason', message: `Nhập lý do từ ${REASON_MIN} đến ${REASON_MAX} ký tự.` }])
     Object.assign(coHost, { status: 'REMOVED', removedBy: user.value.id, removedAt: nowIso(), removeReason: reason, version: coHost.version + 1 })
-    const removedStaff = endCoHostClubStaff(coHost, reason)
+    const removedStaff = endCoHostClubStaff(coHost, reason, user.value.id)
     const clubName = clubNameOf(coHost.clubId)
     notify(coHostDeciders(coHost.clubId), {
       clubId: coHost.clubId,

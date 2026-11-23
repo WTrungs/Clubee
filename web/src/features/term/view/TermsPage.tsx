@@ -1,7 +1,7 @@
 import { motion } from 'motion/react'
-import { ArrowRight, ArrowRightLeft, CalendarRange, History, ListChecks, Pencil, Plus, TriangleAlert } from 'lucide-react'
+import { ArrowRight, ArrowRightLeft, CalendarClock, CalendarRange, History, ListChecks, Pencil, Plus, TriangleAlert } from 'lucide-react'
 import { Link } from 'react-router'
-import { formatDate } from '@/shared/format/formatDate'
+import { formatDate, formatDateTime } from '@/shared/format/formatDate'
 import { useNow } from '@/shared/hooks/useNow'
 import { fadeVariants, itemVariants, listVariants } from '@/shared/motion/presets'
 import { Badge } from '@/shared/ui/Badge'
@@ -16,6 +16,7 @@ import { progressText } from '../viewModel/handoverDisplay'
 import { isTermOverdue, planEntryKind, planEntryKindDisplay, planSummary, termLifecycleSteps, termPeriod, termRemainingText, termStatusDisplay } from '../viewModel/termDisplay'
 import { useTermsPageViewModel } from '../viewModel/useTermsPageViewModel'
 import { DepartmentPlanSheet } from './DepartmentPlanSheet'
+import { ExtendTermDialog } from './ExtendTermDialog'
 import { TermFormSheet } from './TermFormSheet'
 import { TermLifecycle } from './TermLifecycle'
 
@@ -40,7 +41,41 @@ function HandoverLink({ path }: { path: string | null }) {
   )
 }
 
-function CurrentTermCard({ term, overdueHint, handoverPath }: { term: Term; overdueHint: string | null; handoverPath: string | null }) {
+function ExtensionHistory({ term }: { term: Term }) {
+  if (term.extensions.length === 0) return null
+  return (
+    <div className="space-y-2">
+      <h3 className="text-sm font-bold">Lịch sử gia hạn</h3>
+      <ol aria-label="Lịch sử gia hạn" className="divide-y rounded-xl border">
+        {term.extensions.toReversed().map((extension) => (
+          <li key={`${extension.extendedAt}|${extension.toEndOn}`} className="space-y-0.5 px-3 py-2.5 text-sm">
+            <p className="font-semibold">
+              {formatDate(extension.fromEndOn)}
+              <ArrowRight aria-hidden className="mx-1 inline size-3.5 align-[-2px] text-muted-foreground" />
+              <span className="sr-only">tới </span>
+              {formatDate(extension.toEndOn)}
+              <span className="font-normal text-muted-foreground"> · {extension.movedPositions} chức vụ dời theo</span>
+            </p>
+            <p className="text-muted-foreground [overflow-wrap:anywhere]">{extension.reason}</p>
+            <p className="text-xs text-muted-foreground">
+              {extension.extendedBy.fullName} · {formatDateTime(extension.extendedAt)}
+            </p>
+          </li>
+        ))}
+      </ol>
+    </div>
+  )
+}
+
+interface CurrentTermCardProps {
+  term: Term
+  overdueHint: string | null
+  handoverPath: string | null
+  canExtend: boolean
+  onExtend: () => void
+}
+
+function CurrentTermCard({ term, overdueHint, handoverPath, canExtend, onExtend }: CurrentTermCardProps) {
   const now = useNow()
   const overdue = isTermOverdue(term, new Date(now))
   const handingOver = term.status === 'HANDING_OVER'
@@ -82,7 +117,14 @@ function CurrentTermCard({ term, overdueHint, handoverPath }: { term: Term; over
           />
         </div>
       )}
+      <ExtensionHistory term={term} />
       {handingOver && <HandoverLink path={handoverPath} />}
+      {canExtend && (
+        <Button variant="outline" onClick={onExtend} className="w-full sm:w-auto">
+          <CalendarClock aria-hidden />
+          Gia hạn nhiệm kỳ
+        </Button>
+      )}
     </section>
   )
 }
@@ -174,7 +216,7 @@ function PreparingTermCard({ term, canEdit, canStartHandover, onEdit, onEditPlan
   )
 }
 
-function PastTerms({ terms, positionsPath }: { terms: Term[]; positionsPath: (term: Term) => string }) {
+function PastTerms({ terms, detailPath }: { terms: Term[]; detailPath: (term: Term) => string }) {
   return (
     <section aria-labelledby="past-terms-title" className="space-y-3">
       <h2 id="past-terms-title" className="text-base font-bold">
@@ -194,11 +236,11 @@ function PastTerms({ terms, positionsPath }: { terms: Term[]; positionsPath: (te
                 <StatusBadge term={term} />
               </div>
               <Link
-                to={positionsPath(term)}
-                aria-label={`Xem chức vụ ${term.name}`}
-                className="inline-flex items-center gap-1 text-sm font-semibold text-primary hover:underline"
+                to={detailPath(term)}
+                aria-label={`Xem ${term.name}`}
+                className="inline-flex min-h-11 items-center gap-1 text-sm font-semibold text-primary hover:underline"
               >
-                Xem chức vụ
+                Xem nhiệm kỳ
                 <ArrowRight aria-hidden className="size-4" />
               </Link>
             </motion.li>
@@ -242,8 +284,10 @@ export function TermsPage() {
           {vm.current ? (
             <CurrentTermCard
               term={vm.current}
-              overdueHint={vm.canCreate ? 'Hãy khai báo nhiệm kỳ mới rồi bàn giao.' : vm.canStartHandover ? 'Hãy bắt đầu bàn giao sang nhiệm kỳ kế tiếp.' : null}
+              overdueHint={vm.overdueHint}
               handoverPath={vm.handoverPath(vm.current)}
+              canExtend={vm.canExtend}
+              onExtend={vm.openExtend}
             />
           ) : (
             <EmptyState icon={CalendarRange} title="CLB chưa có nhiệm kỳ đang chạy" />
@@ -263,12 +307,13 @@ export function TermsPage() {
               {vm.current && ` Nhiệm kỳ hiện tại kết thúc ngày ${formatDate(vm.current.endOn)}.`}
             </p>
           )}
-          <PastTerms terms={vm.past} positionsPath={vm.positionsPath} />
+          <PastTerms terms={vm.past} detailPath={vm.detailPath} />
         </motion.div>
       )}
 
       <TermFormSheet state={vm.termForm} clubName={vm.clubName} onClose={vm.closeTermForm} />
       <DepartmentPlanSheet term={vm.planTerm} onClose={vm.closePlan} />
+      <ExtendTermDialog term={vm.extendTerm} onClose={vm.closeExtend} />
       <ConfirmDialog
         open={vm.startOpen}
         onOpenChange={(open) => !open && vm.closeStart()}

@@ -1,14 +1,15 @@
 import type { PersonRef } from '@/api/commonTypes'
 import type { TermSummary } from '@/features/club/model/clubTypes'
 import type { EventStatus } from '@/features/event/model/eventTypes'
+import type { AdvanceStatus } from '@/features/finance/model/advanceTypes'
 import type { FundKind } from '@/features/finance/model/financeTypes'
 import type { StandingRole } from '@/features/org/model/orgTypes'
 import type { TaskStatus } from '@/features/task/model/taskTypes'
 
 export type HandoverStatus = 'OPEN' | 'COMPLETED'
 
-/** Thao tác `CONFIRM` chỉ có với người được bầu vào ban chủ nhiệm mới còn đủ điều kiện; `COMPLETE` với ban chủ nhiệm cũ (FR-TERM-05, 06). */
-export type HandoverAction = 'EDIT_APPOINTMENTS' | 'CONFIRM' | 'COMPLETE'
+/** `CONFIRM` cho người được bầu ban chủ nhiệm mới; `COMPLETE`, `SUBSTITUTE_CONFIRM` (FR-TERM-07) cho ban chủ nhiệm hiện tại. */
+export type HandoverAction = 'EDIT_APPOINTMENTS' | 'CONFIRM' | 'SUBSTITUTE_CONFIRM' | 'COMPLETE'
 
 /** Những gì sẽ đổi khi hoàn tất, để ban chủ nhiệm cũ xem lại trước khi bấm (FR-TERM-06). */
 export interface HandoverCompletionPreview {
@@ -29,8 +30,8 @@ export interface CompleteHandoverRequest {
   version: number
 }
 
-/** FR-TERM-04: loại mục đã có dữ liệu; tạm ứng, tài sản, tài liệu thêm khi có module tương ứng. */
-export type HandoverItemKind = 'FUND' | 'EVENT' | 'TASK'
+/** FR-TERM-04: quỹ, tạm ứng chưa quyết toán, sự kiện, việc của ban và tài liệu của nhiệm kỳ cũ; tài sản thêm khi có module tương ứng. */
+export type HandoverItemKind = 'FUND' | 'ADVANCE' | 'EVENT' | 'TASK' | 'DOCUMENTS'
 
 /** Chờ xác nhận, Đã xác nhận, hoặc Không cần bàn giao nữa (đối tượng đã xong, đã đóng, đã quyết toán). */
 export type HandoverItemStatus = 'PENDING' | 'CONFIRMED' | 'RESOLVED'
@@ -83,6 +84,29 @@ export interface HandoverEventInfo {
   needsLeadDecision: boolean
 }
 
+export interface HandoverAdvanceInfo {
+  fundName: string
+  requester: PersonRef
+  amount: number
+  status: AdvanceStatus
+  /** Số tiền còn phải quyết toán; tạm ứng đã duyệt mà chưa ứng thì bằng cả khoản. */
+  outstanding: number
+  settleBy: string
+  overdue: boolean
+}
+
+/** Một mục gộp mọi tài liệu gắn nhiệm kỳ cũ; số lượng đổi thì phải xác nhận lại. */
+export interface HandoverDocumentsInfo {
+  termName: string
+  count: number
+}
+
+/** FR-TERM-07: mục do ban chủ nhiệm hiện tại xác nhận thay người cũ không bàn giao. */
+export interface HandoverSubstitute {
+  by: PersonRef
+  reason: string
+}
+
 /** Quyết định về Trưởng BTC; chỉ áp dụng khi bàn giao hoàn tất (BR-TERM-02). */
 export interface EventLeadDecision {
   action: EventLeadAction
@@ -96,14 +120,17 @@ export interface HandoverItem {
   status: HandoverItemStatus
   title: string
   fund: HandoverFundInfo | null
+  advance: HandoverAdvanceInfo | null
   task: HandoverTaskInfo | null
   event: HandoverEventInfo | null
+  documents: HandoverDocumentsInfo | null
   eventLead: EventLeadDecision | null
   /** Vì sao mục quay về Chờ xác nhận hoặc không cần bàn giao nữa. */
   note: string | null
   confirmedBy: PersonRef | null
   confirmedAt: string | null
-  allowedActions: Array<'CONFIRM'>
+  substitute: HandoverSubstitute | null
+  allowedActions: Array<'CONFIRM' | 'SUBSTITUTE_CONFIRM'>
   version: number
 }
 
@@ -129,6 +156,12 @@ export interface ItemConfirmationRequest {
 /** FR-TERM-05: xác nhận nhiều mục một lần; một mục đã cũ thì không mục nào được ghi. */
 export interface ConfirmItemsRequest {
   items: ItemConfirmationRequest[]
+}
+
+/** FR-TERM-07: xác nhận thay các mục đang chờ, bắt buộc lý do; một mục đã cũ thì không mục nào được ghi. */
+export interface SubstituteConfirmRequest {
+  items: Array<{ itemId: string; version: number }>
+  reason: string
 }
 
 export interface DepartmentOption {

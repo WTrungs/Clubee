@@ -1,6 +1,9 @@
-import type { TransactionFlow } from '@/features/finance/model/financeTypes'
+import type { TransactionFlow, TransactionStatus } from '@/features/finance/model/financeTypes'
+import { transactionAuditLabel } from './auditLabels'
 import { db, type DbFund, type DbTransaction } from './db'
 import { can, canAnywhere, holdersOf, type AccessScope } from './mockAccess'
+import { audit } from './mockAudit'
+import { newId } from './mockHttp'
 import { canAccessClub } from './mockMembers'
 import { DEPARTMENT_ROLES, isBoardMember, positionsIn } from './mockPermissions'
 import { isCoHostBoard, isEventLead, isEventStaff } from './mockStaffEvents'
@@ -9,6 +12,60 @@ import { eventFundId, generalFundId } from './seed/financeSeed'
 
 /** Khoản chưa xong: còn chờ duyệt hoặc đã duyệt mà chưa ghi sổ. */
 export const PENDING_STATUSES: DbTransaction['status'][] = ['PROPOSED', 'APPROVED']
+
+export type NewTransactionFields = Pick<DbTransaction, 'clubId' | 'fundId' | 'type' | 'direction' | 'amount' | 'category' | 'description' | 'proposerId' | 'attachmentIds'> &
+  Partial<DbTransaction>
+
+/** Tạo giao dịch (mặc định Đề xuất) và ghi nhật ký, vì mọi giao dịch quỹ đều phải có dấu vết (BR-DATA-03). */
+export function recordTransaction(fields: NewTransactionFields, actorId: string): DbTransaction {
+  const transaction: DbTransaction = {
+    id: newId('tx'),
+    occurredOn: null,
+    status: 'PROPOSED',
+    approverId: null,
+    posterId: null,
+    originalId: null,
+    targetFundId: null,
+    rejectionReason: null,
+    createdAt: nowIso(),
+    decidedAt: null,
+    postedAt: null,
+    cancelledBy: null,
+    cancelledAt: null,
+    cancellationReason: null,
+    version: 1,
+    ...fields,
+  }
+  db.transactions.push(transaction)
+  audit({
+    actorId,
+    clubId: transaction.clubId,
+    action: 'CREATE_TRANSACTION',
+    objectType: 'TRANSACTION',
+    objectId: transaction.id,
+    objectLabel: transactionAuditLabel(db, transaction),
+    before: null,
+    after: { status: transaction.status, amount: transaction.amount },
+    reason: null,
+  })
+  return transaction
+}
+
+/** Ghi nhật ký một lần đổi trạng thái giao dịch: duyệt, từ chối, rút, ghi sổ, hủy. */
+export function logTransactionChange(transaction: DbTransaction, fromStatus: TransactionStatus, actorId: string, reason: string | null): void {
+  if (fromStatus === transaction.status) return
+  audit({
+    actorId,
+    clubId: transaction.clubId,
+    action: 'CHANGE_TRANSACTION_STATUS',
+    objectType: 'TRANSACTION',
+    objectId: transaction.id,
+    objectLabel: transactionAuditLabel(db, transaction),
+    before: { status: fromStatus },
+    after: { status: transaction.status },
+    reason,
+  })
+}
 
 /** Số dư bằng tiền vào trừ tiền ra của các giao dịch Đã ghi sổ, tính lại mỗi lần đọc (BR-FIN-02). */
 export function fundBalance(fundId: string): number {

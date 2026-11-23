@@ -7,7 +7,7 @@ import { useCurrentClub } from '@/features/club/viewModel/clubContext'
 import { useRefreshMemberData } from '@/features/member/viewModel/useRefreshMemberData'
 import { termRepository } from '../model/termRepository'
 import type { Term } from '../model/termTypes'
-import { groupTerms } from './termDisplay'
+import { groupTerms, overdueHintText } from './termDisplay'
 import { termQueryKeys } from './termQueryKeys'
 
 export type TermFormState = { mode: 'create' } | { mode: 'edit'; term: Term } | null
@@ -24,6 +24,7 @@ export function useTermsPageViewModel() {
   // Nhớ theo mã nhiệm kỳ, để nhiệm kỳ Chuẩn bị biến mất rồi có nhiệm kỳ khác thì sheet không tự mở lại.
   const [planTermId, setPlanTermId] = useState<string | null>(null)
   const [startOpen, setStartOpen] = useState(false)
+  const [extendTermId, setExtendTermId] = useState<string | null>(null)
   const { current, preparing } = groups
 
   const start = useMutation({
@@ -43,6 +44,9 @@ export function useTermsPageViewModel() {
     },
   })
 
+  const canCreate = club.allowedActions.includes('CREATE_TERM')
+  const canStartHandover = (current !== null && preparing?.allowedActions.includes('START_HANDOVER')) ?? false
+  const canExtend = current?.allowedActions.includes('EXTEND') ?? false
   return {
     clubId,
     clubName: club.name,
@@ -52,9 +56,15 @@ export function useTermsPageViewModel() {
     current,
     preparing,
     past: groups.past,
-    canCreate: club.allowedActions.includes('CREATE_TERM'),
+    canCreate,
     canEdit: preparing?.allowedActions.includes('EDIT') ?? false,
-    canStartHandover: (current !== null && preparing?.allowedActions.includes('START_HANDOVER')) ?? false,
+    canStartHandover,
+    canExtend,
+    overdueHint: overdueHintText({ create: canCreate, startHandover: canStartHandover, extend: canExtend }),
+    // Lấy nhiệm kỳ mới nhất từ danh sách để version luôn khớp bản đang có.
+    extendTerm: current && current.id === extendTermId && canExtend ? current : null,
+    openExtend: () => setExtendTermId(current?.id ?? null),
+    closeExtend: () => setExtendTermId(null),
     termForm,
     openCreate: () => setTermForm({ mode: 'create' }),
     openEdit: (term: Term) => setTermForm({ mode: 'edit', term }),
@@ -70,8 +80,8 @@ export function useTermsPageViewModel() {
     confirmStart: () => {
       if (current && preparing) start.mutate({ fromTermId: current.id, toTermId: preparing.id })
     },
-    /** FR-ORG-06: chức vụ thường trực của nhiệm kỳ đã đóng, ở tab Chức vụ trang Cơ cấu. */
-    positionsPath: (term: Term) => `/clubs/${encodeURIComponent(clubId)}/structure?tab=positions&term=${encodeURIComponent(term.id)}`,
+    /** FR-TERM-08: trang tra cứu nhiệm kỳ (cơ cấu, chức vụ, sự kiện, sổ quỹ). */
+    detailPath: (term: Term) => `/clubs/${encodeURIComponent(clubId)}/terms/${encodeURIComponent(term.id)}`,
     handoverPath: (term: Term) =>
       term.handoverId && term.allowedActions.includes('VIEW_HANDOVER') ? `/clubs/${encodeURIComponent(clubId)}/handovers/${encodeURIComponent(term.handoverId)}` : null,
   }

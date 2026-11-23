@@ -1,24 +1,9 @@
 import type { PersonRef } from '@/api/commonTypes'
 import type { FinanceCategory } from './financeTypes'
 
-/** Loại kỳ báo cáo (FR-FIN-12): tháng, học kỳ theo mốc CLB khai, nhiệm kỳ, hoặc khoảng ngày tự chọn. */
-export type ReportPeriodKind = 'MONTH' | 'SEMESTER' | 'TERM' | 'CUSTOM'
+import type { ReportPeriodKind } from '@/features/report/model/reportPeriodTypes'
 
-export interface ReportPeriodOption {
-  kind: Exclude<ReportPeriodKind, 'CUSTOM'>
-  /** `yyyy-mm` với tháng, `yyyy-S1`, `yyyy-S2`, `yyyy-SUMMER` với học kỳ (năm bắt đầu năm học), mã nhiệm kỳ với nhiệm kỳ. */
-  key: string
-  label: string
-  /** yyyy-mm-dd. */
-  from: string
-  to: string
-}
-
-export interface ReportPeriods {
-  months: ReportPeriodOption[]
-  semesters: ReportPeriodOption[]
-  terms: ReportPeriodOption[]
-}
+export type { ReportPeriodKind, ReportPeriodOption, ReportPeriods } from '@/features/report/model/reportPeriodTypes'
 
 export interface FinanceReportQuery {
   period: ReportPeriodKind

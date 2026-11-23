@@ -2,7 +2,7 @@ import { http, HttpResponse } from 'msw'
 import { describe, expect, it, vi } from 'vitest'
 import { server } from './mocks/server'
 import { ApiError, getErrorMessage } from './apiError'
-import { buildUrl, httpClient } from './httpClient'
+import { buildUrl, fileNameFromDisposition, httpClient } from './httpClient'
 
 describe('buildUrl', () => {
   it('skips empty values and repeats array params', () => {
@@ -79,5 +79,14 @@ describe('httpClient', () => {
   it('returns undefined for 204', async () => {
     server.use(http.post('*/api/v1/empty', () => new HttpResponse(null, { status: 204 })))
     await expect(httpClient.post('/empty')).resolves.toBeUndefined()
+  })
+})
+
+describe('fileNameFromDisposition', () => {
+  it('reads the UTF-8 name first, then the plain name, and ignores a broken header', () => {
+    expect(fileNameFromDisposition(`attachment; filename="ke-hoach.pdf"; filename*=UTF-8''K%E1%BA%BF%20ho%E1%BA%A1ch.pdf`)).toBe('Kế hoạch.pdf')
+    expect(fileNameFromDisposition('attachment; filename="bien-ban.docx"')).toBe('bien-ban.docx')
+    expect(fileNameFromDisposition(`attachment; filename*=UTF-8''%E0%A4%A`)).toBeNull()
+    expect(fileNameFromDisposition(null)).toBeNull()
   })
 })

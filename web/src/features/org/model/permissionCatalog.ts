@@ -17,6 +17,7 @@ export const PERMISSION_CATALOG: Record<PermissionKey, { label: string; descript
   ASSIGN_TASK: { label: 'Giao việc', description: 'Giao việc trong phạm vi của chức vụ.', group: 'WORK' },
   MANAGE_SESSIONS: { label: 'Buổi sinh hoạt, điểm danh', description: 'Tạo buổi, điểm danh và chốt điểm danh.', group: 'WORK' },
   SEND_ANNOUNCEMENT: { label: 'Gửi thông báo', description: 'Gửi thông báo tới nhóm trong phạm vi.', group: 'WORK' },
+  MANAGE_DOCUMENTS: { label: 'Quản lý tài liệu', description: 'Tải lên tài liệu của CLB, ban hoặc sự kiện trong phạm vi.', group: 'WORK' },
   PROPOSE_EXPENSE: { label: 'Đề xuất chi', description: 'Đề xuất khoản chi từ quỹ trong phạm vi.', group: 'FINANCE' },
   APPROVE_EXPENSE: { label: 'Duyệt chi', description: 'Duyệt, từ chối khoản chi và điều chỉnh giảm.', group: 'FINANCE' },
   RECORD_LEDGER: { label: 'Ghi sổ quỹ', description: 'Ghi thu, ghi sổ chi, điều chỉnh, quyết toán.', group: 'FINANCE' },
@@ -26,6 +27,6 @@ export const PERMISSION_GROUP_LABELS: Record<PermissionGroup, string> = {
   CLUB: 'Câu lạc bộ',
   MEMBERS: 'Thành viên',
   EVENTS: 'Sự kiện',
-  WORK: 'Công việc, sinh hoạt, thông báo',
+  WORK: 'Công việc, sinh hoạt, thông báo, tài liệu',
   FINANCE: 'Tài chính',
 }
