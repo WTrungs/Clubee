@@ -116,6 +116,9 @@ export interface EventRegistrationStats {
   waitlisted: number
   reconfirmPending: number
   cancelled: number
+  /** Khách mời còn đăng ký (FR-EVT-12) và số khách đã được ghi có mặt ít nhất một ngày. */
+  guests: number
+  guestsCheckedIn: number
 }
 
 /** Điểm danh một ngày của sự kiện; `expected` là người giữ chỗ, sau khi chốt là người có bản ghi. */
@@ -268,7 +271,9 @@ export interface StaffCandidate extends PersonRef {
 
 export interface Registration {
   id: string
+  /** Khách mời không có tài khoản: `id` là mã đăng ký, `fullName` là họ tên khách khai. */
   attendee: PersonRef
+  guest: boolean
   status: RegistrationStatus
   waitlistPosition: number | null
   registeredAt: string
@@ -345,4 +350,40 @@ export interface PublicEventDetail extends PublicEventSummary {
   clubLogoUrl: string | null
   /** Đang Mở đăng ký và chưa quá hạn (BR-EVT-02). */
   registrationOpen: boolean
+}
+
+/** FR-EVT-12: khách mời đăng ký trên trang công khai. */
+export interface GuestRegistrationRequest {
+  fullName: string
+  email?: string
+  phone?: string
+}
+
+export type GuestPassAction = 'CANCEL'
+
+/** Vé của khách: mở bằng mã tham dự trong email, không cần đăng nhập. */
+export interface GuestPass {
+  code: string
+  fullName: string
+  emailHint: string | null
+  phoneHint: string | null
+  status: RegistrationStatus
+  waitlistPosition: number | null
+  registeredAt: string
+  /** Ngày (yyyy-mm-dd) BTC đã ghi có mặt. */
+  checkedInDays: string[]
+  event: PublicEventSummary
+  allowedActions: GuestPassAction[]
+}
+
+/** Dòng khách mời cho BTC tra cứu và ghi có mặt (FR-ATT-07); liên hệ đã che bớt. */
+export interface GuestRegistrationRow {
+  id: string
+  fullName: string
+  emailHint: string | null
+  phoneHint: string | null
+  code: string
+  status: RegistrationStatus
+  checkedIn: boolean
+  checkedInAt: string | null
 }

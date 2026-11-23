@@ -31,6 +31,9 @@ import {
 } from '../mockAttendance'
 import { API, currentUser, networkDelay, problem, writer } from '../mockHttp'
 import { canAccessClub, eligibleMembers, ROSTER_STATUSES } from '../mockMembers'
+import { matchesGuest, toGuestRow } from '../mockGuests'
+import { nowIso } from '../mockTime'
+import { activeRegistrations, holdsSeat } from '../mockRegistrations'
 
 type Resolved = { ok: true; activity: AttendanceActivity } | { ok: false; response: Response }
 type Params = Record<string, string | readonly string[] | undefined>
@@ -245,9 +248,49 @@ function checkInRoute(path: string, locate: (params: Params) => AttendanceActivi
   })
 }
 
+/** FR-EVT-12, FR-ATT-07: BTC tra khách mời theo mã, email, SĐT rồi ghi có mặt từng ngày của sự kiện. */
+const guestRoutes = [
+  http.get(`${API}/clubs/:clubId/events/:eventId/guest-registrations`, async ({ request, params }) => {
+    await networkDelay()
+    const user = currentUser()
+    if (!user.ok) return user.response
+    const resolved = resolveEvent(params, user.value.id)
+    if (!resolved.ok) return resolved.response
+    const url = new URL(request.url)
+    const day = url.searchParams.get('day')
+    const rows = activeRegistrations(String(params.eventId))
+      .filter((registration) => matchesGuest(registration, url.searchParams.get('q') ?? ''))
+      .toSorted((a, b) => (a.guest?.fullName ?? '').localeCompare(b.guest?.fullName ?? '', 'vi'))
+      .map((registration) => toGuestRow(registration, day && resolved.activity.days.includes(day) ? day : (resolved.activity.days[0] ?? null)))
+    return HttpResponse.json(rows)
+  }),
+
+  http.post(`${API}/clubs/:clubId/events/:eventId/guest-registrations/:registrationId/check-ins`, async ({ request, params }) => {
+    await networkDelay()
+    const user = writer(request)
+    if (!user.ok) return user.response
+    const resolved = resolveEvent(params, user.value.id)
+    if (!resolved.ok) return resolved.response
+    const { activity } = resolved
+    const registration = db.registrations.find((candidate) => candidate.id === params.registrationId && candidate.eventId === params.eventId && candidate.guest !== null)
+    if (!registration?.guest) return problem(404, 'Không tìm thấy khách mời.', 'GUEST_NOT_FOUND')
+    if (!activity.canMark(user.value.id)) return problem(403, 'Chỉ ban tổ chức ghi có mặt cho khách mời.', 'FORBIDDEN')
+    const body = (await request.json()) as { day?: unknown }
+    const day = dayOf(activity, body.day)
+    if (!day.ok) return day.response
+    const blocked = writeGuard(activity, day.day)
+    if (blocked) return blocked
+    if (!holdsSeat(registration)) return problem(422, 'Khách chưa được nhận chỗ nên chưa ghi có mặt được.', 'GUEST_NOT_SEATED')
+    if (registration.guest.checkIns.some((checkIn) => checkIn.day === day.day)) return problem(422, 'Khách đã được ghi có mặt ngày này.', 'ALREADY_CHECKED_IN')
+    registration.guest.checkIns.push({ day: day.day ?? '', at: nowIso(), by: user.value.id })
+    return HttpResponse.json(toGuestRow(registration, day.day))
+  }),
+]
+
 export const attendanceHandlers = [
   ...attendanceRoutes('/clubs/:clubId/sessions/:sessionId', resolveSession),
   ...attendanceRoutes('/clubs/:clubId/events/:eventId', resolveEvent),
   checkInRoute('/clubs/:clubId/sessions/:sessionId', locateSession),
   checkInRoute('/clubs/:clubId/events/:eventId', locateEvent),
+  ...guestRoutes,
 ]

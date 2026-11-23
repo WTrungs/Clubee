@@ -3,6 +3,7 @@ import type { DbAuditLog } from './mockAudit'
 import { createAdvanceSeed, type DbAdvance } from './seed/advanceSeed'
 import { createAuditSeed } from './seed/auditSeed'
 import { createDuesSeed, type DbDuesCampaign, type DbDuesItem } from './seed/duesSeed'
+import type { DbGuestMail } from './mockGuests'
 import type { DbNotificationPreference } from './mockNotificationPreferences'
 import type { DbPasswordReset } from './mockPasswordResets'
 import type { DbPermissionMatrixMeta } from './mockPermissionMatrix'
@@ -129,6 +130,7 @@ export interface MockDb {
   passwordResets: DbPasswordReset[]
   notificationPreferences: DbNotificationPreference[]
   news: DbNews[]
+  guestMails: DbGuestMail[]
 }
 
 export function createSeed(): MockDb {
@@ -180,6 +182,7 @@ export function createSeed(): MockDb {
     passwordResets: [],
     notificationPreferences: [],
     news: createNewsSeed(),
+    guestMails: [],
   }
   seed.sessionRegistrations = createSessionRegistrationSeed(seed)
   seed.auditLogs = createAuditSeed(seed)

@@ -1,5 +1,6 @@
 import type { EventProgress, EventReport, EventStaffStats, TaskProgressCounts } from '@/features/event/model/eventTypes'
 import { db } from './db'
+import { guestStats } from './mockGuests'
 import { eventActivity, eventAttendanceAvailable, isAttendanceOpen, sheetEntries, sheetStateOf } from './mockAttendance'
 import { tallyAttendance } from './mockAttendanceStats'
 import { openAdvanceCountOf } from './mockAdvances'
@@ -46,7 +47,14 @@ export const canViewStaffStats = (userId: string, event: DbEvent) => isBoardMemb
 
 function registrationStats(event: DbEvent): EventReport['registrations'] {
   const count = (status: string) => db.registrations.filter((registration) => registration.eventId === event.id && registration.status === status).length
-  return { capacity: event.capacity, confirmed: count('CONFIRMED'), waitlisted: count('WAITLISTED'), reconfirmPending: count('RECONFIRM_PENDING'), cancelled: count('CANCELLED') }
+  return {
+    capacity: event.capacity,
+    confirmed: count('CONFIRMED'),
+    waitlisted: count('WAITLISTED'),
+    reconfirmPending: count('RECONFIRM_PENDING'),
+    cancelled: count('CANCELLED'),
+    ...guestStats(event.id),
+  }
 }
 
 /** Mỗi ngày của sự kiện: đối tượng (người giữ chỗ, sau khi chốt là người có bản ghi) và đếm trạng thái của các bản ghi. */

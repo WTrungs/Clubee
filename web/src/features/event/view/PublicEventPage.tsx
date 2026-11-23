@@ -8,6 +8,7 @@ import { Skeleton } from '@/shared/ui/Skeleton'
 import { ErrorState } from '@/shared/ui/StateViews'
 import { formatEventTime, publicSeatsText } from '../viewModel/eventDisplay'
 import { usePublicEventViewModel } from '../viewModel/usePublicEventViewModel'
+import { GuestRegistrationCard } from './GuestRegistrationCard'
 
 /** FR-CLB-07: trang công khai của sự kiện mở cho khách; không có BTC, quỹ hay danh sách người đăng ký. */
 export function PublicEventPage() {
@@ -75,6 +76,7 @@ export function PublicEventPage() {
             </ul>
             {event.description && <p className="leading-relaxed whitespace-pre-line [overflow-wrap:anywhere]">{event.description}</p>}
           </section>
+          {event.registrationOpen && !vm.appPath && <GuestRegistrationCard eventId={event.id} />}
           {vm.appPath && (
             <section className="flex flex-col gap-3 rounded-2xl border border-dashed bg-card/60 p-4 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-sm text-muted-foreground">Bạn là thành viên của CLB: đăng ký trong ứng dụng để được tính chuyên cần.</p>

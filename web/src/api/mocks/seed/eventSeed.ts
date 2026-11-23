@@ -100,10 +100,23 @@ export function createCoHostSeed(): DbEventCoHost[] {
   ]
 }
 
+/** Khách mời đăng ký trên trang công khai (FR-EVT-12): không có tài khoản, nhận mã tham dự qua email. */
+export interface DbGuestInfo {
+  fullName: string
+  email: string | null
+  phone: string | null
+  /** Mã tham dự in trong QR; BTC tra theo mã, email hoặc SĐT (FR-ATT-07). */
+  code: string
+  /** Mỗi ngày của sự kiện ghi có mặt một lần (yyyy-mm-dd). */
+  checkIns: Array<{ day: string; at: string; by: string }>
+}
+
 export interface DbRegistration {
   id: string
   eventId: string
-  userId: string
+  /** `null` với khách mời. */
+  userId: string | null
+  guest: DbGuestInfo | null
   status: RegistrationStatus
   registeredAt: string
   cancelledAt: string | null
@@ -115,7 +128,7 @@ export interface DbRegistration {
   reconfirmDeadline: string | null
 }
 
-const registrationExtras = { cancelledAt: null, cancelKind: null, promotedAt: null, reconfirmDeadline: null } as const
+const registrationExtras = { cancelledAt: null, cancelKind: null, promotedAt: null, reconfirmDeadline: null, guest: null } as const
 
 const event = (spec: Partial<DbEvent> & Pick<DbEvent, 'id' | 'name' | 'status' | 'startAt' | 'endAt' | 'proposerId'>): DbEvent => ({
   clubId: 'c-guitar',
@@ -197,6 +210,7 @@ export function createEventSeed(): DbEvent[] {
       status: 'ONGOING',
       format: 'ONLINE',
       onlineUrl: 'https://example.com/live',
+      openToGuests: true,
       startAt: vnDayAt(0, 0, 5),
       endAt: vnDayAt(1, 23),
       proposerId: 'u-kiet',
@@ -308,5 +322,15 @@ export function createRegistrationSeed(): DbRegistration[] {
       ...registrationExtras,
       registeredAt: vnDayAt(-1, 9 + index),
     })),
+    // Khách mời của buổi livestream đang diễn ra, để BTC thử tra mã và ghi có mặt (FR-EVT-12).
+    {
+      id: 'r-livestream-guest',
+      eventId: 'e-livestream',
+      userId: null,
+      status: 'CONFIRMED' as const,
+      ...registrationExtras,
+      guest: { fullName: 'Phạm Minh Châu', email: 'chau.pham@khach.test', phone: '0901234567', code: 'KHACH7Q2', checkIns: [] },
+      registeredAt: vnDayAt(-2, 20),
+    },
   ]
 }

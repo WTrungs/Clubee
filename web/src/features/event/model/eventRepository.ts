@@ -10,6 +10,7 @@ import type {
   EventQuery,
   EventSummary,
   EventTransitionRequest,
+  GuestRegistrationRow,
   InviteCoHostRequest,
   MyRegistration,
   Registration,
@@ -69,4 +70,9 @@ export const eventRepository = {
   /** FR-EVT-14: xác nhận vẫn tham dự sau khi sự kiện dời giờ. */
   reconfirmRegistration: (clubId: string, eventId: string, registrationId: string) =>
     httpClient.post<MyRegistration>(`${event(clubId, eventId)}/registrations/${encodeURIComponent(registrationId)}/reconfirmation`),
+  /** FR-EVT-12, FR-ATT-07: BTC tra khách mời theo mã, email, SĐT và ghi có mặt theo ngày. */
+  guestRegistrations: (clubId: string, eventId: string, query: { q?: string; day?: string | null }) =>
+    httpClient.get<GuestRegistrationRow[]>(`${event(clubId, eventId)}/guest-registrations`, { query: { q: query.q, day: query.day ?? undefined } }),
+  checkInGuest: (clubId: string, eventId: string, registrationId: string, day: string | null) =>
+    httpClient.post<GuestRegistrationRow>(`${event(clubId, eventId)}/guest-registrations/${encodeURIComponent(registrationId)}/check-ins`, { day }),
 }

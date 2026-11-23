@@ -20,6 +20,7 @@ import type {
   SubcommitteeAction,
 } from '@/features/event/model/eventTypes'
 import { db } from '../db'
+import { mailGuest } from '../mockGuests'
 import { newActivityBlocked } from '../mockClubStatus'
 import { API, currentUser, matchesKeyword, networkDelay, newId, paginate, problem, writer } from '../mockHttp'
 import { canAccessClub, departmentNameOf, eligibleMembers, isActiveMember, membershipOf, personRef as person } from '../mockMembers'
@@ -234,10 +235,19 @@ function organizerIds(event: DbEvent): string[] {
 
 /** Người cần biết sự kiện bị hủy: người đăng ký còn hiệu lực, nhân sự BTC, Trưởng BTC (FR-EVT-15); lấy trước khi chức vụ hết hiệu lực. */
 function cancellationRecipients(event: DbEvent): string[] {
-  return [...activeRegistrations(event.id).map((registration) => registration.userId), ...organizerIds(event)]
+  return [...activeRegistrations(event.id).flatMap((registration) => (registration.userId ? [registration.userId] : [])), ...organizerIds(event)]
+}
+
+/** Khách mời nhận thư thay cho thông báo trong hệ thống (FR-EVT-12). */
+function mailGuestsOf(event: DbEvent, subject: string, body: string): void {
+  for (const registration of activeRegistrations(event.id)) if (registration.guest) mailGuest(registration, subject, body)
 }
 
 const RESCHEDULABLE: EventStatus[] = ['APPROVED', 'REGISTRATION_OPEN']
+
+/** Khách mời không có tài khoản: dùng mã đăng ký làm `id` và họ tên khách khai. */
+const attendeeOf = (registration: DbRegistration) =>
+  registration.guest ? { id: registration.id, fullName: registration.guest.fullName } : person(registration.userId ?? '')
 const reasonOk = (reason: string) => reason.length >= REASON_MIN && reason.length <= REASON_MAX
 
 /** Kiểm giờ mới khi dời (FR-EVT-14); hạn đăng ký không gửi thì giữ hạn cũ nên vẫn phải kiểm với giờ bắt đầu mới. */
@@ -478,6 +488,7 @@ export const eventHandlers = [
           target: eventTarget(event.clubId, event.id),
           actorId: user.value.id,
         })
+        mailGuestsOf(event, `Sự kiện ${event.name} đã bị hủy`, `Lý do: ${reason}`)
         event.statusBeforeCancel = event.status
         event.status = 'CANCELLED'
         event.cancellationReason = reason
@@ -711,11 +722,12 @@ export const eventHandlers = [
     const keyword = url.searchParams.get('q')
     const order = (registration: DbRegistration) => (holdsSeat(registration) ? 0 : 1)
     const rows: Registration[] = activeRegistrations(event.id)
-      .filter((registration) => matchesKeyword(person(registration.userId).fullName, keyword))
+      .filter((registration) => matchesKeyword(attendeeOf(registration).fullName, keyword))
       .sort((a, b) => order(a) - order(b) || Date.parse(a.registeredAt) - Date.parse(b.registeredAt))
       .map((registration) => ({
         id: registration.id,
-        attendee: person(registration.userId),
+        attendee: attendeeOf(registration),
+        guest: registration.guest !== null,
         status: registration.status,
         waitlistPosition: waitlistPosition(registration),
         registeredAt: registration.registeredAt,
@@ -745,6 +757,7 @@ export const eventHandlers = [
       cancelKind: null,
       promotedAt: null,
       reconfirmDeadline: null,
+      guest: null,
     }
     db.registrations.push(registration)
     return HttpResponse.json(toMyRegistration(event, registration), { status: 201 })
@@ -801,6 +814,7 @@ export const eventHandlers = [
     Object.assign(event, { startAt: change.toStartAt, endAt: change.toEndAt, registrationDeadline: deadline })
     const { seated, deadline: confirmBy } = requireReconfirmation(event, user.value.id)
     notifyReschedule(event, change, seated, confirmBy)
+    mailGuestsOf(event, `Sự kiện ${event.name} đổi thời gian`, `Thời gian mới: ${formatDateTime(change.toStartAt)}. Chỗ của bạn vẫn giữ nguyên.`)
     event.version += 1
     return HttpResponse.json(toDetail(event, user.value.id))
   }),

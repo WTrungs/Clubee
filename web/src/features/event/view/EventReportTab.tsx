@@ -42,6 +42,11 @@ function Registrations({ stats }: { stats: EventReport['registrations'] }) {
         <Stat label="Chờ xác nhận lại" value={stats.reconfirmPending} tone={stats.reconfirmPending > 0 ? 'warning' : undefined} />
         <Stat label="Đã hủy" value={stats.cancelled} />
       </div>
+      {stats.guests > 0 && (
+        <p className="mt-3 text-sm text-muted-foreground">
+          Trong đó {stats.guests} khách mời, {stats.guestsCheckedIn} khách đã có mặt.
+        </p>
+      )}
     </ReportSection>
   )
 }
