@@ -186,3 +186,28 @@ export interface Workload {
   scope: WorkloadScope
   rows: WorkloadRow[]
 }
+
+/** FR-TASK-07: người viết hoặc người giao ẩn được bình luận, không xóa. */
+export type TaskCommentAction = 'HIDE'
+
+export interface TaskComment {
+  id: string
+  author: PersonRef
+  /** null khi bình luận đã bị ẩn: nội dung và tệp không trả về nữa. */
+  body: string | null
+  attachments: FileRef[]
+  createdAt: string
+  hidden: { by: PersonRef; at: string } | null
+  allowedActions: TaskCommentAction[]
+}
+
+export interface TaskCommentList {
+  comments: TaskComment[]
+  /** Người giao, người chính, người phối hợp viết được khi việc chưa hủy và sự kiện chưa khóa. */
+  canComment: boolean
+}
+
+export interface CreateTaskCommentRequest {
+  body: string
+  attachmentIds: string[]
+}

@@ -1,9 +1,8 @@
 import { motion } from 'motion/react'
-import { AlarmClock, Ban, CalendarClock, CheckCircle2, Ellipsis, FileText, History, Info, Lock, MessageSquareText, Send, UserRoundPen } from 'lucide-react'
+import { AlarmClock, Ban, CalendarClock, CheckCircle2, Ellipsis, History, Info, Lock, MessageSquareText, Send, UserRoundPen } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { formatDateTime } from '@/shared/format/formatDate'
 import { cn } from '@/shared/lib/cn'
-import { formatFileSize } from '@/shared/lib/validateUploadFile'
 import { itemVariants, listVariants } from '@/shared/motion/presets'
 import { Avatar } from '@/shared/ui/Avatar'
 import { Button } from '@/shared/ui/Button'
@@ -15,6 +14,7 @@ import { actionLabel, overdueSummary, taskTimeline, type TaskMenuAction } from '
 import { useTaskDetailViewModel, type ViewerRole } from '../viewModel/useTaskDetailViewModel'
 import { useTaskEditViewModel } from '../viewModel/useTaskEditViewModel'
 import type { TaskTransitionController } from '../viewModel/useTaskTransition'
+import { TaskComments, TaskFileList } from './TaskComments'
 import { TaskEditDialogs } from './TaskEditDialogs'
 import { DueLabel, DueSoonBadge, TaskPriorityBadge, TaskStatusBadge } from './TaskMeta'
 
@@ -186,17 +186,7 @@ export function TaskDetailSheet({ selection, onClose, transition }: TaskDetailSh
                   Kết quả đã nộp · {formatDateTime(task.submission.submittedAt)}
                 </h3>
                 {task.submission.note && <p className="text-sm whitespace-pre-line">{task.submission.note}</p>}
-                {task.submission.attachments.length > 0 && (
-                  <ul className="space-y-1.5">
-                    {task.submission.attachments.map((file) => (
-                      <li key={file.id} className="flex items-center gap-2 rounded-lg border bg-card px-2.5 py-1.5 text-sm">
-                        <FileText aria-hidden className="size-4 shrink-0 text-muted-foreground" />
-                        <span className="min-w-0 flex-1 truncate">{file.name}</span>
-                        <span className="text-xs text-muted-foreground tabular-nums">{formatFileSize(file.size)}</span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
+                {task.submission.attachments.length > 0 && <TaskFileList files={task.submission.attachments} clubId={task.clubId} taskId={task.id} />}
               </motion.section>
             )}
 
@@ -209,6 +199,10 @@ export function TaskDetailSheet({ selection, onClose, transition }: TaskDetailSh
                 <p className="text-sm whitespace-pre-line">{task.reviewComment}</p>
               </motion.section>
             )}
+
+            <motion.div variants={itemVariants}>
+              <TaskComments task={task} />
+            </motion.div>
 
             <motion.section variants={itemVariants} className="space-y-3">
               <h3 className="flex items-center gap-2 text-sm font-bold">

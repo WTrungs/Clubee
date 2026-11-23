@@ -108,3 +108,22 @@ export function managesScope(userId: string, clubId: string, type: TaskScopeType
   const subcommittee = db.subcommittees.find((candidate) => candidate.id === scopeId)
   return subcommittee !== undefined && (hasPosition(userId, 'EVENT_LEAD', subcommittee.eventId) || hasPosition(userId, 'SUBCOMMITTEE_LEAD', scopeId))
 }
+
+/** FR-EVT-16: hồ sơ sự kiện Đã đóng, Đã hủy chỉ đọc, nên việc của tiểu ban cũng chỉ xem được. */
+export function eventLockReason(task: Pick<DbTask, 'scopeType' | 'scopeId'>): string | null {
+  const status = lockedEventStatusOf(task)
+  if (status === 'CLOSED') return 'Sự kiện đã đóng nên công việc chỉ xem được.'
+  if (status === 'CANCELLED') return 'Sự kiện đã hủy nên công việc chỉ xem được.'
+  return null
+}
+
+/** Người giao, người chính, người phối hợp và người quản lý phạm vi xem được việc (SRS 3.5). */
+export function canViewTask(task: DbTask, userId: string): boolean {
+  if (!hasTaskAccess(task, userId)) return false
+  return (
+    task.ownerId === userId ||
+    task.assignerId === userId ||
+    task.collaboratorIds.includes(userId) ||
+    managesScope(userId, task.clubId, task.scopeType, task.scopeId)
+  )
+}

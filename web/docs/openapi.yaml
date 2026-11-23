@@ -2822,14 +2822,116 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
         '422': { $ref: '#/components/responses/UnprocessableEntity' }
+  /clubs/{clubId}/tasks/{taskId}/comments:
+    get:
+      tags: [TASK]
+      operationId: listTaskComments
+      summary: Bình luận của công việc (FR-TASK-07)
+      description: |
+        Ai xem được việc thì đọc được, cũ trước. Bình luận đã ẩn không trả `body`, tệp; chỉ ghi ai ẩn, lúc nào.
+        `canComment`: người giao, người chính, người phối hợp khi việc chưa hủy và sự kiện chưa khóa.
+        Lỗi 404 `TASK_NOT_FOUND`; 403 `FORBIDDEN`.
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - $ref: '#/components/parameters/TaskId'
+      responses:
+        '200':
+          description: Bình luận.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TaskCommentList' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [TASK]
+      operationId: createTaskComment
+      summary: Viết bình luận kèm tệp (FR-TASK-07)
+      description: |
+        Người giao, người chính, người phối hợp. Nội dung 1–2000 ký tự; tối đa 5 tệp do chính người viết vừa tải lên. Báo những người
+        còn lại (loại TASK). Lỗi: 404; 403 `FORBIDDEN`; 422 `TASK_CANCELLED`, `EVENT_READ_ONLY`; 400 `VALIDATION`.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - $ref: '#/components/parameters/TaskId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateTaskCommentRequest' }
+      responses:
+        '201':
+          description: Bình luận vừa viết.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TaskComment' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+  /clubs/{clubId}/tasks/{taskId}/comments/{commentId}/hiding:
+    post:
+      tags: [TASK]
+      operationId: hideTaskComment
+      summary: Ẩn bình luận (FR-TASK-07)
+      description: |
+        Người viết hoặc người giao việc; không xóa (BR-DATA-01). Lỗi: 404 `COMMENT_NOT_FOUND`; 403 `FORBIDDEN`;
+        422 `COMMENT_HIDDEN`, `EVENT_READ_ONLY`.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - $ref: '#/components/parameters/TaskId'
+        - name: commentId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Bình luận sau khi ẩn.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TaskComment' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+  /clubs/{clubId}/tasks/{taskId}/attachments/{attachmentId}/file:
+    get:
+      tags: [TASK]
+      operationId: downloadTaskAttachment
+      summary: Tải tệp của kết quả đã nộp hoặc bình luận (FR-TASK-03, 07)
+      description: |
+        Ai xem được việc thì tải được; quyền kiểm lại mỗi lần. Tệp của bình luận đã ẩn coi như không có.
+        Lỗi 404 `TASK_NOT_FOUND`, `FILE_NOT_FOUND`; 403 `FORBIDDEN`.
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - $ref: '#/components/parameters/TaskId'
+        - name: attachmentId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Nội dung tệp.
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
   /clubs/{clubId}/tasks/{taskId}/attachments:
     post:
       tags: [TASK]
       operationId: uploadTaskAttachment
       summary: Đính kèm tệp cho công việc (FR-TASK-03)
       description: |
-        Chỉ người chính và người phối hợp. Trường `file`: JPG, PNG, PDF, DOCX, XLSX, PPTX, tối đa 15 MB (IF-05).
-        Trả `FileRef` để gửi kèm `attachmentIds` khi nộp kết quả.
+        Người giao, người chính, người phối hợp. Trường `file`: JPG, PNG, PDF, DOCX, XLSX, PPTX, tối đa 15 MB (IF-05).
+        Trả `FileRef` để gửi kèm `attachmentIds` khi nộp kết quả hoặc viết bình luận (FR-TASK-07).
         Lỗi: 400 `VALIDATION` (thiếu tệp), `INVALID_FILE`; 403 `FORBIDDEN`; 404 `TASK_NOT_FOUND`;
         422 `EVENT_READ_ONLY` (việc của tiểu ban thuộc sự kiện Đã đóng hoặc Đã hủy, FR-EVT-16).
       security:
@@ -9396,6 +9498,47 @@ components:
         name: { type: string }
         eventId: { $ref: '#/components/schemas/NullableString' }
         eventName: { $ref: '#/components/schemas/NullableString' }
+    TaskComment:
+      type: object
+      required: [id, author, body, attachments, createdAt, hidden, allowedActions]
+      properties:
+        id: { type: string }
+        author: { $ref: '#/components/schemas/PersonRef' }
+        body:
+          type: [string, 'null']
+          description: Chữ thuần; null khi đã ẩn.
+        attachments:
+          type: array
+          items: { $ref: '#/components/schemas/FileRef' }
+        createdAt: { type: string, format: date-time }
+        hidden:
+          oneOf:
+            - type: object
+              required: [by, at]
+              properties:
+                by: { $ref: '#/components/schemas/PersonRef' }
+                at: { type: string, format: date-time }
+            - type: 'null'
+        allowedActions:
+          type: array
+          items: { type: string, enum: [HIDE] }
+    TaskCommentList:
+      type: object
+      required: [comments, canComment]
+      properties:
+        comments:
+          type: array
+          items: { $ref: '#/components/schemas/TaskComment' }
+        canComment: { type: boolean }
+    CreateTaskCommentRequest:
+      type: object
+      required: [body, attachmentIds]
+      properties:
+        body: { type: string, minLength: 1, maxLength: 2000 }
+        attachmentIds:
+          type: array
+          maxItems: 5
+          items: { type: string }
     FileRef:
       type: object
       required: [id, name, size, contentType]

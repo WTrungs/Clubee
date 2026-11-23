@@ -2,8 +2,11 @@ import { httpClient, type QueryParams } from '@/api/httpClient'
 import type { Page } from '@/api/pagination'
 import type {
   AssignableScope,
+  CreateTaskCommentRequest,
   CreateTaskRequest,
   FileRef,
+  TaskComment,
+  TaskCommentList,
   TaskDetail,
   TaskFacets,
   TaskQuery,
@@ -52,4 +55,9 @@ export const taskRepository = {
     return httpClient.post<FileRef>(`${task(clubId, taskId)}/attachments`, form)
   },
   assignableScopes: (clubId: string) => httpClient.get<AssignableScope[]>(`${club(clubId)}/task-scopes`),
+  /** FR-TASK-07: bình luận, ẩn bình luận, tải tệp của kết quả và bình luận. */
+  comments: (clubId: string, taskId: string) => httpClient.get<TaskCommentList>(`${task(clubId, taskId)}/comments`),
+  addComment: (clubId: string, taskId: string, request: CreateTaskCommentRequest) => httpClient.post<TaskComment>(`${task(clubId, taskId)}/comments`, request),
+  hideComment: (clubId: string, taskId: string, commentId: string) => httpClient.post<TaskComment>(`${task(clubId, taskId)}/comments/${encodeURIComponent(commentId)}/hiding`),
+  downloadAttachment: (clubId: string, taskId: string, attachmentId: string) => httpClient.download(`${task(clubId, taskId)}/attachments/${encodeURIComponent(attachmentId)}/file`),
 }

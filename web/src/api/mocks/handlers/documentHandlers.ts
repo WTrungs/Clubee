@@ -7,7 +7,7 @@ import { matchesKeyword } from '@/shared/lib/searchText'
 import { validateUploadFile } from '@/shared/lib/validateUploadFile'
 import { db, type DbDocument, type DbDocumentVersion } from '../db'
 import { canUploadVersion, canViewDocument, documentScopesFor, hiddenFrom, managesDocument, ownerOf, toDocumentDetail, toDocumentSummary } from '../mockDocuments'
-import { API, currentUser, networkDelay, newId, paginate, problem, writer } from '../mockHttp'
+import { API, currentUser, downloadResponse, networkDelay, newId, paginate, problem, writer } from '../mockHttp'
 import { canAccessClub, personRef } from '../mockMembers'
 import { currentTermOf, isBoardMember } from '../mockPermissions'
 import { nowIso } from '../mockTime'
@@ -40,17 +40,8 @@ function fileOf(document: DbDocument, version: Pick<DbDocumentVersion, 'number' 
   return stored?.file ?? new Blob([`Tài liệu mẫu: ${document.title} (bản ${version.number})\n`], { type: version.contentType })
 }
 
-/** Trả tệp kèm tên gốc (UTF-8); không lưu đệm vì quyền xem kiểm lại mỗi lần. */
-function fileResponse(document: DbDocument, version: Pick<DbDocumentVersion, 'number' | 'contentType' | 'fileName'>): Response {
-  const ascii = version.fileName.normalize('NFD').replace(/[^\x20-\x7e]/g, '').replace(/"/g, '') || 'tai-lieu'
-  return new HttpResponse(fileOf(document, version), {
-    headers: {
-      'Content-Type': version.contentType,
-      'Content-Disposition': `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(version.fileName)}`,
-      'Cache-Control': 'no-store',
-    },
-  })
-}
+const fileResponse = (document: DbDocument, version: Pick<DbDocumentVersion, 'number' | 'contentType' | 'fileName'>): Response =>
+  downloadResponse(fileOf(document, version), version.fileName, version.contentType)
 
 export const documentHandlers = [
   http.get(`${API}/clubs/:clubId/document-scopes`, async ({ params }) => {

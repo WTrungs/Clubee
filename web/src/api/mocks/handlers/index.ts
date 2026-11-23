@@ -28,13 +28,14 @@ import { publicClubHandlers } from './publicClubHandlers'
 import { recruitmentHandlers } from './recruitmentHandlers'
 import { sessionHandlers } from './sessionHandlers'
 import { staffSignupHandlers } from './staffSignupHandlers'
+import { taskCommentHandlers } from './taskCommentHandlers'
 import { taskHandlers } from './taskHandlers'
 import { termHandlers } from './termHandlers'
 import { transferHandlers } from './transferHandlers'
 import { workloadHandlers } from './workloadHandlers'
 
 /** Route API thật, đối chiếu với docs/openapi.yaml. */
-export const routeHandlers = [...accountHandlers, ...adminHandlers, ...publicClubHandlers, ...guestHandlers, ...clubHandlers, ...newsHandlers, ...memberHandlers, ...invitationHandlers, ...leaveHandlers, ...backlogHandlers, ...orgHandlers, ...permissionHandlers, ...termHandlers, ...transferHandlers, ...taskHandlers, ...workloadHandlers, ...eventHandlers, ...staffSignupHandlers, ...coHostHandlers, ...sessionHandlers, ...attendanceHandlers, ...calendarHandlers, ...meReportHandlers, ...documentHandlers, ...recruitmentHandlers, ...financeHandlers, ...advanceHandlers, ...duesHandlers, ...financeReportHandlers, ...clubReportHandlers, ...auditHandlers, ...notificationHandlers, ...announcementHandlers]
+export const routeHandlers = [...accountHandlers, ...adminHandlers, ...publicClubHandlers, ...guestHandlers, ...clubHandlers, ...newsHandlers, ...memberHandlers, ...invitationHandlers, ...leaveHandlers, ...backlogHandlers, ...orgHandlers, ...permissionHandlers, ...termHandlers, ...transferHandlers, ...taskHandlers, ...taskCommentHandlers, ...workloadHandlers, ...eventHandlers, ...staffSignupHandlers, ...coHostHandlers, ...sessionHandlers, ...attendanceHandlers, ...calendarHandlers, ...meReportHandlers, ...documentHandlers, ...recruitmentHandlers, ...financeHandlers, ...advanceHandlers, ...duesHandlers, ...financeReportHandlers, ...clubReportHandlers, ...auditHandlers, ...notificationHandlers, ...announcementHandlers]
 
 /** Bộ chặn Admin ở route CLB chạy trước mọi route (NFR-SEC-06); sau đó tới bộ chỉ đọc của CLB đã giải thể (FR-CLB-04). */
 export const handlers = [...adminGuardHandlers, ...clubStatusGuards(routeHandlers), ...routeHandlers]
