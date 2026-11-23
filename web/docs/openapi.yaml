@@ -4063,6 +4063,224 @@ paths:
                 items: { $ref: '#/components/schemas/JudgeCandidate' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+  /clubs/{clubId}/news:
+    get:
+      tags: [CLB]
+      operationId: listNews
+      summary: Tin tức của CLB (FR-CLB-06)
+      description: |
+        Thành viên chỉ thấy tin Đã xuất bản; ban chủ nhiệm thấy cả Nháp, Đã ẩn và lọc được bằng `status`. `q` tìm theo tiêu đề.
+        Mới nhất trước (tin đã xuất bản theo lúc xuất bản, nháp theo lúc sửa), 12 tin một trang. Lỗi 403 `NOT_A_MEMBER`.
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - $ref: '#/components/parameters/Q'
+        - name: status
+          in: query
+          description: Chỉ có tác dụng với ban chủ nhiệm.
+          schema: { $ref: '#/components/schemas/NewsStatus' }
+        - $ref: '#/components/parameters/Page'
+      responses:
+        '200':
+          description: Trang tin.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NewsPage' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [CLB]
+      operationId: createNews
+      summary: Viết tin mới, lưu thành Nháp (FR-CLB-06)
+      description: |
+        Chỉ ban chủ nhiệm. Tiêu đề 5–150, nội dung 20–10.000 ký tự, chữ thuần (không phải HTML).
+        Lỗi: 403 `NOT_A_MEMBER`, `FORBIDDEN`; 422 `CLUB_DISSOLVED`; 400 `VALIDATION`.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/NewsRequest' }
+      responses:
+        '201':
+          description: Tin vừa tạo.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NewsDetail' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+  /clubs/{clubId}/news/{newsId}:
+    get:
+      tags: [CLB]
+      operationId: getNews
+      summary: Chi tiết tin (FR-CLB-06)
+      description: Tin Nháp, Đã ẩn chỉ ban chủ nhiệm xem; người khác nhận 404 `NEWS_NOT_FOUND`. Lỗi 403 `NOT_A_MEMBER`.
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - name: newsId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Tin.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NewsDetail' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [CLB]
+      operationId: updateNews
+      summary: Sửa tin (FR-CLB-06)
+      description: |
+        Chỉ ban chủ nhiệm, ở mọi trạng thái. Tăng `version`.
+        Lỗi: 404 `NEWS_NOT_FOUND`; 403 `NOT_A_MEMBER`, `FORBIDDEN`; 409 `VERSION_CONFLICT`; 422 `CLUB_DISSOLVED`; 400 `VALIDATION`.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - name: newsId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateNewsRequest' }
+      responses:
+        '200':
+          description: Tin sau khi sửa.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NewsDetail' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+  /clubs/{clubId}/news/{newsId}/image:
+    post:
+      tags: [CLB]
+      operationId: uploadNewsImage
+      summary: Đặt ảnh bìa cho tin (FR-CLB-06)
+      description: |
+        Chỉ ban chủ nhiệm. Trường `file`: JPG, PNG, tối đa 15 MB (IF-05). Tăng `version`.
+        Lỗi: 404 `NEWS_NOT_FOUND`; 403 `NOT_A_MEMBER`, `FORBIDDEN`; 400 `VALIDATION`, `INVALID_FILE`.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - name: newsId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  contentMediaType: application/octet-stream
+      responses:
+        '200':
+          description: Tin với ảnh bìa mới.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NewsDetail' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+  /clubs/{clubId}/news/{newsId}/publication:
+    post:
+      tags: [CLB]
+      operationId: publishNews
+      summary: Xuất bản hoặc hiện lại tin (FR-CLB-06)
+      description: |
+        Nháp hoặc Đã ẩn → Đã xuất bản. Chỉ ban chủ nhiệm. Lần xuất bản đầu ghi `publishedAt`.
+        Lỗi: 404; 403 `FORBIDDEN`; 409 `VERSION_CONFLICT`; 422 `NEWS_ALREADY_PUBLISHED`, `CLUB_DISSOLVED`.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - name: newsId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [version]
+              properties:
+                version: { type: integer }
+      responses:
+        '200':
+          description: Tin đã xuất bản.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NewsDetail' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+  /clubs/{clubId}/news/{newsId}/hiding:
+    post:
+      tags: [CLB]
+      operationId: hideNews
+      summary: Ẩn tin đang xuất bản (FR-CLB-06)
+      description: |
+        Đã xuất bản → Đã ẩn; không xóa (BR-DATA-01). Chỉ ban chủ nhiệm.
+        Lỗi: 404; 403 `FORBIDDEN`; 409 `VERSION_CONFLICT`; 422 `NEWS_NOT_PUBLISHED`, `CLUB_DISSOLVED`.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - name: newsId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [version]
+              properties:
+                version: { type: integer }
+      responses:
+        '200':
+          description: Tin đã ẩn.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NewsDetail' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
   /clubs/{clubId}/documents:
     get:
       tags: [DOC]
@@ -7108,10 +7326,10 @@ components:
         `VIEW_DUES`: thuộc ban chủ nhiệm, xem tab Đóng quỹ (FR-FIN-09). `OPEN_DUES`: ban chủ nhiệm có `RECORD_LEDGER`, mở đợt đóng quỹ.
         `VIEW_FINANCE_REPORT`: thuộc ban chủ nhiệm, xem tab Báo cáo thu chi (FR-FIN-12).
         `MANAGE_RECRUITMENT`: có quyền Quản lý thành viên, mở và quản lý đợt tuyển (FR-REC-01).
-        `CHANGE_CLUB_STATUS`: ban chủ nhiệm (FR-CLB-04). `CREATE_RECRUITMENT`: có quyền Quản lý thành viên và CLB đang Hoạt động.
+        `CHANGE_CLUB_STATUS`, `MANAGE_NEWS`: ban chủ nhiệm (FR-CLB-04, 06). `CREATE_RECRUITMENT`: có quyền Quản lý thành viên và CLB đang Hoạt động.
         CLB Tạm ngừng không có `CREATE_EVENT`, `PROPOSE_EVENT`, `CREATE_RECRUITMENT`; CLB Giải thể chỉ còn các hành động `VIEW_*`.
         `VIEW_CLUB_REPORT`, `VIEW_AUDIT_LOG`: ban chủ nhiệm (FR-RPT-04, 06). `VIEW_HIDDEN_DOCUMENTS`: ban chủ nhiệm (FR-DOC-04). `VIEW_WORKLOAD`: có ít nhất một phạm vi xem khối lượng việc (FR-TASK-08). `VIEW_DEPARTMENT_REPORTS`: ban chủ nhiệm, trưởng hoặc phó của một ban đang hoạt động (FR-RPT-03).
-      enum: [CREATE_EVENT, PROPOSE_EVENT, ASSIGN_TASK, MANAGE_MEMBERS, MANAGE_ORG, ASSIGN_PRESIDENCY, EDIT_CLUB, SEND_ANNOUNCEMENT, CREATE_TERM, ASSIGN_POSITION, REQUEST_PRESIDENCY_TRANSFER, VIEW_PERMISSIONS, VIEW_SHARED_EVENTS, VIEW_DUES, OPEN_DUES, VIEW_FINANCE_REPORT, MANAGE_RECRUITMENT, VIEW_CLUB_REPORT, VIEW_DEPARTMENT_REPORTS, VIEW_AUDIT_LOG, VIEW_HIDDEN_DOCUMENTS, VIEW_WORKLOAD, CHANGE_CLUB_STATUS, CREATE_RECRUITMENT]
+      enum: [CREATE_EVENT, PROPOSE_EVENT, ASSIGN_TASK, MANAGE_MEMBERS, MANAGE_ORG, ASSIGN_PRESIDENCY, EDIT_CLUB, SEND_ANNOUNCEMENT, CREATE_TERM, ASSIGN_POSITION, REQUEST_PRESIDENCY_TRANSFER, VIEW_PERMISSIONS, VIEW_SHARED_EVENTS, VIEW_DUES, OPEN_DUES, VIEW_FINANCE_REPORT, MANAGE_RECRUITMENT, VIEW_CLUB_REPORT, VIEW_DEPARTMENT_REPORTS, VIEW_AUDIT_LOG, VIEW_HIDDEN_DOCUMENTS, VIEW_WORKLOAD, CHANGE_CLUB_STATUS, CREATE_RECRUITMENT, MANAGE_NEWS]
     TermSummary:
       type: object
       description: Nhiệm kỳ đang phụ trách CLB (Đang chạy hoặc Đang bàn giao).
@@ -10341,6 +10559,67 @@ components:
         id: { type: string }
         fullName: { type: string }
         departmentName: { $ref: '#/components/schemas/NullableString' }
+    NewsStatus:
+      type: string
+      description: ST-NEWS. Nháp → Đã xuất bản ↔ Đã ẩn.
+      enum: [DRAFT, PUBLISHED, HIDDEN]
+    NewsSummary:
+      type: object
+      required: [id, title, excerpt, imageUrl, status, author, publishedAt, updatedAt]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        excerpt:
+          type: string
+          description: Đoạn đầu của nội dung trên một dòng, tối đa 160 ký tự.
+        imageUrl: { $ref: '#/components/schemas/NullableString' }
+        status: { $ref: '#/components/schemas/NewsStatus' }
+        author: { $ref: '#/components/schemas/PersonRef' }
+        publishedAt: { type: [string, 'null'], format: date-time }
+        updatedAt: { type: string, format: date-time }
+    NewsDetail:
+      allOf:
+        - $ref: '#/components/schemas/NewsSummary'
+        - type: object
+          required: [body, createdAt, hiddenAt, hiddenBy, allowedActions, version]
+          properties:
+            body:
+              type: string
+              description: Chữ thuần, giữ xuống dòng; không phải HTML.
+            createdAt: { type: string, format: date-time }
+            hiddenAt: { type: [string, 'null'], format: date-time }
+            hiddenBy:
+              oneOf:
+                - $ref: '#/components/schemas/PersonRef'
+                - type: 'null'
+            allowedActions:
+              type: array
+              items:
+                type: string
+                enum: [EDIT, PUBLISH, HIDE]
+            version: { type: integer }
+    NewsPage:
+      allOf:
+        - $ref: '#/components/schemas/PageMeta'
+        - type: object
+          required: [content]
+          properties:
+            content:
+              type: array
+              items: { $ref: '#/components/schemas/NewsSummary' }
+    NewsRequest:
+      type: object
+      required: [title, body]
+      properties:
+        title: { type: string, minLength: 5, maxLength: 150 }
+        body: { type: string, minLength: 20, maxLength: 10000 }
+    UpdateNewsRequest:
+      allOf:
+        - $ref: '#/components/schemas/NewsRequest'
+        - type: object
+          required: [version]
+          properties:
+            version: { type: integer }
     DocumentPage:
       allOf:
         - $ref: '#/components/schemas/PageMeta'

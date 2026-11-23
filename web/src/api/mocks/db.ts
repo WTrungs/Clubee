@@ -37,6 +37,7 @@ import {
 } from './seed/eventSeed'
 import { createFinanceAttachmentSeed, createFundSeed, createTransactionSeed, type DbFund, type DbTransaction } from './seed/financeSeed'
 import { createInvitationSeed, type DbInvitation } from './seed/invitationSeed'
+import { createNewsSeed, type DbNews } from './seed/newsSeed'
 import { createLeaveRequestSeed, createMembershipSeed, createUserSeed, type DbLeaveRequest, type DbMembership, type DbUser } from './seed/memberSeed'
 import { createNotificationSeed, type DbNotification, type DbNotificationRecipient } from './seed/notificationSeed'
 import { createDepartmentSeed, createPositionSeed, createTermSeed, type DbDepartment, type DbPosition, type DbTerm, type PositionRole } from './seed/orgSeed'
@@ -52,6 +53,7 @@ export type { DbAdvance } from './seed/advanceSeed'
 export type { DbDuesCampaign, DbDuesItem } from './seed/duesSeed'
 export type { DbFund, DbTransaction } from './seed/financeSeed'
 export type { DbInvitation } from './seed/invitationSeed'
+export type { DbNews } from './seed/newsSeed'
 export type { DbAuditLog } from './mockAudit'
 export type { AccountStatus, AccountType, DbDepartmentStint, DbLeaveRequest, DbMemberInfoChange, DbMembership, DbMembershipChange, DbUser, MemberInfoField, MembershipExit } from './seed/memberSeed'
 export type { DbNotification, DbNotificationRecipient } from './seed/notificationSeed'
@@ -126,6 +128,7 @@ export interface MockDb {
   transferRequests: DbTransferRequest[]
   passwordResets: DbPasswordReset[]
   notificationPreferences: DbNotificationPreference[]
+  news: DbNews[]
 }
 
 export function createSeed(): MockDb {
@@ -176,6 +179,7 @@ export function createSeed(): MockDb {
     transferRequests: [],
     passwordResets: [],
     notificationPreferences: [],
+    news: createNewsSeed(),
   }
   seed.sessionRegistrations = createSessionRegistrationSeed(seed)
   seed.auditLogs = createAuditSeed(seed)

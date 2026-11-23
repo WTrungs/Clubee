@@ -18,6 +18,7 @@ import { financeHandlers } from './financeHandlers'
 import { invitationHandlers } from './invitationHandlers'
 import { leaveHandlers } from './leaveHandlers'
 import { memberHandlers } from './memberHandlers'
+import { newsHandlers } from './newsHandlers'
 import { meReportHandlers } from './meReportHandlers'
 import { notificationHandlers } from './notificationHandlers'
 import { orgHandlers } from './orgHandlers'
@@ -31,7 +32,7 @@ import { transferHandlers } from './transferHandlers'
 import { workloadHandlers } from './workloadHandlers'
 
 /** Route API thật, đối chiếu với docs/openapi.yaml. */
-export const routeHandlers = [...accountHandlers, ...adminHandlers, ...publicClubHandlers, ...clubHandlers, ...memberHandlers, ...invitationHandlers, ...leaveHandlers, ...backlogHandlers, ...orgHandlers, ...permissionHandlers, ...termHandlers, ...transferHandlers, ...taskHandlers, ...workloadHandlers, ...eventHandlers, ...coHostHandlers, ...sessionHandlers, ...attendanceHandlers, ...calendarHandlers, ...meReportHandlers, ...documentHandlers, ...recruitmentHandlers, ...financeHandlers, ...advanceHandlers, ...duesHandlers, ...financeReportHandlers, ...clubReportHandlers, ...auditHandlers, ...notificationHandlers, ...announcementHandlers]
+export const routeHandlers = [...accountHandlers, ...adminHandlers, ...publicClubHandlers, ...clubHandlers, ...newsHandlers, ...memberHandlers, ...invitationHandlers, ...leaveHandlers, ...backlogHandlers, ...orgHandlers, ...permissionHandlers, ...termHandlers, ...transferHandlers, ...taskHandlers, ...workloadHandlers, ...eventHandlers, ...coHostHandlers, ...sessionHandlers, ...attendanceHandlers, ...calendarHandlers, ...meReportHandlers, ...documentHandlers, ...recruitmentHandlers, ...financeHandlers, ...advanceHandlers, ...duesHandlers, ...financeReportHandlers, ...clubReportHandlers, ...auditHandlers, ...notificationHandlers, ...announcementHandlers]
 
 /** Bộ chặn Admin ở route CLB chạy trước mọi route (NFR-SEC-06); sau đó tới bộ chỉ đọc của CLB đã giải thể (FR-CLB-04). */
 export const handlers = [...adminGuardHandlers, ...clubStatusGuards(routeHandlers), ...routeHandlers]

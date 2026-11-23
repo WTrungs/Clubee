@@ -63,7 +63,7 @@ function clubActionsFor(userId: string, clubId: string): ClubAction[] {
   if (reportDepartmentsOf(userId, clubId).length > 0) actions.push('VIEW_DEPARTMENT_REPORTS')
   if (workloadScopesOf(userId, clubId).length > 0) actions.push('VIEW_WORKLOAD')
   if (canManageRecruitment(userId, clubId)) actions.push('CREATE_RECRUITMENT')
-  if (isBoardMember(userId, clubId)) actions.push('CHANGE_CLUB_STATUS')
+  if (isBoardMember(userId, clubId)) actions.push('CHANGE_CLUB_STATUS', 'MANAGE_NEWS')
   const status = clubStatusOf(clubId)
   // ST-CLB: tạm ngừng thì không tạo hoạt động mới; giải thể thì chỉ còn quyền xem.
   if (status === 'DISSOLVED') return actions.filter((action) => action.startsWith('VIEW_'))

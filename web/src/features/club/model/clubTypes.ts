@@ -43,6 +43,8 @@ export type ClubAction =
   | 'CHANGE_CLUB_STATUS'
   /** FR-REC-01: mở đợt tuyển mới; CLB tạm ngừng thì không có (ST-CLB). */
   | 'CREATE_RECRUITMENT'
+  /** FR-CLB-06: ban chủ nhiệm soạn, xuất bản, ẩn tin tức; thấy cả tin nháp và tin đã ẩn. */
+  | 'MANAGE_NEWS'
 
 /** ST-CLB: Hoạt động ↔ Tạm ngừng; Hoạt động, Tạm ngừng → Giải thể. */
 export type ClubStatus = 'ACTIVE' | 'SUSPENDED' | 'DISSOLVED'
