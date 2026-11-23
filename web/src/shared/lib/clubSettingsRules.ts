@@ -10,6 +10,7 @@ export const CLUB_SETTING_LIMITS = {
   registrationCancelHours: { min: 0, max: 168 },
   rescheduleConfirmHours: { min: 1, max: 168 },
   taskReminderDays: { min: 0, max: 14 },
+  taskOverloadThreshold: { min: 1, max: 30 },
   advanceSettleDays: { min: 1, max: 90 },
 } as const
 
@@ -33,6 +34,7 @@ export const CLUB_SETTING_MESSAGES: Record<NumericClubSetting, string> = {
   registrationCancelHours: `Hạn hủy đăng ký ${range('registrationCancelHours', 'giờ')} trước giờ bắt đầu.`,
   rescheduleConfirmHours: `Hạn xác nhận lại ${range('rescheduleConfirmHours', 'giờ')}.`,
   taskReminderDays: `Nhắc hạn công việc ${range('taskReminderDays', 'ngày')} trước hạn.`,
+  taskOverloadThreshold: `Ngưỡng quá tải ${range('taskOverloadThreshold', 'việc')} đang làm.`,
   advanceSettleDays: `Hạn quyết toán tạm ứng ${range('advanceSettleDays', 'ngày')}.`,
 }
 

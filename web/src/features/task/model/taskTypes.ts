@@ -129,6 +129,8 @@ export interface CreateTaskRequest {
 
 export interface AssignableMember extends PersonRef {
   departmentName: string | null
+  /** FR-TASK-09: số việc đang làm chính của người này trong CLB. */
+  openTaskCount: number
 }
 
 /** Phạm vi người dùng được giao việc (BR-TASK-01) kèm người nhận hợp lệ. */
@@ -138,6 +140,8 @@ export interface AssignableScope {
   name: string
   eventName: string | null
   members: AssignableMember[]
+  /** Tham số CLB: giao thêm mà vượt số việc đang làm này thì cảnh báo, không chặn (FR-TASK-09). */
+  overloadThreshold: number
 }
 
 export interface TaskQuery {

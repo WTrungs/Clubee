@@ -26,6 +26,7 @@ const SERVER_FIELDS = [
   'attendanceQrRotateSeconds',
   'attendanceEditHours',
   'taskReminderDays',
+  'taskOverloadThreshold',
   'expenseReceiptThreshold',
   'advanceSettleDays',
   'semester1Start',

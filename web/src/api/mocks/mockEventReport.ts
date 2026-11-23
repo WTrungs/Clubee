@@ -7,12 +7,12 @@ import { openAdvanceCountOf } from './mockAdvances'
 import { PENDING_STATUSES, canViewFund, canViewRequests, eventFundOf, flowFor, fundBalance } from './mockFinance'
 import { personRef } from './mockMembers'
 import { isBoardMember, positionHolderOf } from './mockPermissions'
-import { isTaskOverdue } from './mockScopes'
+import { isTaskOverdue, OPEN_TASK_STATUSES } from './mockScopes'
 import { isEventLead } from './mockStaffEvents'
 import type { DbEvent } from './seed/eventSeed'
 import type { DbTask } from './seed/taskSeed'
 
-const OPEN_TASK: ReadonlySet<DbTask['status']> = new Set(['ASSIGNED', 'IN_PROGRESS', 'PENDING_REVIEW'])
+const OPEN_TASK = OPEN_TASK_STATUSES
 const emptyCounts = (): TaskProgressCounts => ({ total: 0, assigned: 0, inProgress: 0, pendingReview: 0, done: 0, overdue: 0 })
 
 /** Đếm việc theo trạng thái, bỏ việc Đã hủy; quá hạn tính theo BR-TASK-03. */

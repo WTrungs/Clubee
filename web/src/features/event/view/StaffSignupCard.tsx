@@ -5,6 +5,8 @@ import { FormField } from '@/shared/ui/FormField'
 import { Textarea } from '@/shared/ui/Input'
 import type { EventDetail } from '../model/eventTypes'
 import { signupQuotaText, useStaffSignupViewModel } from '../viewModel/useStaffSignupViewModels'
+import { WarningNote } from '@/shared/ui/WarningNote'
+import { conflictText } from '../viewModel/eventDisplay'
 
 /** FR-EVT-06: thẻ ở tab Tổng quan khi BTC mở đăng ký nhân sự; thành viên chọn tiểu ban, đủ chỉ tiêu thì xin Trưởng BTC. */
 export function StaffSignupCard({ event }: { event: EventDetail }) {
@@ -61,6 +63,16 @@ export function StaffSignupCard({ event }: { event: EventDetail }) {
             ))}
             {vm.selectError && <p className="text-sm font-medium text-status-danger">{vm.selectError}</p>}
           </fieldset>
+          {info.conflicts.length > 0 && (
+            <WarningNote>
+              <p>Sự kiện chồng giờ với hoạt động bạn đang tham gia; bạn vẫn đăng ký được:</p>
+              <ul className="list-disc pl-4">
+                {info.conflicts.map((conflict) => (
+                  <li key={`${conflict.kind}-${conflict.startAt}-${conflict.title ?? ''}`}>{conflictText(conflict)}</li>
+                ))}
+              </ul>
+            </WarningNote>
+          )}
           {vm.needsNote && (
             <FormField label="Lời nhắn gửi Trưởng BTC" required error={vm.noteError} hint="Tiểu ban đã đủ chỉ tiêu; Trưởng BTC sẽ quyết định có nhận thêm hay không.">
               <Textarea rows={3} value={vm.note} onChange={(changeEvent) => vm.setNote(changeEvent.target.value)} maxLength={vm.noteMax} />

@@ -196,4 +196,36 @@ test.describe('Công việc', () => {
     await expect(page.getByRole('heading', { name: 'Công việc', level: 1 })).toBeVisible()
     await expect(page.getByRole('tab', { name: 'Khối lượng theo người' })).toHaveCount(0)
   })
+
+  test('hạ ngưỡng quá tải rồi giao thêm việc: thấy cảnh báo, vẫn giao được (FR-TASK-09)', async ({ page }, testInfo) => {
+    await loginAs(page, 'anh.nguyen@demo.test')
+    await page.goto('/clubs/c-guitar')
+    await page.getByRole('button', { name: 'Quản lý CLB' }).click()
+    await page.getByRole('menuitem', { name: 'Tham số CLB' }).click()
+    const settings = page.getByRole('dialog', { name: 'Tham số CLB' })
+    await expect(settings.getByRole('textbox', { name: 'Ngưỡng quá tải' })).toHaveValue('5')
+    await settings.getByRole('textbox', { name: 'Ngưỡng quá tải' }).fill('1')
+    await settings.getByRole('button', { name: 'Lưu tham số' }).click()
+    await settleToast(page, 'Đã lưu tham số CLB.')
+
+    await openNavLink(page, 'Công việc')
+    const assign = async (title: string) => {
+      await page.getByRole('button', { name: 'Giao việc' }).click()
+      const sheet = page.getByRole('dialog', { name: 'Giao việc' })
+      await sheet.getByRole('textbox', { name: 'Tên việc' }).fill(title)
+      await sheet.getByRole('combobox', { name: 'Thuộc ban / tiểu ban' }).selectOption({ label: 'Ban Hậu cần' })
+      await sheet.getByRole('combobox', { name: 'Người chính' }).selectOption({ label: 'Võ Ngọc Mai' })
+      await sheet.getByRole('button', { name: '1 tuần' }).click()
+      return sheet
+    }
+    const first = await assign('Mượn loa cho buổi tập')
+    await first.getByRole('button', { name: 'Giao việc' }).click()
+    await settleToast(page, 'Đã giao “Mượn loa cho buổi tập” cho Võ Ngọc Mai.')
+
+    const second = await assign('Kiểm kê dây đàn dự phòng')
+    await expect(second.getByText(/Võ Ngọc Mai đang làm \d+ việc; giao thêm sẽ vượt ngưỡng 1 việc của CLB/)).toBeVisible()
+    await snap(page, testInfo, 'taskOverloadWarning', { fullPage: false })
+    await second.getByRole('button', { name: 'Giao việc' }).click()
+    await expect(page.getByText('Đã giao “Kiểm kê dây đàn dự phòng” cho Võ Ngọc Mai.')).toBeVisible()
+  })
 })

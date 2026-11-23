@@ -1,6 +1,6 @@
 import { formatDateTime, formatTimeRange } from '@/shared/format/formatDate'
 import type { Tone } from '@/shared/ui/tone'
-import type { CoHost, CoHostStatus, EventAction, EventDetail, EventStatus, EventSummary, EventTransitionAction, MyRegistration, PublicEventSummary, RegistrationStatus, ScheduleChange } from '../model/eventTypes'
+import type { CoHost, CoHostStatus, EventAction, EventDetail, EventStatus, EventSummary, EventTransitionAction, MyRegistration, PublicEventSummary, RegistrationStatus, ScheduleChange, ScheduleConflict } from '../model/eventTypes'
 
 export const eventStatusDisplay: Record<EventStatus, { label: string; tone: Tone }> = {
   DRAFT: { label: 'Dự thảo', tone: 'neutral' },
@@ -166,4 +166,11 @@ export function publicSeatsText(event: Pick<PublicEventSummary, 'capacity' | 'se
   if (event.capacity === null || event.seatsLeft === null) return 'Không giới hạn chỗ'
   if (event.seatsLeft === 0) return 'Đã hết chỗ, đăng ký mới vào danh sách chờ'
   return `Còn ${event.seatsLeft}/${event.capacity} chỗ`
+}
+
+/** FR-TASK-09: một dòng mô tả hoạt động chồng giờ; hoạt động ở CLB khác không lộ tên. */
+export function conflictText(conflict: ScheduleConflict): string {
+  const kind = conflict.kind === 'SESSION' ? 'Buổi sinh hoạt' : 'Sự kiện'
+  const what = conflict.title ? `${kind} ${conflict.title}` : `${kind} ở CLB khác`
+  return `${what} (${formatTimeRange(conflict.startAt, conflict.endAt)})`
 }

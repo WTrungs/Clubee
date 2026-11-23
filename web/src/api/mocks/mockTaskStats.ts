@@ -1,8 +1,9 @@
 import type { TaskTally } from '@/features/report/model/myReportTypes'
 import { toVnDateKey } from '@/shared/format/formatDate'
+import { OPEN_TASK_STATUSES } from './mockScopes'
 import type { DbTask } from './seed/taskSeed'
 
-const OPEN_STATUSES = new Set<DbTask['status']>(['ASSIGNED', 'IN_PROGRESS', 'PENDING_REVIEW'])
+const OPEN_STATUSES = OPEN_TASK_STATUSES
 
 /** Lúc việc chuyển sang Hoàn thành gần nhất. */
 const doneAtOf = (task: DbTask) => task.history.filter((change) => change.toStatus === 'DONE').at(-1)?.at ?? null

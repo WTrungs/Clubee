@@ -15,12 +15,14 @@ import type {
   RescheduleEventRequest,
   ScheduleChange,
   SetSubcommitteeLeadRequest,
+  InviteCandidate,
   StaffCandidate,
   Subcommittee,
   SubcommitteeAction,
 } from '@/features/event/model/eventTypes'
 import { db } from '../db'
 import { mailGuest } from '../mockGuests'
+import { scheduleConflictsOf } from '../mockScheduleConflicts'
 import { newActivityBlocked } from '../mockClubStatus'
 import { API, currentUser, matchesKeyword, networkDelay, newId, paginate, problem, writer } from '../mockHttp'
 import { canAccessClub, departmentNameOf, eligibleMembers, isActiveMember, membershipOf, personRef as person } from '../mockMembers'
@@ -597,14 +599,17 @@ export const eventHandlers = [
     const keyword = url.searchParams.get('q')
     const coHostId = url.searchParams.get('coHostId')
     // Trưởng tiểu ban (kể cả nhân sự CLB đồng tổ chức) được mời thành viên CLB chủ trì nên thấy tên và ban của họ (SRS 3.1, 3.5); không thấy gì khác của CLB (BR-SEC-01).
-    if (!coHostId) return HttpResponse.json(memberCandidates(event.clubId, keyword))
+    // FR-TASK-09: kèm hoạt động chồng giờ với sự kiện để người mời cân nhắc; chỉ cảnh báo, không chặn.
+    const withConflicts = (candidates: StaffCandidate[]): InviteCandidate[] =>
+      candidates.map((candidate) => ({ ...candidate, conflicts: scheduleConflictsOf(candidate.id, { startAt: event.startAt, endAt: event.endAt, excludeEventId: event.id }, event.clubId) }))
+    if (!coHostId) return HttpResponse.json(withConflicts(memberCandidates(event.clubId, keyword)))
     // Nhân sự CLB đồng tổ chức chỉ người có quyền ở cả sự kiện thêm được (FR-EVT-08).
     if (!can(user.value.id, event.clubId, 'MANAGE_EVENT_STAFF', eventScope(event))) {
       return forbidden(event.clubId, 'MANAGE_EVENT_STAFF', 'thêm nhân sự CLB đồng tổ chức', eventScope(event))
     }
     const coHost = acceptedCoHost(event.id, coHostId)
     if (!coHost) return problem(422, 'CLB này không còn đồng tổ chức sự kiện.', 'CO_HOST_NOT_ACTIVE')
-    return HttpResponse.json(coHostCandidates(event, coHost, keyword))
+    return HttpResponse.json(withConflicts(coHostCandidates(event, coHost, keyword)))
   }),
 
   http.post(`${API}/clubs/:clubId/events/:eventId/subcommittees/:subcommitteeId/members`, async ({ request, params }) => {

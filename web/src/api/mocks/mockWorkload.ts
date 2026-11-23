@@ -3,10 +3,10 @@ import { db } from './db'
 import { leadsDepartment } from './mockClubReport'
 import { canAccessClub, departmentNameOf, membershipOf, personRef, ROSTER_STATUSES } from './mockMembers'
 import { EVENT_STAFF_ACTIVE, hasPosition, isBoardMember, positionHolderOf } from './mockPermissions'
-import { isTaskActive, isTaskOverdue } from './mockScopes'
+import { isTaskActive, isTaskOverdue, OPEN_TASK_STATUSES } from './mockScopes'
 import type { DbTask } from './seed/taskSeed'
 
-const OPEN_STATUSES = new Set<DbTask['status']>(['ASSIGNED', 'IN_PROGRESS', 'PENDING_REVIEW'])
+const OPEN_STATUSES = OPEN_TASK_STATUSES
 
 /** FR-TASK-08: ban chủ nhiệm xem toàn CLB, từng ban, từng sự kiện; Trưởng ban, Phó ban xem ban mình; Trưởng BTC xem sự kiện mình. */
 export function workloadScopesOf(userId: string, clubId: string): WorkloadScope[] {

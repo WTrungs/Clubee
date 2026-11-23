@@ -275,6 +275,11 @@ export interface StaffCandidate extends PersonRef {
   departmentName: string | null
 }
 
+/** Ứng viên mời vào tiểu ban kèm hoạt động chồng giờ với sự kiện (FR-TASK-09). */
+export interface InviteCandidate extends StaffCandidate {
+  conflicts: ScheduleConflict[]
+}
+
 export interface Registration {
   id: string
   /** Khách mời không có tài khoản: `id` là mã đăng ký, `fullName` là họ tên khách khai. */
@@ -423,6 +428,8 @@ export interface StaffSignupInfo {
   mySubcommitteeName: string | null
   myRequest: MyStaffSignupRequest | null
   canSignUp: boolean
+  /** FR-TASK-09: hoạt động của chính mình chồng giờ với sự kiện. */
+  conflicts: ScheduleConflict[]
 }
 
 export interface StaffSignupRequest {
@@ -446,4 +453,12 @@ export interface PendingStaffSignup {
   memberCount: number
   note: string
   createdAt: string
+}
+
+/** FR-TASK-09: hoạt động chồng giờ của một người; hoạt động ở CLB khác không lộ tên (`title` null). */
+export interface ScheduleConflict {
+  kind: 'SESSION' | 'EVENT'
+  title: string | null
+  startAt: string
+  endAt: string
 }

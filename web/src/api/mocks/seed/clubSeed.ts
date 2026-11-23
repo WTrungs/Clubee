@@ -46,6 +46,8 @@ export interface DbClub {
   rescheduleConfirmHours: number
   /** Nhắc việc trước hạn số ngày này; 0 là không nhắc (FR-TASK-06). */
   taskReminderDays: number
+  /** Cảnh báo khi giao việc làm số việc đang làm của người nhận vượt ngưỡng này (FR-TASK-09, SRS 9.2). */
+  taskOverloadThreshold: number
   /** Hạn quyết toán tạm ứng gợi ý, tính từ ngày đề xuất (FR-FIN-07). */
   advanceSettleDays: number
   /** Mốc bắt đầu học kỳ dạng `MM-DD` cho báo cáo thu chi (FR-FIN-12); không có mốc hè thì kỳ hè gộp vào học kỳ 2. */
@@ -73,6 +75,7 @@ export const defaultClubSettings = () => ({
   registrationCancelHours: 24,
   rescheduleConfirmHours: 48,
   taskReminderDays: 1,
+  taskOverloadThreshold: 5,
   advanceSettleDays: 14,
   semester1Start: '09-01',
   semester2Start: '02-01',

@@ -8,6 +8,7 @@ import { taskRepository } from '../model/taskRepository'
 import type { TaskScopeType } from '../model/taskTypes'
 import { assignTaskSchema, scopeKeyOf, type AssignTaskValues } from './assignTaskSchema'
 import { taskQueryKeys } from './taskQueryKeys'
+import { overloadWarning } from './overloadWarning'
 
 const DAY_MS = 24 * 60 * 60 * 1000
 
@@ -52,6 +53,8 @@ export function useAssignTaskViewModel(clubId: string, onDone: () => void) {
     meta: { silentError: true },
     onSuccess: async (task) => {
       await queryClient.invalidateQueries({ queryKey: taskQueryKeys.lists })
+      // Số việc đang làm của người nhận đổi theo, để cảnh báo quá tải lần giao sau đúng (FR-TASK-09).
+      void queryClient.invalidateQueries({ queryKey: taskQueryKeys.scopes(task.clubId) })
       toast.success(`Đã giao “${task.title}” cho ${task.owner.fullName}.`)
       form.reset(defaultValues())
       onDone()
@@ -75,6 +78,8 @@ export function useAssignTaskViewModel(clubId: string, onDone: () => void) {
     scopesError: scopes.error,
     canAssign: (scopes.data?.length ?? 0) > 0,
     members: scope?.members ?? [],
+    /** FR-TASK-09: cảnh báo quá tải cho người chính đang chọn. */
+    ownerWarning: overloadWarning(scope?.members.find((member) => member.id === ownerId), scope?.overloadThreshold),
     collaboratorCandidates: (scope?.members ?? []).filter((member) => member.id !== ownerId),
     scopeKey,
     ownerId,

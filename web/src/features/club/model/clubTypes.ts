@@ -149,6 +149,8 @@ export interface ClubSettingsValues {
   rescheduleConfirmHours: number
   /** Nhắc việc trước hạn số ngày này; 0 là không nhắc. */
   taskReminderDays: number
+  /** FR-TASK-09: cảnh báo (không chặn) khi giao việc làm người nhận vượt số việc đang làm này. */
+  taskOverloadThreshold: number
   /** Hạn quyết toán tạm ứng gợi ý, tính từ ngày đề xuất. */
   advanceSettleDays: number
   /** Mốc bắt đầu học kỳ dạng `MM-DD`; `summerStart` null là không tách kỳ hè. */

@@ -142,10 +142,15 @@ function ClubSettingsForm({ settings, onClose, onPendingChange }: { settings: Cl
             </FormField>
           </div>
         </Group>
-        <Group icon={ListTodo} title="Công việc" description="Nhắc người làm trước hạn.">
-          <FormField label="Nhắc trước hạn" required error={errors.taskReminderDays?.message} hint="Tính theo ngày: 1 là nhắc từ đầu ngày trước hạn; 0 là không nhắc.">
-            <UnitInput unit="ngày" {...register('taskReminderDays')} />
-          </FormField>
+        <Group icon={ListTodo} title="Công việc" description="Nhắc người làm trước hạn, cảnh báo khi giao quá nhiều việc.">
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+            <FormField label="Nhắc trước hạn" required error={errors.taskReminderDays?.message} hint="Tính theo ngày: 1 là nhắc từ đầu ngày trước hạn; 0 là không nhắc.">
+              <UnitInput unit="ngày" {...register('taskReminderDays')} />
+            </FormField>
+            <FormField label="Ngưỡng quá tải" required error={errors.taskOverloadThreshold?.message} hint="Giao thêm việc mà người nhận vượt số việc đang làm này thì cảnh báo, vẫn giao được.">
+              <UnitInput unit="việc" {...register('taskOverloadThreshold')} />
+            </FormField>
+          </div>
         </Group>
         <Group icon={Coins} title="Tài chính" description="Áp cho mọi quỹ của CLB.">
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">

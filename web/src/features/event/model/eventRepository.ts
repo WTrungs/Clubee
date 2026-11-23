@@ -11,6 +11,7 @@ import type {
   EventSummary,
   EventTransitionRequest,
   GuestRegistrationRow,
+  InviteCandidate,
   InviteCoHostRequest,
   MyRegistration,
   PendingStaffSignup,
@@ -54,7 +55,7 @@ export const eventRepository = {
   setSubcommitteeLead: (clubId: string, eventId: string, subcommitteeId: string, request: SetSubcommitteeLeadRequest) =>
     httpClient.put<Subcommittee>(`${subcommittee(clubId, eventId, subcommitteeId)}/lead`, request),
   staffCandidates: (clubId: string, eventId: string, q: string, coHostId: string | null = null) =>
-    httpClient.get<StaffCandidate[]>(`${event(clubId, eventId)}/staff-candidates`, { query: { q, coHostId: coHostId ?? undefined } }),
+    httpClient.get<InviteCandidate[]>(`${event(clubId, eventId)}/staff-candidates`, { query: { q, coHostId: coHostId ?? undefined } }),
 
   coHosts: (clubId: string, eventId: string) => httpClient.get<CoHost[]>(`${event(clubId, eventId)}/co-hosts`),
   inviteCoHost: (clubId: string, eventId: string, request: InviteCoHostRequest) => httpClient.post<CoHost>(`${event(clubId, eventId)}/co-hosts`, request),

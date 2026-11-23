@@ -3381,7 +3381,7 @@ paths:
             application/json:
               schema:
                 type: array
-                items: { $ref: '#/components/schemas/StaffCandidate' }
+                items: { $ref: '#/components/schemas/InviteCandidate' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -7858,6 +7858,7 @@ components:
         - attendanceQrRotateSeconds
         - attendanceEditHours
         - taskReminderDays
+        - taskOverloadThreshold
         - expenseReceiptThreshold
         - advanceSettleDays
         - semester1Start
@@ -7872,6 +7873,7 @@ components:
         attendanceQrRotateSeconds: { type: integer, minimum: 10, maximum: 300, description: Chu kỳ đổi mã QR, tính bằng giây. }
         attendanceEditHours: { type: integer, minimum: 1, maximum: 720, description: 'Số giờ sau khi chốt mà người chốt còn sửa được điểm danh; quá hạn chỉ ban chủ nhiệm (FR-ATT-08, BR-ATT-04).' }
         taskReminderDays: { type: integer, minimum: 0, maximum: 14, description: 'Nhắc việc trước hạn N ngày tính theo ngày lịch giờ Việt Nam: nhắc khi hạn rơi vào từ hôm nay đến hết N ngày tới (1 là từ đầu ngày trước hạn); 0 là không nhắc (FR-TASK-06, SRS 9.2).' }
+        taskOverloadThreshold: { type: integer, minimum: 1, maximum: 30, description: 'Giao thêm việc mà người nhận vượt số việc đang làm này thì cảnh báo, không chặn; mặc định 5 (FR-TASK-09, SRS 9.2).' }
         expenseReceiptThreshold: { type: integer, minimum: 0, maximum: 100000000, description: Khoản chi trên ngưỡng này phải có chứng từ (BR-FIN-03), VND. }
         advanceSettleDays: { type: integer, minimum: 1, maximum: 90, description: Hạn quyết toán tạm ứng gợi ý, tính từ ngày đề xuất (FR-FIN-07). }
         semester1Start:
@@ -9530,13 +9532,14 @@ components:
       allOf:
         - $ref: '#/components/schemas/PersonRef'
         - type: object
-          required: [departmentName]
+          required: [departmentName, openTaskCount]
           properties:
             departmentName: { $ref: '#/components/schemas/NullableString' }
+            openTaskCount: { type: integer, description: 'Số việc đang làm chính (Mới giao, Đang làm, Chờ nghiệm thu) trong CLB (FR-TASK-09).' }
     AssignableScope:
       type: object
       description: Phạm vi người dùng được giao việc kèm người nhận hợp lệ (BR-TASK-01).
-      required: [type, id, name, eventName, members]
+      required: [type, id, name, eventName, members, overloadThreshold]
       properties:
         type: { $ref: '#/components/schemas/TaskScopeType' }
         id: { type: string }
@@ -9545,6 +9548,7 @@ components:
         members:
           type: array
           items: { $ref: '#/components/schemas/AssignableMember' }
+        overloadThreshold: { type: integer, description: 'Tham số CLB `taskOverloadThreshold`: web cảnh báo khi `openTaskCount + 1` vượt số này.' }
     TaskFacets:
       type: object
       required: [clubs, events]
@@ -9915,6 +9919,25 @@ components:
       type: string
       description: Thành viên CLB chủ trì, CTV, nhân sự CLB đồng tổ chức.
       enum: [MEMBER, COLLABORATOR, CO_HOST]
+    ScheduleConflict:
+      type: object
+      description: 'FR-TASK-09: hoạt động chồng giờ (chạm mốc không tính); ở CLB khác thì `title` null để không lộ thông tin.'
+      required: [kind, title, startAt, endAt]
+      properties:
+        kind: { type: string, enum: [SESSION, EVENT] }
+        title: { $ref: '#/components/schemas/NullableString' }
+        startAt: { type: string, format: date-time }
+        endAt: { type: string, format: date-time }
+    InviteCandidate:
+      allOf:
+        - $ref: '#/components/schemas/StaffCandidate'
+        - type: object
+          required: [conflicts]
+          properties:
+            conflicts:
+              type: array
+              description: Buổi sinh hoạt, sự kiện người này tham gia chồng giờ với sự kiện đang mời; chỉ cảnh báo, không chặn.
+              items: { $ref: '#/components/schemas/ScheduleConflict' }
     StaffSignupSetting:
       type: object
       required: [open, version]
@@ -9929,7 +9952,7 @@ components:
         note: { type: string, minLength: 5, maxLength: 500, description: Bắt buộc khi tiểu ban đã đủ chỉ tiêu. }
     StaffSignupInfo:
       type: object
-      required: [open, subcommittees, mySubcommitteeName, myRequest, canSignUp]
+      required: [open, subcommittees, mySubcommitteeName, myRequest, canSignUp, conflicts]
       properties:
         open: { type: boolean }
         subcommittees:
@@ -9958,6 +9981,10 @@ components:
                 createdAt: { type: string, format: date-time }
             - type: 'null'
         canSignUp: { type: boolean }
+        conflicts:
+          type: array
+          description: Hoạt động của chính người gọi chồng giờ với sự kiện (FR-TASK-09).
+          items: { $ref: '#/components/schemas/ScheduleConflict' }
     PendingStaffSignup:
       type: object
       required: [id, person, departmentName, subcommitteeId, subcommitteeName, quota, memberCount, note, createdAt]

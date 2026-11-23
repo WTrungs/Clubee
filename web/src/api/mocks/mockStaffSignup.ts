@@ -1,6 +1,7 @@
 import type { PendingStaffSignup, SignupSubcommittee, StaffSignupInfo, StaffSignupRequestStatus } from '@/features/event/model/eventTypes'
 import { db } from './db'
 import { departmentNameOf, isActiveMember, personRef } from './mockMembers'
+import { scheduleConflictsOf } from './mockScheduleConflicts'
 import { isEventStaff } from './mockStaffEvents'
 import type { DbEvent, DbSubcommittee } from './seed/eventSeed'
 
@@ -58,6 +59,7 @@ export function staffSignupInfo(event: DbEvent, userId: string): StaffSignupInfo
       ? { id: latest.id, subcommitteeName: subcommitteeName(latest.subcommitteeId), status: latest.status, note: latest.note, reason: latest.reason, createdAt: latest.createdAt }
       : null,
     canSignUp: open && isActiveMember(userId, event.clubId) && !isEventStaff(userId, event) && !pendingRequestOf(event.id, userId),
+    conflicts: scheduleConflictsOf(userId, { startAt: event.startAt, endAt: event.endAt, excludeEventId: event.id }, event.clubId),
   }
 }
 
