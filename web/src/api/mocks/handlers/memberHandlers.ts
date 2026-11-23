@@ -308,6 +308,7 @@ export const memberHandlers = [
     if (current) {
       return problem(409, `Bạn đang có tư cách ${statusLabel[current.status]} ở CLB này; mỗi người chỉ có một tư cách đang hoạt động.`, 'ALREADY_MEMBER')
     }
+    if (club.status === 'DISSOLVED') return problem(422, 'CLB đã giải thể nên không nhận thành viên mới.', 'CLUB_DISSOLVED')
     const body = (await request.json()) as Partial<CreateJoinRequest>
     // FR-MEM-01: đi qua lời mời vẫn tạo yêu cầu Chờ duyệt, chỉ ghi lại lời mời đã dùng.
     let invitation: DbInvitation | undefined

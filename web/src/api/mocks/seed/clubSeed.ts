@@ -1,5 +1,14 @@
 import { DEFAULT_ATTENDANCE_LEAD_MINUTES, DEFAULT_QR_ROTATE_SECONDS } from './attendanceSeed'
 import { DEFAULT_RECEIPT_THRESHOLD } from './financeSeed'
+import type { ClubStatus } from '@/features/club/model/clubTypes'
+
+export interface DbClubStatusChange {
+  from: ClubStatus
+  to: ClubStatus
+  at: string
+  by: string
+  reason: string
+}
 
 /** Dữ liệu tổng hợp, không phải người thật (security.md). */
 export interface DbClub {
@@ -15,8 +24,9 @@ export interface DbClub {
   contactPhone: string | null
   contactUrl: string | null
   rules: string
-  /** ST-CLB; đổi trạng thái thuộc FR-CLB-04 (P2), hiện mọi CLB đều Hoạt động. */
-  status: 'ACTIVE'
+  /** ST-CLB (FR-CLB-04): Hoạt động ↔ Tạm ngừng; cả hai → Giải thể. */
+  status: ClubStatus
+  statusHistory: DbClubStatusChange[]
   /** Tham số CLB ở SRS 9.2. */
   collectsStudentId: boolean
   probationStep: boolean
@@ -91,6 +101,7 @@ export function createClubSeed(): DbClub[] {
         'Tôn trọng thành viên và khán giả trong mọi buổi diễn.',
       ].join('\n'),
       status: 'ACTIVE',
+      statusHistory: [],
       collectsStudentId: true,
       ...defaultClubSettings(),
       version: 1,
@@ -108,6 +119,7 @@ export function createClubSeed(): DbClub[] {
       contactUrl: null,
       rules: '',
       status: 'ACTIVE',
+      statusHistory: [],
       collectsStudentId: false,
       ...defaultClubSettings(),
       version: 1,
@@ -125,6 +137,7 @@ export function createClubSeed(): DbClub[] {
       contactUrl: null,
       rules: '',
       status: 'ACTIVE',
+      statusHistory: [],
       collectsStudentId: true,
       ...defaultClubSettings(),
       probationStep: false,

@@ -20,6 +20,7 @@ const membership = (clubId: string, memberStatus: ClubMembershipSummary['memberS
   departmentName: null,
   positionTitles: [],
   memberCount: 1,
+  clubStatus: 'ACTIVE',
 })
 
 describe('pickCurrentClub (FR-ACC-06, IF-01)', () => {

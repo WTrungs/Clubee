@@ -6,6 +6,8 @@ import type { TransactionStatus } from '@/features/finance/model/financeTypes'
 import { transactionStatusDisplay } from '@/features/finance/viewModel/financeDisplay'
 import type { HandoverItemStatus } from '@/features/term/model/handoverTypes'
 import { handoverItemStatusDisplay } from '@/features/term/viewModel/handoverDisplay'
+import type { ClubStatus } from '@/features/club/model/clubTypes'
+import { clubStatusDisplay } from '@/features/club/viewModel/clubStatusDisplay'
 import { formatDate } from '@/shared/format/formatDate'
 import { formatMoney } from '@/shared/format/formatMoney'
 import type { AuditLogEntry, AuditObjectType } from '../model/auditLogTypes'
@@ -42,6 +44,7 @@ const actionLabels: Record<string, string> = {
   LOCK_ACCOUNT: 'Khóa tài khoản',
   UNLOCK_ACCOUNT: 'Mở khóa tài khoản',
   SEND_PASSWORD_RESET: 'Gửi đặt lại mật khẩu',
+  CHANGE_CLUB_STATUS: 'Đổi trạng thái CLB',
 }
 
 /** Thao tác chưa có nhãn thì hiện mã để không mất thông tin. */
@@ -69,6 +72,7 @@ function statusLabel(objectType: AuditObjectType, value: string): string {
   if (objectType === 'ATTENDANCE') return attendanceStatusDisplay[value as AttendanceStatus]?.label ?? value
   if (objectType === 'HANDOVER_ITEM') return handoverItemStatusDisplay[value as HandoverItemStatus]?.label ?? value
   if (objectType === 'TRANSFER_REQUEST') return transferStatusLabel[value] ?? value
+  if (objectType === 'CLUB') return clubStatusDisplay[value as ClubStatus]?.label ?? value
   return value
 }
 

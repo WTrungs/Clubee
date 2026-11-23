@@ -43,6 +43,7 @@ function toCurrentUser(user: DbUser): CurrentUser {
           departmentName: departmentNameOf(user.id, club.id),
           positionTitles: positionTitlesOf(user.id, club.id),
           memberCount: memberCountOf(club.id),
+          clubStatus: club.status,
         },
       ]
     })

@@ -9,6 +9,7 @@ import { auditHandlers } from './auditHandlers'
 import { backlogHandlers } from './backlogHandlers'
 import { calendarHandlers } from './calendarHandlers'
 import { clubHandlers } from './clubHandlers'
+import { clubStatusGuards } from '../mockClubStatus'
 import { clubReportHandlers } from './clubReportHandlers'
 import { coHostHandlers } from './coHostHandlers'
 import { documentHandlers } from './documentHandlers'
@@ -32,5 +33,5 @@ import { workloadHandlers } from './workloadHandlers'
 /** Route API thật, đối chiếu với docs/openapi.yaml. */
 export const routeHandlers = [...accountHandlers, ...adminHandlers, ...publicClubHandlers, ...clubHandlers, ...memberHandlers, ...invitationHandlers, ...leaveHandlers, ...backlogHandlers, ...orgHandlers, ...permissionHandlers, ...termHandlers, ...transferHandlers, ...taskHandlers, ...workloadHandlers, ...eventHandlers, ...coHostHandlers, ...sessionHandlers, ...attendanceHandlers, ...calendarHandlers, ...meReportHandlers, ...documentHandlers, ...recruitmentHandlers, ...financeHandlers, ...advanceHandlers, ...duesHandlers, ...financeReportHandlers, ...clubReportHandlers, ...auditHandlers, ...notificationHandlers, ...announcementHandlers]
 
-/** Bộ chặn Admin ở route CLB chạy trước mọi route (NFR-SEC-06). */
-export const handlers = [...adminGuardHandlers, ...routeHandlers]
+/** Bộ chặn Admin ở route CLB chạy trước mọi route (NFR-SEC-06); sau đó tới bộ chỉ đọc của CLB đã giải thể (FR-CLB-04). */
+export const handlers = [...adminGuardHandlers, ...clubStatusGuards(routeHandlers), ...routeHandlers]

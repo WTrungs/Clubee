@@ -1,3 +1,5 @@
+import type { ClubStatus } from '@/features/club/model/clubTypes'
+
 /** ST-MEM: Chờ duyệt, Thử việc, Chính thức, Tạm nghỉ, Đã rời. */
 export type MemberStatus = 'PENDING' | 'PROBATION' | 'ACTIVE' | 'ON_LEAVE' | 'LEFT'
 
@@ -11,6 +13,7 @@ export interface ClubMembershipSummary {
   departmentName: string | null
   positionTitles: string[]
   memberCount: number
+  clubStatus: ClubStatus
 }
 
 /** Sự kiện người dùng đang làm BTC ở CLB mà họ không là thành viên (FR-ACC-06). */

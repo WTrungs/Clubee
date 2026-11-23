@@ -39,6 +39,30 @@ export type ClubAction =
   | 'VIEW_HIDDEN_DOCUMENTS'
   /** FR-TASK-08: ban chủ nhiệm, Trưởng ban, Phó ban, Trưởng BTC xem khối lượng việc theo người. */
   | 'VIEW_WORKLOAD'
+  /** FR-CLB-04: ban chủ nhiệm tạm ngừng, cho hoạt động lại, giải thể CLB. */
+  | 'CHANGE_CLUB_STATUS'
+  /** FR-REC-01: mở đợt tuyển mới; CLB tạm ngừng thì không có (ST-CLB). */
+  | 'CREATE_RECRUITMENT'
+
+/** ST-CLB: Hoạt động ↔ Tạm ngừng; Hoạt động, Tạm ngừng → Giải thể. */
+export type ClubStatus = 'ACTIVE' | 'SUSPENDED' | 'DISSOLVED'
+
+export type ClubTransitionAction = 'SUSPEND' | 'REACTIVATE' | 'DISSOLVE'
+
+/** FR-CLB-04. */
+export interface ClubTransitionRequest {
+  action: ClubTransitionAction
+  reason: string
+  version: number
+}
+
+/** Lần đổi trạng thái gần nhất, hiện ở băng thông báo của CLB. */
+export interface ClubStatusChange {
+  status: ClubStatus
+  at: string
+  by: PersonRef
+  reason: string
+}
 
 /** Nhiệm kỳ đang phụ trách CLB: Đang chạy hoặc Đang bàn giao. */
 export interface TermSummary {
@@ -76,6 +100,8 @@ export interface ClubDetail extends ClubContacts {
   generalFundId: string
   /** Khách của sự kiện (CTV, nhân sự CLB đồng tổ chức) chỉ có thông tin công khai và mục Sự kiện. */
   viewerRole: ClubViewerRole
+  status: ClubStatus
+  lastStatusChange: ClubStatusChange | null
   version: number
 }
 

@@ -1,6 +1,6 @@
 import { httpClient } from '@/api/httpClient'
 import type { Page } from '@/api/pagination'
-import type { ClubDetail, ClubDirectoryEntry, ClubDirectoryQuery, ClubSettings, CreateClubRequest, UpdateClubRequest, UpdateClubSettingsRequest } from './clubTypes'
+import type { ClubDetail, ClubDirectoryEntry, ClubDirectoryQuery, ClubSettings, ClubTransitionRequest, CreateClubRequest, UpdateClubRequest, UpdateClubSettingsRequest } from './clubTypes'
 
 const club = (clubId: string) => `/clubs/${encodeURIComponent(clubId)}`
 
@@ -20,4 +20,6 @@ export const clubRepository = {
   /** FR-CLB-03. */
   settings: (clubId: string) => httpClient.get<ClubSettings>(`${club(clubId)}/settings`),
   updateSettings: (clubId: string, request: UpdateClubSettingsRequest) => httpClient.patch<ClubSettings>(`${club(clubId)}/settings`, request),
+  /** FR-CLB-04. */
+  transition: (clubId: string, request: ClubTransitionRequest) => httpClient.post<ClubDetail>(`${club(clubId)}/transitions`, request),
 }

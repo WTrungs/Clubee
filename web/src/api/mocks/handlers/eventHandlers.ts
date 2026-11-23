@@ -20,6 +20,7 @@ import type {
   SubcommitteeAction,
 } from '@/features/event/model/eventTypes'
 import { db } from '../db'
+import { newActivityBlocked } from '../mockClubStatus'
 import { API, currentUser, matchesKeyword, networkDelay, newId, paginate, problem, writer } from '../mockHttp'
 import { canAccessClub, departmentNameOf, eligibleMembers, isActiveMember, membershipOf, personRef as person } from '../mockMembers'
 import { normalizeEmail } from '../mockInvitations'
@@ -370,6 +371,8 @@ export const eventHandlers = [
       ...(body.format !== 'ONLINE' && !(body.location ?? '').trim() ? [{ field: 'location', message: 'Nhập địa điểm tổ chức.' }] : []),
       ...(!leadOk ? [{ field: 'leadUserId', message: 'Trưởng BTC phải là thành viên Thử việc hoặc Chính thức của CLB.' }] : []),
     ]
+    const blocked = newActivityBlocked(clubId)
+    if (blocked) return blocked
     if (errors.length > 0) return problem(400, 'Thông tin sự kiện chưa hợp lệ.', 'VALIDATION', errors)
     const createdAt = nowIso()
     const event: DbEvent = {

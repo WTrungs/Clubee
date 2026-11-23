@@ -1021,6 +1021,40 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+  /clubs/{clubId}/transitions:
+    post:
+      tags: [CLB]
+      operationId: transitionClub
+      summary: Tạm ngừng, cho hoạt động lại, giải thể CLB (FR-CLB-04)
+      description: |
+        Chỉ ban chủ nhiệm. ST-CLB: Hoạt động ↔ Tạm ngừng; Hoạt động, Tạm ngừng → Giải thể. Lý do 5–500 ký tự. Tăng `version`,
+        ghi nhật ký `CHANGE_CLUB_STATUS`, báo mọi thành viên. Tạm ngừng: không tạo buổi sinh hoạt, sự kiện, đợt tuyển mới
+        (422 `CLUB_SUSPENDED`). Giải thể: từ chối yêu cầu gia nhập đang chờ, đợt tuyển thôi nhận đơn; mọi lệnh ghi khác của
+        CLB trả 422 `CLUB_DISSOLVED`, `allowedActions` chỉ còn hành động xem.
+        Lỗi: 403 `NOT_A_MEMBER`, `FORBIDDEN`; 404 `CLUB_NOT_FOUND`; 409 `VERSION_CONFLICT`; 422 `INVALID_TRANSITION`,
+        `CLUB_HAS_OPEN_EVENTS` (còn sự kiện chưa Đã đóng, hoặc Đã hủy mà quỹ chưa quyết toán), `CLUB_DISSOLVED`; 400 `VALIDATION`.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ClubTransitionRequest' }
+      responses:
+        '200':
+          description: CLB sau khi đổi trạng thái.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ClubDetail' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
   /clubs/{clubId}/announcement-audiences:
     get:
       tags: [NOT]
@@ -6675,7 +6709,7 @@ components:
       enum: [PENDING, PROBATION, ACTIVE, ON_LEAVE, LEFT]
     ClubMembershipSummary:
       type: object
-      required: [clubId, clubName, shortName, logoUrl, field, memberStatus, departmentName, positionTitles, memberCount]
+      required: [clubId, clubName, shortName, logoUrl, field, memberStatus, departmentName, positionTitles, memberCount, clubStatus]
       properties:
         clubId: { type: string }
         clubName: { type: string }
@@ -6688,6 +6722,7 @@ components:
           type: array
           items: { type: string }
         memberCount: { type: integer }
+        clubStatus: { $ref: '#/components/schemas/ClubStatus' }
     StaffEventSummary:
       type: object
       description: Sự kiện người dùng đang làm BTC ở CLB mà họ không là thành viên (FR-ACC-06).
@@ -7073,8 +7108,10 @@ components:
         `VIEW_DUES`: thuộc ban chủ nhiệm, xem tab Đóng quỹ (FR-FIN-09). `OPEN_DUES`: ban chủ nhiệm có `RECORD_LEDGER`, mở đợt đóng quỹ.
         `VIEW_FINANCE_REPORT`: thuộc ban chủ nhiệm, xem tab Báo cáo thu chi (FR-FIN-12).
         `MANAGE_RECRUITMENT`: có quyền Quản lý thành viên, mở và quản lý đợt tuyển (FR-REC-01).
+        `CHANGE_CLUB_STATUS`: ban chủ nhiệm (FR-CLB-04). `CREATE_RECRUITMENT`: có quyền Quản lý thành viên và CLB đang Hoạt động.
+        CLB Tạm ngừng không có `CREATE_EVENT`, `PROPOSE_EVENT`, `CREATE_RECRUITMENT`; CLB Giải thể chỉ còn các hành động `VIEW_*`.
         `VIEW_CLUB_REPORT`, `VIEW_AUDIT_LOG`: ban chủ nhiệm (FR-RPT-04, 06). `VIEW_HIDDEN_DOCUMENTS`: ban chủ nhiệm (FR-DOC-04). `VIEW_WORKLOAD`: có ít nhất một phạm vi xem khối lượng việc (FR-TASK-08). `VIEW_DEPARTMENT_REPORTS`: ban chủ nhiệm, trưởng hoặc phó của một ban đang hoạt động (FR-RPT-03).
-      enum: [CREATE_EVENT, PROPOSE_EVENT, ASSIGN_TASK, MANAGE_MEMBERS, MANAGE_ORG, ASSIGN_PRESIDENCY, EDIT_CLUB, SEND_ANNOUNCEMENT, CREATE_TERM, ASSIGN_POSITION, REQUEST_PRESIDENCY_TRANSFER, VIEW_PERMISSIONS, VIEW_SHARED_EVENTS, VIEW_DUES, OPEN_DUES, VIEW_FINANCE_REPORT, MANAGE_RECRUITMENT, VIEW_CLUB_REPORT, VIEW_DEPARTMENT_REPORTS, VIEW_AUDIT_LOG, VIEW_HIDDEN_DOCUMENTS, VIEW_WORKLOAD]
+      enum: [CREATE_EVENT, PROPOSE_EVENT, ASSIGN_TASK, MANAGE_MEMBERS, MANAGE_ORG, ASSIGN_PRESIDENCY, EDIT_CLUB, SEND_ANNOUNCEMENT, CREATE_TERM, ASSIGN_POSITION, REQUEST_PRESIDENCY_TRANSFER, VIEW_PERMISSIONS, VIEW_SHARED_EVENTS, VIEW_DUES, OPEN_DUES, VIEW_FINANCE_REPORT, MANAGE_RECRUITMENT, VIEW_CLUB_REPORT, VIEW_DEPARTMENT_REPORTS, VIEW_AUDIT_LOG, VIEW_HIDDEN_DOCUMENTS, VIEW_WORKLOAD, CHANGE_CLUB_STATUS, CREATE_RECRUITMENT]
     TermSummary:
       type: object
       description: Nhiệm kỳ đang phụ trách CLB (Đang chạy hoặc Đang bàn giao).
@@ -7107,6 +7144,8 @@ components:
         - allowedActions
         - generalFundId
         - viewerRole
+        - status
+        - lastStatusChange
         - version
       properties:
         id: { type: string }
@@ -7144,6 +7183,33 @@ components:
           type: string
           enum: [MEMBER, EVENT_GUEST]
           description: '`EVENT_GUEST`: người ngoài CLB đang làm BTC một sự kiện của CLB; chỉ dùng được mục Sự kiện.'
+        status: { $ref: '#/components/schemas/ClubStatus' }
+        lastStatusChange:
+          oneOf:
+            - $ref: '#/components/schemas/ClubStatusChange'
+            - type: 'null'
+        version: { type: integer }
+    ClubStatus:
+      type: string
+      description: ST-CLB.
+      enum: [ACTIVE, SUSPENDED, DISSOLVED]
+    ClubStatusChange:
+      type: object
+      description: Lần đổi trạng thái gần nhất (FR-CLB-04).
+      required: [status, at, by, reason]
+      properties:
+        status: { $ref: '#/components/schemas/ClubStatus' }
+        at: { type: string, format: date-time }
+        by: { $ref: '#/components/schemas/PersonRef' }
+        reason: { type: string }
+    ClubTransitionRequest:
+      type: object
+      required: [action, reason, version]
+      properties:
+        action:
+          type: string
+          enum: [SUSPEND, REACTIVATE, DISSOLVE]
+        reason: { type: string, minLength: 5, maxLength: 500 }
         version: { type: integer }
     CreateClubRequest:
       type: object
