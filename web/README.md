@@ -28,6 +28,17 @@ Tắt mock để gọi backend thật (Vite chuyển `/api` sang `http://localho
 
 `npm run e2e` cần Chromium của Playwright: `npx playwright install chromium`.
 
+## Chạy bằng Docker
+
+Ở gốc repo:
+
+```bash
+docker compose up --build
+```
+
+Mở http://localhost:3000 (đổi cổng bằng biến `WEB_PORT`). Image mặc định build với mock MSW bật.
+Để gọi backend thật qua nginx (`/api` chuyển sang service `server:8080`), build lại với `VITE_USE_MOCK=false docker compose up --build`. `VITE_USE_MOCK` được nhúng lúc build nên đổi giá trị thì phải build lại image.
+
 ## Cấu trúc
 
 ```
