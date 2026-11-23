@@ -14,6 +14,8 @@ export interface DbEvent {
   capacity: number | null
   registrationDeadline: string | null
   openToGuests: boolean
+  /** FR-EVT-06: BTC mở cho thành viên tự đăng ký vào tiểu ban. */
+  staffSignupOpen: boolean
   status: EventStatus
   /** Bước cuối đã đạt trước khi hủy, để hiện tiến trình. */
   statusBeforeCancel: EventStatus | null
@@ -56,6 +58,8 @@ export interface DbEventStaff {
   leftAt: string | null
   /** CLB gốc của nhân sự `CO_HOST` (FR-EVT-08); rời CLB gốc hoặc CLB đó bị gỡ thì thôi làm nhân sự. */
   homeClubId?: string
+  /** Vào vượt chỉ tiêu nhờ Trưởng BTC duyệt ngoại lệ (BR-EVT-07). */
+  overQuota?: boolean
 }
 
 /** Lời mời đồng tổ chức theo ST-COH (FR-EVT-08); quỹ vẫn thuộc CLB chủ trì (BR-FIN-07). */
@@ -139,6 +143,7 @@ const event = (spec: Partial<DbEvent> & Pick<DbEvent, 'id' | 'name' | 'status' |
   capacity: null,
   registrationDeadline: null,
   openToGuests: false,
+  staffSignupOpen: false,
   statusBeforeCancel: null,
   approverId: null,
   rejectionReason: null,

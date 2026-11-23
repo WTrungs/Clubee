@@ -26,6 +26,8 @@ export type EventCapability =
   | 'VIEW_REGISTRATIONS'
   | 'VIEW_FUND'
   | 'VIEW_ATTENDANCE'
+  /** FR-EVT-06: Trưởng BTC duyệt, từ chối yêu cầu vào tiểu ban vượt chỉ tiêu (BR-EVT-07). */
+  | 'DECIDE_STAFF_REQUESTS'
 
 export type EventAction = EventTransitionAction | EventCapability
 
@@ -79,6 +81,8 @@ export interface EventDetail extends EventSummary {
   cancellationReason: string | null
   /** Trạng thái cuối cùng đạt được trước khi hủy, để hiện tiến trình. */
   statusBeforeCancel: EventStatus | null
+  /** FR-EVT-06: BTC mở cho thành viên tự đăng ký vào tiểu ban. */
+  staffSignupOpen: boolean
   allowedActions: EventAction[]
   version: number
   createdAt: string
@@ -177,6 +181,8 @@ export interface StaffMember extends PersonRef {
   kind: StaffKind
   /** CLB gốc của nhân sự CLB đồng tổ chức; null với thành viên CLB chủ trì và CTV. */
   homeClubName: string | null
+  /** Vào tiểu ban vượt chỉ tiêu nhờ Trưởng BTC duyệt ngoại lệ (BR-EVT-07). */
+  overQuota: boolean
 }
 
 /**
@@ -386,4 +392,58 @@ export interface GuestRegistrationRow {
   status: RegistrationStatus
   checkedIn: boolean
   checkedInAt: string | null
+}
+
+/** FR-EVT-06: tiểu ban thành viên tự đăng ký được. */
+export interface SignupSubcommittee {
+  id: string
+  name: string
+  description: string
+  quota: number | null
+  memberCount: number
+  /** Đủ chỉ tiêu: đăng ký thành yêu cầu vượt chỉ tiêu chờ Trưởng BTC duyệt. */
+  full: boolean
+}
+
+export type StaffSignupRequestStatus = 'PENDING' | 'APPROVED' | 'REJECTED'
+
+export interface MyStaffSignupRequest {
+  id: string
+  subcommitteeName: string
+  status: StaffSignupRequestStatus
+  note: string
+  reason: string | null
+  createdAt: string
+}
+
+/** Thông tin cho thành viên CLB chủ trì: BTC đang mở đăng ký nhân sự không, tôi đã ở tiểu ban nào, yêu cầu gần nhất. */
+export interface StaffSignupInfo {
+  open: boolean
+  subcommittees: SignupSubcommittee[]
+  mySubcommitteeName: string | null
+  myRequest: MyStaffSignupRequest | null
+  canSignUp: boolean
+}
+
+export interface StaffSignupRequest {
+  subcommitteeId: string
+  note?: string
+}
+
+export interface StaffSignupSetting {
+  open: boolean
+  version: number
+}
+
+/** Yêu cầu vượt chỉ tiêu chờ Trưởng BTC xử lý. */
+export interface PendingStaffSignup {
+  id: string
+  person: PersonRef
+  departmentName: string | null
+  subcommitteeId: string
+  subcommitteeName: string
+  quota: number | null
+  memberCount: number
+  note: string
+  createdAt: string
 }

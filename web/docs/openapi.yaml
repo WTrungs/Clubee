@@ -3122,6 +3122,189 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+  /clubs/{clubId}/events/{eventId}/staff-signup:
+    get:
+      tags: [EVT]
+      operationId: getStaffSignup
+      summary: Đăng ký nhân sự của sự kiện cho thành viên (FR-EVT-06)
+      description: |
+        Thành viên CLB chủ trì: BTC có đang mở đăng ký không, các tiểu ban với chỉ tiêu và số người, tiểu ban của tôi, yêu cầu gần nhất.
+        Lỗi 404 `EVENT_NOT_FOUND` (cả khi không phải thành viên CLB chủ trì).
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - name: eventId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Thông tin đăng ký nhân sự.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StaffSignupInfo' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [EVT]
+      operationId: setStaffSignup
+      summary: Mở, đóng đăng ký nhân sự (FR-EVT-06)
+      description: |
+        Người có quyền quản lý nhân sự ở cả sự kiện (Trưởng BTC, ban chủ nhiệm). Đổi trạng thái thì tăng `version` của sự kiện.
+        Lỗi: 404; 403 `FORBIDDEN`; 409 `VERSION_CONFLICT`; 422 `EVENT_READ_ONLY`; 400 `VALIDATION`.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - name: eventId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/StaffSignupSetting' }
+      responses:
+        '200':
+          description: Trạng thái mới.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StaffSignupSetting' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+  /clubs/{clubId}/events/{eventId}/staff-signups:
+    post:
+      tags: [EVT]
+      operationId: signUpStaff
+      summary: Thành viên tự vào tiểu ban (FR-EVT-06, BR-EVT-07)
+      description: |
+        Thành viên Thử việc, Chính thức của CLB chủ trì khi BTC đang mở. Tiểu ban còn chỗ thì vào ngay; đủ chỉ tiêu thì bắt buộc `note`
+        5–500 ký tự và tạo yêu cầu chờ Trưởng BTC duyệt. Báo Trưởng BTC.
+        Lỗi: 404; 403 `FORBIDDEN`; 409 `ALREADY_STAFF`, `REQUEST_PENDING`; 422 `SIGNUP_CLOSED`; 400 `VALIDATION`.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - name: eventId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/StaffSignupRequest' }
+      responses:
+        '201':
+          description: Thông tin đăng ký nhân sự sau khi gửi.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StaffSignupInfo' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+  /clubs/{clubId}/events/{eventId}/staff-signup-requests:
+    get:
+      tags: [EVT]
+      operationId: listStaffSignupRequests
+      summary: Yêu cầu vượt chỉ tiêu chờ duyệt (FR-EVT-06)
+      description: Chỉ Trưởng BTC. Lỗi 404; 403 `FORBIDDEN`.
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - name: eventId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Yêu cầu đang chờ.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/PendingStaffSignup' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /clubs/{clubId}/events/{eventId}/staff-signup-requests/{requestId}/approval:
+    post:
+      tags: [EVT]
+      operationId: approveStaffSignup
+      summary: Trưởng BTC nhận vào tiểu ban vượt chỉ tiêu (BR-EVT-07)
+      description: |
+        Nhân sự mới được đánh dấu `overQuota` để ghi nhận ngoại lệ; báo người gửi.
+        Lỗi: 404; 403 `FORBIDDEN`; 422 `REQUEST_DECIDED`, `ALREADY_STAFF`, `NOT_ELIGIBLE`.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - name: eventId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: requestId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Yêu cầu sau khi duyệt.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PendingStaffSignup' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+  /clubs/{clubId}/events/{eventId}/staff-signup-requests/{requestId}/rejection:
+    post:
+      tags: [EVT]
+      operationId: rejectStaffSignup
+      summary: Trưởng BTC từ chối yêu cầu vượt chỉ tiêu (FR-EVT-06)
+      description: Lý do 5–500 ký tự, báo người gửi. Lỗi 404; 403 `FORBIDDEN`; 422 `REQUEST_DECIDED`; 400 `VALIDATION`.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - name: eventId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: requestId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: { type: string, minLength: 5, maxLength: 500 }
+      responses:
+        '200':
+          description: Yêu cầu sau khi từ chối.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PendingStaffSignup' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
   /clubs/{clubId}/events/{eventId}/subcommittees:
     get:
       tags: [EVT]
@@ -9504,11 +9687,12 @@ components:
     EventAction:
       type: string
       description: |
+        `DECIDE_STAFF_REQUESTS`: Trưởng BTC duyệt yêu cầu vượt chỉ tiêu (FR-EVT-06).
         Chuyển trạng thái cộng các quyền khác do máy chủ tính: `MANAGE_SUBCOMMITTEES`, `REGISTER`, `RESCHEDULE` (dời thời gian, FR-EVT-14),
         `VIEW_STAFF`, `VIEW_REGISTRATIONS`, `VIEW_FUND`, `VIEW_ATTENDANCE` (dữ liệu BTC, danh sách tham dự, quỹ sự kiện, điểm danh chỉ BTC và ban chủ nhiệm xem, SRS 3.5).
         `VIEW_REPORT`: báo cáo sự kiện (FR-RPT-05, gồm số việc theo tiểu ban của FR-EVT-09). Ban chủ nhiệm CLB đồng tổ chức (đang Chấp nhận, sự kiện còn hoạt
         động) chỉ có `VIEW_REPORT`, `VIEW_STAFF`, `VIEW_FUND`: không có `VIEW_REGISTRATIONS`, `VIEW_ATTENDANCE` và không thao tác ghi nào.
-      enum: [SUBMIT, APPROVE, REJECT, OPEN_REGISTRATION, CANCEL, CLOSE, MANAGE_SUBCOMMITTEES, REGISTER, RESCHEDULE, VIEW_STAFF, VIEW_REPORT, VIEW_REGISTRATIONS, VIEW_FUND, VIEW_ATTENDANCE]
+      enum: [SUBMIT, APPROVE, REJECT, OPEN_REGISTRATION, CANCEL, CLOSE, MANAGE_SUBCOMMITTEES, REGISTER, RESCHEDULE, VIEW_STAFF, VIEW_REPORT, VIEW_REGISTRATIONS, VIEW_FUND, VIEW_ATTENDANCE, DECIDE_STAFF_REQUESTS]
     EventFormat:
       type: string
       enum: [OFFLINE, ONLINE]
@@ -9588,9 +9772,10 @@ components:
       allOf:
         - $ref: '#/components/schemas/EventSummary'
         - type: object
-          required: [description, onlineUrl, proposer, approver, rejectionReason, cancellationReason, statusBeforeCancel, allowedActions, version, createdAt, fundId, fundStatus, openAdvanceCount, lastScheduleChange, viewingAsCoHost]
+          required: [description, onlineUrl, proposer, approver, rejectionReason, cancellationReason, statusBeforeCancel, staffSignupOpen, allowedActions, version, createdAt, fundId, fundStatus, openAdvanceCount, lastScheduleChange, viewingAsCoHost]
           properties:
             description: { type: string }
+            staffSignupOpen: { type: boolean, description: 'FR-EVT-06: BTC mở cho thành viên tự đăng ký vào tiểu ban.' }
             onlineUrl: { $ref: '#/components/schemas/NullableString' }
             proposer: { $ref: '#/components/schemas/PersonRef' }
             approver:
@@ -9730,12 +9915,69 @@ components:
       type: string
       description: Thành viên CLB chủ trì, CTV, nhân sự CLB đồng tổ chức.
       enum: [MEMBER, COLLABORATOR, CO_HOST]
+    StaffSignupSetting:
+      type: object
+      required: [open, version]
+      properties:
+        open: { type: boolean }
+        version: { type: integer, description: '`version` của sự kiện.' }
+    StaffSignupRequest:
+      type: object
+      required: [subcommitteeId]
+      properties:
+        subcommitteeId: { type: string }
+        note: { type: string, minLength: 5, maxLength: 500, description: Bắt buộc khi tiểu ban đã đủ chỉ tiêu. }
+    StaffSignupInfo:
+      type: object
+      required: [open, subcommittees, mySubcommitteeName, myRequest, canSignUp]
+      properties:
+        open: { type: boolean }
+        subcommittees:
+          type: array
+          items:
+            type: object
+            required: [id, name, description, quota, memberCount, full]
+            properties:
+              id: { type: string }
+              name: { type: string }
+              description: { type: string }
+              quota: { type: [integer, 'null'] }
+              memberCount: { type: integer }
+              full: { type: boolean }
+        mySubcommitteeName: { $ref: '#/components/schemas/NullableString' }
+        myRequest:
+          oneOf:
+            - type: object
+              required: [id, subcommitteeName, status, note, reason, createdAt]
+              properties:
+                id: { type: string }
+                subcommitteeName: { type: string }
+                status: { type: string, enum: [PENDING, APPROVED, REJECTED] }
+                note: { type: string }
+                reason: { $ref: '#/components/schemas/NullableString' }
+                createdAt: { type: string, format: date-time }
+            - type: 'null'
+        canSignUp: { type: boolean }
+    PendingStaffSignup:
+      type: object
+      required: [id, person, departmentName, subcommitteeId, subcommitteeName, quota, memberCount, note, createdAt]
+      properties:
+        id: { type: string }
+        person: { $ref: '#/components/schemas/PersonRef' }
+        departmentName: { $ref: '#/components/schemas/NullableString' }
+        subcommitteeId: { type: string }
+        subcommitteeName: { type: string }
+        quota: { type: [integer, 'null'] }
+        memberCount: { type: integer }
+        note: { type: string }
+        createdAt: { type: string, format: date-time }
     StaffMember:
       allOf:
         - $ref: '#/components/schemas/PersonRef'
         - type: object
-          required: [departmentName, kind, homeClubName]
+          required: [departmentName, kind, homeClubName, overQuota]
           properties:
+            overQuota: { type: boolean, description: Vào vượt chỉ tiêu nhờ Trưởng BTC duyệt (BR-EVT-07). }
             departmentName:
               $ref: '#/components/schemas/NullableString'
               description: Ban ở CLB chủ trì; nhân sự CLB đồng tổ chức thì ban ở CLB của họ.

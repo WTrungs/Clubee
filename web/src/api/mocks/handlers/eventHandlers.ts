@@ -108,6 +108,7 @@ function eventActions(userId: string, event: DbEvent): EventAction[] {
   if (CANCELLABLE.includes(event.status) && can(userId, event.clubId, 'CREATE_EVENT')) actions.push('CANCEL')
   if (closable(event) && runs) actions.push('CLOSE')
   if (STAFF_ACTIVE.includes(event.status) && can(userId, event.clubId, 'MANAGE_EVENT_STAFF', eventScope(event))) actions.push('MANAGE_SUBCOMMITTEES')
+  if (lead) actions.push('DECIDE_STAFF_REQUESTS')
   if (registrationOpen(event) && isActiveMember(userId, event.clubId) && !myRegistration(userId, event)) actions.push('REGISTER')
   // Ban chủ nhiệm CLB đồng tổ chức xem cơ cấu và báo cáo, không xem danh sách tham dự (FR-EVT-09, FR-RPT-05).
   if (canViewStaff(userId, event)) actions.push('VIEW_STAFF', 'VIEW_REPORT')
@@ -151,6 +152,7 @@ function toDetail(event: DbEvent, userId: string): EventDetail {
     approver: event.approverId ? person(event.approverId) : null,
     rejectionReason: event.rejectionReason,
     cancellationReason: event.cancellationReason,
+    staffSignupOpen: event.staffSignupOpen,
     allowedActions: eventActions(userId, event),
     version: event.version,
     createdAt: event.createdAt,
@@ -185,6 +187,7 @@ function toSubcommittee(subcommittee: DbSubcommittee, event: DbEvent, userId: st
       departmentName: departmentNameOf(member.userId, member.homeClubId ?? event.clubId),
       kind: member.kind,
       homeClubName: member.kind === 'CO_HOST' && member.homeClubId ? clubNameOf(member.homeClubId) : null,
+      overQuota: member.overQuota === true,
     }))
   const leadId = positionHolderOf('SUBCOMMITTEE_LEAD', subcommittee.id, historyOnly(event))
   const active = STAFF_ACTIVE.includes(event.status)
@@ -398,6 +401,7 @@ export const eventHandlers = [
       capacity: body.capacity ?? null,
       registrationDeadline: body.registrationDeadline ?? null,
       openToGuests: Boolean(body.openToGuests),
+      staffSignupOpen: false,
       status: creates ? 'APPROVED' : 'DRAFT',
       statusBeforeCancel: null,
       proposerId: user.value.id,

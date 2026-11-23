@@ -20,6 +20,7 @@ import { useCoHostsViewModel } from '../viewModel/useCoHostsViewModel'
 import { useEventStaffViewModel, type EventStaffViewModel } from '../viewModel/useEventStaffViewModel'
 import { useSetLeadViewModel, type SetLeadViewModel } from '../viewModel/useSetLeadViewModel'
 import { CoHostSection } from './CoHostSection'
+import { StaffSignupAdmin } from './StaffSignupAdmin'
 
 /** Nhãn cạnh tên: CTV, CLB gốc của nhân sự CLB đồng tổ chức, hoặc ban ở CLB chủ trì. */
 function StaffTag({ member }: { member: StaffMember }) {
@@ -113,6 +114,11 @@ function SubcommitteeCard({ subcommittee, onInvite, onAddCollaborator, onSetLead
           <li key={member.id} className="flex items-center gap-2.5 text-sm">
             <Avatar name={member.fullName} size="sm" />
             <span className="min-w-0 flex-1 truncate">{member.fullName}</span>
+            {member.overQuota && (
+              <Badge tone="warning" title="Trưởng BTC duyệt vào vượt chỉ tiêu">
+                Vượt chỉ tiêu
+              </Badge>
+            )}
             <StaffTag member={member} />
           </li>
         ))}
@@ -347,6 +353,7 @@ export function EventStaffTab({ event, clubId, canManage }: { event: EventDetail
         )}
       </div>
 
+      <StaffSignupAdmin event={event} canManage={canManage} />
       <CoHostSection vm={coHosts} canManage={canManage} eventName={event.name} />
 
       {staff.loading && (

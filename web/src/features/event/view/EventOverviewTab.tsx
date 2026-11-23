@@ -8,6 +8,7 @@ import { Avatar } from '@/shared/ui/Avatar'
 import type { EventDetail } from '../model/eventTypes'
 import { formatEventTime, scheduleChangeText } from '../viewModel/eventDisplay'
 import { EventPlace } from './EventMeta'
+import { StaffSignupCard } from './StaffSignupCard'
 
 function Fact({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -30,6 +31,7 @@ function PersonLine({ name }: { name: string }) {
 export function EventOverviewTab({ event }: { event: EventDetail }) {
   return (
     <div className="space-y-5">
+      <StaffSignupCard event={event} />
       {event.status === 'DRAFT' && event.rejectionReason && (
         <p className="flex items-start gap-2 rounded-xl bg-status-warning-soft p-4 text-sm text-status-warning">
           <MessageSquareWarning aria-hidden className="mt-0.5 size-4 shrink-0" />

@@ -129,4 +129,47 @@ test.describe('Ban tổ chức sự kiện', () => {
     await expect(page.getByRole('button', { name: 'Ghi khoản thu' })).toHaveCount(0)
     await snap(page, testInfo, 'sharedEventFund')
   })
+
+  test('Trưởng BTC mở đăng ký nhân sự; thành viên tự vào tiểu ban, đủ chỉ tiêu thì xin và được duyệt (FR-EVT-06)', async ({ page }, testInfo) => {
+    // Đi trong app (không tải lại) để giữ dữ liệu mock vừa ghi.
+    const goTo = (path: string) =>
+      page.evaluate((target) => {
+        window.history.pushState({}, '', target)
+        window.dispatchEvent(new PopStateEvent('popstate'))
+      }, path)
+    await loginAs(page, 'bao.tran@demo.test')
+    await page.goto('/clubs/c-guitar/events/e-winter?tab=staff')
+    await page.getByRole('switch', { name: 'Mở cho thành viên tự đăng ký' }).click()
+    await settleToast(page, 'Đã mở cho thành viên tự đăng ký.')
+    await expect(page.getByRole('switch', { name: 'Mở cho thành viên tự đăng ký' })).toBeChecked()
+
+    await switchUser(page, 'Trần Quốc Bảo', 'thao.mai@demo.test')
+    await goTo('/clubs/c-guitar/events/e-winter')
+    const signup = page.getByRole('region', { name: 'Tham gia ban tổ chức' })
+    await signup.getByRole('radio', { name: /Tiểu ban Hậu cần/ }).check()
+    await signup.getByRole('button', { name: 'Đăng ký vào tiểu ban' }).click()
+    await settleToast(page, 'Bạn đã vào tiểu ban Hậu cần.')
+    await expect(signup.getByText('Bạn đang ở tiểu ban Hậu cần.')).toBeVisible()
+
+    await switchUser(page, 'Mai Phương Thảo', 'mai.vo@demo.test')
+    await goTo('/clubs/c-guitar/events/e-winter')
+    await signup.getByRole('radio', { name: /Tiểu ban Hậu cần/ }).check()
+    await expect(signup.getByText('Đủ chỉ tiêu 4/4')).toBeVisible()
+    await signup.getByRole('textbox', { name: 'Lời nhắn gửi Trưởng BTC' }).fill('Mình có xe chở loa, muốn phụ hậu cần.')
+    await snap(page, testInfo, 'staffSignupFull')
+    await signup.getByRole('button', { name: 'Gửi yêu cầu vượt chỉ tiêu' }).click()
+    await settleToast(page, 'Đã gửi yêu cầu cho Trưởng BTC.')
+    await expect(signup.getByText('đang chờ Trưởng BTC duyệt', { exact: false })).toBeVisible()
+
+    await switchUser(page, 'Võ Ngọc Mai', 'bao.tran@demo.test')
+    await goTo('/clubs/c-guitar/events/e-winter?tab=staff')
+    const requests = page.getByRole('region', { name: 'Yêu cầu vượt chỉ tiêu (1)' })
+    await expect(requests).toContainText('Mình có xe chở loa')
+    await snap(page, testInfo, 'staffSignupRequests')
+    await requests.getByRole('button', { name: 'Duyệt Võ Ngọc Mai' }).click()
+    await settleToast(page, 'Đã nhận Võ Ngọc Mai vào tiểu ban Hậu cần.')
+    const card = page.getByRole('listitem').filter({ has: page.getByRole('heading', { name: 'Tiểu ban Hậu cần' }) })
+    await expect(card.getByText('Mai Phương Thảo')).toBeVisible()
+    await expect(card.getByRole('listitem').filter({ hasText: 'Võ Ngọc Mai' }).getByText('Vượt chỉ tiêu')).toBeVisible()
+  })
 })

@@ -13,11 +13,15 @@ import type {
   GuestRegistrationRow,
   InviteCoHostRequest,
   MyRegistration,
+  PendingStaffSignup,
   Registration,
   RemoveCoHostRequest,
   RescheduleEventRequest,
   SetSubcommitteeLeadRequest,
   SharedEvent,
+  StaffSignupInfo,
+  StaffSignupRequest,
+  StaffSignupSetting,
   StaffCandidate,
   Subcommittee,
 } from './eventTypes'
@@ -75,4 +79,13 @@ export const eventRepository = {
     httpClient.get<GuestRegistrationRow[]>(`${event(clubId, eventId)}/guest-registrations`, { query: { q: query.q, day: query.day ?? undefined } }),
   checkInGuest: (clubId: string, eventId: string, registrationId: string, day: string | null) =>
     httpClient.post<GuestRegistrationRow>(`${event(clubId, eventId)}/guest-registrations/${encodeURIComponent(registrationId)}/check-ins`, { day }),
+  /** FR-EVT-06: BTC mở, đóng đăng ký nhân sự; thành viên tự vào tiểu ban, đủ chỉ tiêu thì gửi yêu cầu cho Trưởng BTC. */
+  setStaffSignup: (clubId: string, eventId: string, setting: StaffSignupSetting) => httpClient.put<StaffSignupSetting>(`${event(clubId, eventId)}/staff-signup`, setting),
+  staffSignup: (clubId: string, eventId: string) => httpClient.get<StaffSignupInfo>(`${event(clubId, eventId)}/staff-signup`),
+  signUpStaff: (clubId: string, eventId: string, request: StaffSignupRequest) => httpClient.post<StaffSignupInfo>(`${event(clubId, eventId)}/staff-signups`, request),
+  staffSignupRequests: (clubId: string, eventId: string) => httpClient.get<PendingStaffSignup[]>(`${event(clubId, eventId)}/staff-signup-requests`),
+  approveStaffSignup: (clubId: string, eventId: string, requestId: string) =>
+    httpClient.post<PendingStaffSignup>(`${event(clubId, eventId)}/staff-signup-requests/${encodeURIComponent(requestId)}/approval`),
+  rejectStaffSignup: (clubId: string, eventId: string, requestId: string, reason: string) =>
+    httpClient.post<PendingStaffSignup>(`${event(clubId, eventId)}/staff-signup-requests/${encodeURIComponent(requestId)}/rejection`, { reason }),
 }
