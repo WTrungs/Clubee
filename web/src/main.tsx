@@ -14,8 +14,9 @@ import { syncReducedMotion } from './shared/motion/reducedMotion'
 
 async function enableMocking(): Promise<void> {
   if (!USE_MOCK) return
-  const { worker } = await import('./api/mocks/browser')
+  const [{ worker }, { keepMockClientActive }] = await Promise.all([import('./api/mocks/browser'), import('./api/mocks/keepMockClientActive')])
   await worker.start({ onUnhandledFrame: 'bypass', quiet: true })
+  keepMockClientActive()
 }
 
 const rootElement = document.getElementById('root')
