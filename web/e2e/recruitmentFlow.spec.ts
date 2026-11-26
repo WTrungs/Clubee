@@ -118,6 +118,30 @@ test.describe('Tuyển thành viên', () => {
     await snap(page, testInfo, 'recruitmentApplications')
   })
 
+  test('ban chủ nhiệm thấy cảnh báo ứng viên cũ: đơn cũ, điểm cũ, lý do bị loại (FR-REC-04)', async ({ page }, testInfo) => {
+    await loginAs(page, 'anh.nguyen@demo.test')
+    await page.goto('/clubs/c-guitar/recruitments/rec-guitar-k1?tab=rounds')
+    const rounds = page.getByRole('list', { name: 'Đơn theo vòng' })
+    await expect(rounds.getByRole('listitem').filter({ hasText: 'Hồ Tấn Đạt' })).toContainText('Từng nộp 1 đơn, từng bị loại, từng là thành viên ở CLB này.')
+    await rounds.getByRole('button', { name: 'Loại: Hồ Tấn Đạt' }).click()
+    await expect(page.getByRole('dialog', { name: 'Xét vòng: Hồ Tấn Đạt' }).getByRole('note')).toContainText('từng bị loại')
+    await page.keyboard.press('Escape')
+
+    await page.getByRole('tab', { name: /Đơn ứng tuyển/ }).click()
+    const applications = page.getByRole('list', { name: 'Đơn ứng tuyển' })
+    await expect(applications.getByRole('listitem').filter({ hasText: 'Hồ Tấn Đạt' })).toContainText('Ứng viên cũ')
+    await expect(applications.getByRole('listitem').filter({ hasText: 'Châu Minh Tú' })).not.toContainText('Ứng viên cũ')
+    await applications.getByRole('button', { name: /Hồ Tấn Đạt/ }).click()
+    const history = page.getByRole('dialog').getByRole('region', { name: 'Lịch sử ở CLB' })
+    await expect(history).toContainText('Tuyển thành viên học kỳ 1 năm học 2025–2026')
+    await expect(history).toContainText('Lọc đơn: Đạt · 70 điểm')
+    await expect(history).toContainText('Phỏng vấn: Loại · Chưa sắp xếp được lịch sinh hoạt cố định.')
+    await expect(history).toContainText('Bị đưa ra khỏi CLB')
+    await expect(history).toContainText('Vắng sinh hoạt nhiều buổi liên tiếp không báo.')
+    await expectNoHorizontalScroll(page)
+    await snap(page, testInfo, 'recruitmentApplicantHistory', { fullPage: false })
+  })
+
   test('ban chủ nhiệm lọc đơn theo vòng: Đạt kèm điểm, Loại kèm nhận xét', async ({ page }, testInfo) => {
     await loginAs(page, 'anh.nguyen@demo.test')
     await page.goto('/clubs/c-guitar/recruitments/rec-guitar-k1?tab=rounds')

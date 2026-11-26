@@ -115,7 +115,7 @@ describe('staff from the co-host club (FR-EVT-08, BR-ORG-01)', () => {
     const candidates = await eventRepository.staffCandidates('c-guitar', 'e-winter', '', ENGLISH)
     // u-ha, u-bao cũng ở CLB Guitar nên mời như thành viên.
     expect(candidates.map((candidate) => candidate.id).toSorted()).toEqual(['u-tam', 'u-tu'])
-    expect(Object.keys(candidates[0] ?? {}).toSorted()).toEqual(['departmentName', 'fullName', 'id'])
+    expect(Object.keys(candidates[0] ?? {}).toSorted()).toEqual(['conflicts', 'departmentName', 'fullName', 'id'])
     expect((await subcommitteeOf('sc-winter-logistics')).allowedActions).toContain('ADD_CO_HOST_STAFF')
 
     signInAs('u-long')

@@ -1,6 +1,7 @@
 import type { EventStatus, MyRegistration, RegistrationAction } from '@/features/event/model/eventTypes'
 import { formatDateTime } from '@/shared/format/formatDate'
 import { db } from './db'
+import { mailGuest } from './mockGuests'
 import { eventTarget, notify } from './mockNotifications'
 import { byArrival } from './mockQueue'
 import { registerJob, SYSTEM_ACTOR } from './mockSchedule'
@@ -73,6 +74,7 @@ export function promoteWaitlist(event: DbEvent, actorId: string): DbRegistration
     if (seatsTaken(event.id) >= event.capacity) break
     Object.assign(next, { status: 'CONFIRMED', promotedAt: nowIso() })
     promoted.push(next)
+    mailGuest(next, `Bạn đã được nhận chỗ: ${event.name}`, `Một chỗ vừa trống nên bạn được đôn từ danh sách chờ. Mã tham dự: ${next.guest?.code ?? ''}.`)
     notify([next.userId], { clubId: event.clubId, category: 'EVENT', title: `Bạn đã được nhận chỗ: ${event.name}`, body: 'Một chỗ vừa trống nên bạn được đôn từ danh sách chờ.', target: eventTarget(event.clubId, event.id), actorId })
   }
   return promoted
@@ -82,7 +84,8 @@ export function promoteWaitlist(event: DbEvent, actorId: string): DbRegistration
 export function requireReconfirmation(event: DbEvent, actorId: string): { seated: DbRegistration[]; deadline: string } {
   const hours = clubSettingsOf(event.clubId).rescheduleConfirmHours
   const deadline = toVnIso(Math.min(Date.now() + hours * HOUR_MS, Date.parse(event.startAt)))
-  const holders = activeRegistrations(event.id).filter(holdsSeat)
+  // Khách mời không có tài khoản để xác nhận lại nên giữ chỗ, chỉ nhận thư báo giờ mới.
+  const holders = activeRegistrations(event.id).filter((registration) => holdsSeat(registration) && registration.guest === null)
   // Người dời đã chọn giờ mới nên giữ Nhận chỗ; họ không nhận thông báo của chính mình nên nếu phải xác nhận sẽ dễ mất chỗ.
   for (const own of holders.filter((registration) => registration.userId === actorId)) Object.assign(own, { status: 'CONFIRMED', reconfirmDeadline: null })
   const seated = holders.filter((registration) => registration.userId !== actorId)

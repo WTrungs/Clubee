@@ -38,7 +38,7 @@ describe('event report numbers (FR-RPT-05, FR-RPT-03)', () => {
     if (cancelled) cancelled.status = 'CANCELLED'
     signInAs('u-bao')
     const report = await eventRepository.report('c-guitar', 'e-winter')
-    expect(report.registrations).toEqual({ capacity: 12, confirmed: 10, waitlisted: 0, reconfirmPending: 0, cancelled: 1 })
+    expect(report.registrations).toEqual({ capacity: 12, confirmed: 10, waitlisted: 0, reconfirmPending: 0, cancelled: 1, guests: 0, guestsCheckedIn: 0 })
     // Sự kiện chưa diễn ra: có ngày điểm danh nhưng chưa ai được ghi.
     expect(report.attendance).toHaveLength(1)
     expect(report.attendance[0]).toMatchObject({ closed: false, expected: 10, tally: { total: 0, rate: null } })

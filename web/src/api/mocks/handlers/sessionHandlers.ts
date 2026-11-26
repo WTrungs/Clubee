@@ -16,6 +16,7 @@ import { formatDate, formatDateTime, formatTime, formatTimeRange } from '@/share
 import { REASON_MAX, REASON_MIN } from '@/shared/lib/reasonRules'
 import { recurrenceDays, recurrenceError, seriesTimes, vnDayOf, type RecurrenceFrequency } from '@/shared/lib/sessionRecurrence'
 import { db, type DbAbsenceRequest, type DbSession, type DbSessionRegistration } from '../db'
+import { acceptsNewActivities, newActivityBlocked } from '../mockClubStatus'
 import {
   activeAbsenceRequest,
   canWithdrawAbsence,
@@ -234,7 +235,7 @@ export const sessionHandlers = [
     if (!user.ok) return user.response
     const clubId = String(params.clubId)
     if (!canAccessClub(user.value.id, clubId)) return notMember()
-    return HttpResponse.json(sessionScopesFor(user.value.id, clubId))
+    return HttpResponse.json(acceptsNewActivities(clubId) ? sessionScopesFor(user.value.id, clubId) : [])
   }),
 
   http.get(`${API}/clubs/:clubId/sessions/:sessionId`, async ({ params }) => {
@@ -257,6 +258,8 @@ export const sessionHandlers = [
     const body = (await request.json()) as Partial<CreateSessionRequest>
     const scope = creationScope(user.value.id, clubId, body)
     if (!scope.ok) return scope.response
+    const blocked = newActivityBlocked(clubId)
+    if (blocked) return blocked
     const { title, description, location, errors } = validate(body)
     if (errors.length > 0) return problem(400, 'Thông tin buổi sinh hoạt chưa hợp lệ.', 'VALIDATION', errors)
     const session = newSession({
@@ -293,6 +296,8 @@ export const sessionHandlers = [
     const body = (await request.json()) as Partial<CreateSessionSeriesRequest>
     const scope = creationScope(user.value.id, clubId, body)
     if (!scope.ok) return scope.response
+    const blocked = newActivityBlocked(clubId)
+    if (blocked) return blocked
     const { title, description, location, errors } = validate(body)
     const frequency = FREQUENCIES.find((candidate) => candidate === body.recurrence?.frequency)
     const until = typeof body.recurrence?.until === 'string' ? body.recurrence.until : ''

@@ -20,7 +20,7 @@ export function RecruitmentsPage() {
         title="Tuyển thành viên"
         description="Các đợt tuyển của CLB: thời gian nhận đơn, chỉ tiêu theo ban và các vòng."
         actions={
-          vm.canManage && (
+          vm.canCreate && (
             <Button onClick={vm.openForm}>
               <Plus aria-hidden />
               Mở đợt tuyển

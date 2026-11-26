@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { motion } from 'motion/react'
 import { getErrorMessage } from '@/api/apiError'
 import { Clock, Info, Lock, QrCode, UserPlus, UsersRound } from 'lucide-react'
@@ -27,7 +28,8 @@ const noticeStyle = {
 } as const
 
 /** Bảng điểm danh dùng chung cho buổi sinh hoạt và sự kiện (FR-ATT-05, 07, 08: chốt và sửa sau khi chốt). */
-export function AttendancePanel({ activity }: { activity: AttendanceActivityRef }) {
+/** `extra`: phần thêm theo ngày đang chọn, ví dụ khách mời của sự kiện (FR-EVT-12). */
+export function AttendancePanel({ activity, extra }: { activity: AttendanceActivityRef; extra?: (day: string | null, canMark: boolean) => ReactNode }) {
   const vm = useAttendanceViewModel(activity)
   const sheet = vm.sheet
 
@@ -137,6 +139,7 @@ export function AttendancePanel({ activity }: { activity: AttendanceActivityRef 
       <AddExtraDialog activity={activity} vm={vm} />
       <AttendanceQrDialog activity={activity} vm={vm} />
       <AttendanceEditDialog vm={vm} />
+      {extra?.(vm.day, vm.canMark)}
       <AttendanceHistoryDialog vm={vm} />
       <ConfirmDialog
         open={vm.closeOpen}

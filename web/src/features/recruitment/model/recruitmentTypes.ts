@@ -1,4 +1,5 @@
 import type { PersonRef } from '@/api/commonTypes'
+import type { MembershipExit } from '@/features/member/model/memberTypes'
 
 /** Suy ra từ giờ mở, giờ đóng và thao tác: Sắp mở, Đang nhận đơn, Đang xét, Đã có kết quả, Đã đóng. */
 export type RecruitmentStatus = 'UPCOMING' | 'OPEN' | 'REVIEWING' | 'RESULTS' | 'CLOSED'
@@ -179,7 +180,42 @@ export interface ApplicationSummary {
   /** Tổng điểm các vòng Đạt. */
   totalScore: number
   outcome: ApplicationOutcome | null
+  /** FR-REC-04: tóm tắt để gắn nhãn khi ứng viên từng nộp đơn hoặc từng là thành viên CLB này; null là ứng viên mới. */
+  priorHistory: ApplicantPriorFlags | null
   version: number
+}
+
+export interface ApplicantPriorFlags {
+  /** Số đơn khác ở các đợt tuyển của CLB. */
+  applications: number
+  /** Từng bị loại: đơn bị Loại ở một vòng hoặc không trúng tuyển, bị đưa ra khỏi CLB, yêu cầu gia nhập bị từ chối. */
+  eliminated: boolean
+  formerMember: boolean
+}
+
+/** Một đơn cũ ở CLB này: kết quả từng vòng có điểm, nhận xét vòng bị Loại là lý do bị loại. */
+export interface PriorApplication {
+  id: string
+  recruitment: { id: string; name: string }
+  submittedAt: string
+  status: ApplicationStatus
+  roundResults: Array<{ roundName: string; result: 'PASS' | 'FAIL'; score: number | null; note: string }>
+  totalScore: number
+  eliminationNote: string | null
+  outcome: ApplicationOutcome | null
+}
+
+/** Một lần từng là thành viên (hoặc từng xin gia nhập) đã kết thúc, kèm lý do. */
+export interface PriorMembership {
+  joinedOn: string | null
+  leftOn: string | null
+  exitKind: MembershipExit
+  reason: string | null
+}
+
+export interface ApplicantHistory {
+  applications: PriorApplication[]
+  memberships: PriorMembership[]
 }
 
 /** `state`: Chờ xét (đang ở vòng này), Đạt, Loại ở vòng này. */
@@ -201,6 +237,8 @@ export interface RoundResultRequest {
 }
 
 export interface ApplicationDetail extends ApplicationSummary {
+  /** FR-REC-04: đơn cũ, điểm cũ, lý do bị loại và tư cách cũ ở CLB này; chỉ ban chủ nhiệm xem. */
+  history: ApplicantHistory
   answers: ApplicationAnswer[]
   studentId: string | null
   withdrawnAt: string | null

@@ -8,6 +8,8 @@ export const eventQueryKeys = {
   details: ['events', 'detail'] as const,
   detail: (clubId: string, eventId: string) => ['events', 'detail', clubId, eventId] as const,
   subcommittees: (clubId: string, eventId: string) => ['events', 'subcommittees', clubId, eventId] as const,
+  staffSignup: (clubId: string, eventId: string) => ['events', 'staffSignup', clubId, eventId] as const,
+  staffSignupRequests: (clubId: string, eventId: string) => ['events', 'staffSignupRequests', clubId, eventId] as const,
   candidates: (clubId: string, eventId: string, q: string, coHostId: string | null = null) => ['events', 'candidates', clubId, eventId, q, coHostId] as const,
   report: (clubId: string, eventId: string) => ['events', 'report', clubId, eventId] as const,
   coHosts: (clubId: string, eventId: string) => ['events', 'coHosts', clubId, eventId] as const,

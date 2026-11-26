@@ -171,12 +171,12 @@ describe('changing a campaign (FR-FIN-09, BR-FIN-06)', () => {
 })
 
 describe('reaching the dues tab (FR-FIN-09, BR-SEC-02)', () => {
-  it('links a dues notification to the campaign and sends members without access to the general ledger', async () => {
+  it('links a dues notification to the campaign and sends members without access to their own dues', async () => {
     expect(notificationPath({ type: 'DUES', clubId: 'c-guitar', id: 'dues-guitar-hk1' })).toBe('/clubs/c-guitar/finance?view=dues&dues=dues-guitar-hk1')
     signInAs('u-ha')
     const member = renderHook(() => useFinancePageViewModel(), { wrapper: await clubWrapper() })
     expect(member.result.current.canViewDues).toBe(false)
-    expect(member.result.current.view).toBe('general')
+    expect(member.result.current.view).toBe('mine')
     signInAs('u-anh')
     const board = renderHook(() => useFinancePageViewModel(), { wrapper: await clubWrapper() })
     expect(board.result.current.view).toBe('dues')

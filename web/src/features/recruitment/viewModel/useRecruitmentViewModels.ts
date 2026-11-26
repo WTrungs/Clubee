@@ -31,6 +31,8 @@ export function useRecruitmentsViewModel() {
     clubId,
     clubName: club.name,
     canManage,
+    /** ST-CLB: CLB tạm ngừng không mở đợt tuyển mới. */
+    canCreate: club.allowedActions.includes('CREATE_RECRUITMENT'),
     rows: list.data?.content ?? [],
     loading: canManage && list.isPending,
     error: list.error,

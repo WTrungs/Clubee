@@ -29,11 +29,25 @@ export function currentUser(): Guarded<DbUser> {
   return { ok: true, value: user }
 }
 
+/** Trả tệp kèm tên gốc (UTF-8); không lưu đệm vì quyền xem kiểm lại mỗi lần. Đọc ra ArrayBuffer để chạy đúng cả trong test (Blob của jsdom). */
+export async function downloadResponse(file: Blob, fileName: string, contentType: string): Promise<Response> {
+  const ascii = fileName.normalize('NFD').replace(/[^\x20-\x7e]/g, '').replace(/"/g, '') || 'tep'
+  return new HttpResponse(await file.arrayBuffer(), {
+    headers: {
+      'Content-Type': contentType,
+      'Content-Disposition': `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(fileName)}`,
+      'Cache-Control': 'no-store',
+    },
+  })
+}
+
+export const csrfRejected = () => problem(403, 'Phiên làm việc không hợp lệ (thiếu token CSRF). Tải lại trang rồi thử lại.', 'CSRF')
+
 /** Kiểm tra đăng nhập và token CSRF cho request ghi. */
 export function writer(request: Request): Guarded<DbUser> {
   const user = currentUser()
   if (!user.ok) return user
-  if (!hasValidCsrf(request)) return { ok: false, response: problem(403, 'Phiên làm việc không hợp lệ (thiếu token CSRF). Tải lại trang rồi thử lại.', 'CSRF') }
+  if (!hasValidCsrf(request)) return { ok: false, response: csrfRejected() }
   return user
 }
 

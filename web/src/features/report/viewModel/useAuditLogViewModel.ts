@@ -6,6 +6,8 @@ import { auditLogRepository } from '../model/auditLogRepository'
 import type { AuditLogQuery, AuditObjectType } from '../model/auditLogTypes'
 import { AUDIT_OBJECT_TYPES } from './auditDisplay'
 import { periodErrorReasons } from './reportDisplay'
+import { useFileDownload } from '@/shared/hooks/useFileDownload'
+import type { ExportFormat } from '@/shared/lib/exportFormat'
 
 export const auditLogQueryKeys = {
   list: (clubId: string, query: AuditLogQuery) => ['auditLog', 'list', clubId, query] as const,
@@ -64,7 +66,11 @@ export function useAuditLogViewModel(clubId: string) {
   }
   const reasons = periodErrorReasons(list.error)
 
+  const exporter = useFileDownload('nhat-ky')
   return {
+    /** FR-RPT-07: xuất theo bộ lọc đang chọn, không theo trang. */
+    exportLog: (format: ExportFormat) => exporter.download(() => auditLogRepository.export(clubId, { ...query, page: undefined }, format)),
+    exporting: exporter.pending,
     actors: actors.data ?? [],
     actorsError: actors.isError,
     actorsLoading: actors.isPending,

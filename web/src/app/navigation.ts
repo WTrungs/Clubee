@@ -13,6 +13,7 @@ import {
   LayoutGrid,
   ListTodo,
   Network,
+  Newspaper,
   ScanLine,
   Shuffle,
   type LucideIcon,
@@ -86,6 +87,7 @@ export function buildNavigation(
         { to: `/clubs/${clubId}/events`, label: 'Sự kiện', icon: CalendarDays },
         { to: `/clubs/${clubId}/sessions`, label: 'Sinh hoạt', icon: CalendarCheck },
         { to: `/clubs/${clubId}/tasks`, label: 'Công việc', icon: KanbanSquare },
+        { to: `/clubs/${clubId}/news`, label: 'Tin tức', icon: Newspaper },
         { to: `/clubs/${clubId}/documents`, label: 'Tài liệu', icon: FolderOpen },
         { to: `/clubs/${clubId}/finance`, label: 'Tài chính', icon: Wallet },
         // Mục quản lý chỉ hiện khi máy chủ cho phép; trang vẫn tự kiểm quyền.

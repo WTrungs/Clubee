@@ -3,6 +3,11 @@ import type { DbAuditLog } from './mockAudit'
 import { createAdvanceSeed, type DbAdvance } from './seed/advanceSeed'
 import { createAuditSeed } from './seed/auditSeed'
 import { createDuesSeed, type DbDuesCampaign, type DbDuesItem } from './seed/duesSeed'
+import type { DbGuestMail } from './mockGuests'
+import type { DbStaffSignupRequest } from './mockStaffSignup'
+import type { DbAttachmentFile, DbTaskComment } from './mockTaskComments'
+import type { DbNotificationPreference } from './mockNotificationPreferences'
+import type { DbPasswordReset } from './mockPasswordResets'
 import type { DbPermissionMatrixMeta } from './mockPermissionMatrix'
 import type { DbTransferRequest } from './mockTransfers'
 import {
@@ -19,7 +24,7 @@ import {
   type DbSessionRegistration,
 } from './seed/attendanceSeed'
 import { createClubSeed, type DbClub } from './seed/clubSeed'
-import { createDocumentSeed, type DbDocument, type DbDocumentFile } from './seed/documentSeed'
+import { createDocumentSeed, createDocumentVersionSeed, type DbDocument, type DbDocumentFile, type DbDocumentVersion } from './seed/documentSeed'
 import { createApplicationSeed, createRecruitmentSeed, type DbApplication, type DbRecruitment } from './seed/recruitmentSeed'
 import {
   createCoHostSeed,
@@ -35,6 +40,7 @@ import {
 } from './seed/eventSeed'
 import { createFinanceAttachmentSeed, createFundSeed, createTransactionSeed, type DbFund, type DbTransaction } from './seed/financeSeed'
 import { createInvitationSeed, type DbInvitation } from './seed/invitationSeed'
+import { createNewsSeed, type DbNews } from './seed/newsSeed'
 import { createLeaveRequestSeed, createMembershipSeed, createUserSeed, type DbLeaveRequest, type DbMembership, type DbUser } from './seed/memberSeed'
 import { createNotificationSeed, type DbNotification, type DbNotificationRecipient } from './seed/notificationSeed'
 import { createDepartmentSeed, createPositionSeed, createTermSeed, type DbDepartment, type DbPosition, type DbTerm, type PositionRole } from './seed/orgSeed'
@@ -44,12 +50,13 @@ import type { DbHandover, DbHandoverItem } from './seed/termSeed'
 /** Dữ liệu tổng hợp, không phải người thật (security.md); bản ghi ở dạng phía máy chủ, handler map sang DTO. */
 export type { DbAbsenceRequest, DbAttendance, DbAttendanceCode, DbAttendanceSheet, DbSession, DbSessionRegistration } from './seed/attendanceSeed'
 export type { DbClub } from './seed/clubSeed'
-export type { DbDocument, DbDocumentFile } from './seed/documentSeed'
+export type { DbDocument, DbDocumentFile, DbDocumentVersion } from './seed/documentSeed'
 export type { DbApplication, DbRecruitment } from './seed/recruitmentSeed'
 export type { DbAdvance } from './seed/advanceSeed'
 export type { DbDuesCampaign, DbDuesItem } from './seed/duesSeed'
 export type { DbFund, DbTransaction } from './seed/financeSeed'
 export type { DbInvitation } from './seed/invitationSeed'
+export type { DbNews } from './seed/newsSeed'
 export type { DbAuditLog } from './mockAudit'
 export type { AccountStatus, AccountType, DbDepartmentStint, DbLeaveRequest, DbMemberInfoChange, DbMembership, DbMembershipChange, DbUser, MemberInfoField, MembershipExit } from './seed/memberSeed'
 export type { DbNotification, DbNotificationRecipient } from './seed/notificationSeed'
@@ -113,6 +120,7 @@ export interface MockDb {
   sessionRegistrations: DbSessionRegistration[]
   absenceRequests: DbAbsenceRequest[]
   documents: DbDocument[]
+  documentVersions: DbDocumentVersion[]
   documentFiles: DbDocumentFile[]
   recruitments: DbRecruitment[]
   applications: DbApplication[]
@@ -121,6 +129,13 @@ export interface MockDb {
   attendanceCodes: DbAttendanceCode[]
   auditLogs: DbAuditLog[]
   transferRequests: DbTransferRequest[]
+  passwordResets: DbPasswordReset[]
+  notificationPreferences: DbNotificationPreference[]
+  news: DbNews[]
+  guestMails: DbGuestMail[]
+  staffSignupRequests: DbStaffSignupRequest[]
+  taskComments: DbTaskComment[]
+  attachmentFiles: DbAttachmentFile[]
 }
 
 export function createSeed(): MockDb {
@@ -160,6 +175,7 @@ export function createSeed(): MockDb {
     sessionRegistrations: [],
     absenceRequests: createAbsenceRequestSeed(),
     documents: createDocumentSeed(),
+    documentVersions: [],
     recruitments: createRecruitmentSeed(),
     applications: createApplicationSeed(),
     documentFiles: [],
@@ -168,9 +184,17 @@ export function createSeed(): MockDb {
     attendanceCodes: [],
     auditLogs: [],
     transferRequests: [],
+    passwordResets: [],
+    notificationPreferences: [],
+    news: createNewsSeed(),
+    guestMails: [],
+    staffSignupRequests: [],
+    taskComments: [],
+    attachmentFiles: [],
   }
   seed.sessionRegistrations = createSessionRegistrationSeed(seed)
   seed.auditLogs = createAuditSeed(seed)
+  seed.documentVersions = createDocumentVersionSeed(seed.documents)
   return seed
 }
 

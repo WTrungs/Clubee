@@ -16,6 +16,7 @@ import type { FinanceReport } from '../model/financeReportTypes'
 import { financeCategoryLabel } from '../viewModel/financeDisplay'
 import { netText, reportMonthLabel, reportShare } from '../viewModel/financeReportDisplay'
 import { useFinanceReportViewModel, type FinanceReportViewModel } from '../viewModel/useFinanceReportViewModel'
+import { ExportMenu } from '@/shared/ui/ExportMenu'
 
 function Stat({ label, value, tone }: { label: string; value: string; tone?: 'success' | 'danger' | 'warning' }) {
   return (
@@ -312,6 +313,11 @@ export function FinanceReportPanel({ active }: { active: boolean }) {
   return (
     <div className="space-y-5">
       <ReportPeriodPicker params={vm.periodParams} loading={vm.periodsLoading} />
+      {vm.canExport && (
+        <div className="flex justify-end">
+          <ExportMenu onExport={vm.exportReport} pending={vm.exporting} label="Xuất báo cáo" />
+        </div>
+      )}
       {vm.periodsError && <ErrorState error={vm.periodsError} onRetry={vm.retryPeriods} />}
       {vm.loading && !vm.report && (
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4" role="status" aria-label="Đang tải báo cáo">

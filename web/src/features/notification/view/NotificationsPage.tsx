@@ -1,5 +1,6 @@
 import { motion } from 'motion/react'
-import { BellOff, CheckCheck, SearchX } from 'lucide-react'
+import { BellOff, CheckCheck, SearchX, Settings2 } from 'lucide-react'
+import { Link } from 'react-router'
 import { itemVariants, listVariants } from '@/shared/motion/presets'
 import { Button } from '@/shared/ui/Button'
 import { FilterChip, Pagination, SearchInput } from '@/shared/ui/ListControls'
@@ -11,6 +12,7 @@ import { NOTIFICATION_CATEGORIES, notificationCategoryDisplay } from '../viewMod
 import { useNotificationInboxViewModel } from '../viewModel/useNotificationInboxViewModel'
 import { NotificationDetailSheet } from './NotificationDetailSheet'
 import { NotificationItem } from './NotificationItem'
+import { SentAnnouncementsPanel } from './SentAnnouncementsPanel'
 
 /** FR-NOT-03: hộp thông báo gộp mọi CLB. */
 export function NotificationsPage() {
@@ -21,10 +23,18 @@ export function NotificationsPage() {
         title="Thông báo"
         description="Thông báo từ mọi CLB bạn tham gia. Mở thông báo thì trang liên quan kiểm tra lại quyền của bạn."
         actions={
-          <Button variant="outline" onClick={vm.markAllRead} loading={vm.markingAll} disabled={vm.unreadCount === 0} className="w-full sm:w-auto">
-            <CheckCheck aria-hidden />
-            Đánh dấu đã đọc tất cả
-          </Button>
+          <>
+            <Button variant="outline" onClick={vm.markAllRead} loading={vm.markingAll} disabled={vm.unreadCount === 0} className="w-full sm:w-auto">
+              <CheckCheck aria-hidden />
+              Đánh dấu đã đọc tất cả
+            </Button>
+            <Button asChild variant="ghost" className="w-full sm:w-auto">
+              <Link to="/me/notification-settings">
+                <Settings2 aria-hidden />
+                Tùy chọn
+              </Link>
+            </Button>
+          </>
         }
       />
 
@@ -35,9 +45,15 @@ export function NotificationsPage() {
           items={[
             { value: 'all', label: 'Tất cả' },
             { value: 'unread', label: 'Chưa đọc', count: vm.unreadCount },
+            ...(vm.hasSent || vm.tab === 'sent' ? [{ value: 'sent', label: 'Đã gửi' }] : []),
           ]}
         />
       </Tabs>
+
+      {vm.tab === 'sent' ? (
+        <SentAnnouncementsPanel />
+      ) : (
+        <>
 
       <div className="mt-4 flex flex-col gap-3 lg:flex-row lg:items-center">
         <SearchInput label="Tìm thông báo" placeholder="Tìm theo tiêu đề, tên CLB…" value={vm.keyword} onValueChange={vm.setKeyword} className="w-full lg:w-72" />
@@ -77,6 +93,8 @@ export function NotificationsPage() {
       </section>
 
       <Pagination className="mt-4" page={vm.page} totalPages={vm.totalPages} totalElements={vm.totalElements} pageSize={vm.pageSize} onPageChange={vm.setPage} />
+        </>
+      )}
       <NotificationDetailSheet id={vm.openedId} onClose={vm.closeDetail} />
     </div>
   )

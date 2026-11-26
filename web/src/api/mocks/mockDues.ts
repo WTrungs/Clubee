@@ -79,10 +79,7 @@ export function toDuesDetail(campaign: DbDuesCampaign, userId: string): DuesCamp
   }
 }
 
-/**
- * Trang đích thông báo đợt đóng quỹ: tab Đóng quỹ của trang Tài chính. Người không có `VIEW_DUES` (thành viên phải đóng) thì
- * trang tự về sổ Quỹ chung; nội dung thông báo đã nêu kỳ, mức, hạn của chính họ.
- */
+/** Đích thông báo đợt đóng quỹ: tab Đóng quỹ; người không có `VIEW_DUES` thì trang mở Khoản đóng của tôi (FR-FIN-13). */
 export const duesTarget = (campaign: Pick<DbDuesCampaign, 'clubId' | 'id'>) => ({ type: 'DUES' as const, clubId: campaign.clubId, id: campaign.id })
 
 /** Số còn thiếu của một người. */

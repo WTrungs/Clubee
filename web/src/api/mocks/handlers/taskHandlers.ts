@@ -21,7 +21,8 @@ import { API, currentUser, matchesKeyword, networkDelay, newId, paginate, proble
 import { canAccessClub, personRef as person } from '../mockMembers'
 import { isEventGuest } from '../mockStaffEvents'
 import { isBoardMember } from '../mockPermissions'
-import { assignableScopes, hasTaskAccess, isTaskOverdue as isOverdue, lockedEventStatusOf, managesScope, resolveScope } from '../mockScopes'
+import { isTaskParticipant } from '../mockTaskComments'
+import { assignableScopes, canViewTask, eventLockReason, hasTaskAccess, isTaskOverdue as isOverdue, lockedEventStatusOf, resolveScope } from '../mockScopes'
 import { isDueSoon } from '../mockTaskJobs'
 import { notify, taskTarget } from '../mockNotifications'
 import { recordTaskChange, toTaskChange } from '../mockTasks'
@@ -52,13 +53,6 @@ const statusLabel: Record<TaskStatus, string> = {
 const reasonOk = (reason: string) => reason.length >= REASON_MIN && reason.length <= REASON_MAX
 const reasonError = { field: 'reason', message: `Nhập lý do từ ${REASON_MIN} đến ${REASON_MAX} ký tự.` }
 
-/** FR-EVT-16: hồ sơ sự kiện Đã đóng, Đã hủy chỉ đọc, nên việc của tiểu ban cũng chỉ xem được. */
-function eventLockReason(task: DbTask): string | null {
-  const status = lockedEventStatusOf(task)
-  if (status === 'CLOSED') return 'Sự kiện đã đóng nên công việc chỉ xem được.'
-  if (status === 'CANCELLED') return 'Sự kiện đã hủy nên công việc chỉ xem được.'
-  return null
-}
 
 const accessScopeOf = (task: DbTask): AccessScope => ({ type: task.scopeType, id: task.scopeId })
 
@@ -77,15 +71,6 @@ function allowedActionsFor(task: DbTask, userId: string): TaskAction[] {
   return [...transitions, ...(editable && reassignScopeOf(task, userId) ? (['REASSIGN'] as const) : []), ...(editable ? (['CHANGE_DUE'] as const) : [])]
 }
 
-function canViewTask(task: DbTask, userId: string): boolean {
-  if (!hasTaskAccess(task, userId)) return false
-  return (
-    task.ownerId === userId ||
-    task.assignerId === userId ||
-    task.collaboratorIds.includes(userId) ||
-    managesScope(userId, task.clubId, task.scopeType, task.scopeId)
-  )
-}
 
 function toSummary(task: DbTask, userId: string): TaskSummary {
   return {
@@ -368,8 +353,9 @@ export const taskHandlers = [
     if (!user.ok) return user.response
     const task = db.tasks.find((candidate) => candidate.id === params.taskId && candidate.clubId === params.clubId)
     if (!task) return problem(404, 'Không tìm thấy công việc.', 'TASK_NOT_FOUND')
-    if (!hasTaskAccess(task, user.value.id) || (task.ownerId !== user.value.id && !task.collaboratorIds.includes(user.value.id))) {
-      return problem(403, 'Chỉ người chính và người phối hợp được đính kèm tệp cho việc này.', 'FORBIDDEN')
+    // Người giao cũng đính kèm được để gửi tệp trong bình luận (FR-TASK-07).
+    if (!hasTaskAccess(task, user.value.id) || !isTaskParticipant(task, user.value.id)) {
+      return problem(403, 'Chỉ người giao, người chính và người phối hợp được đính kèm tệp cho việc này.', 'FORBIDDEN')
     }
     const lockReason = eventLockReason(task)
     if (lockReason) return problem(422, lockReason, 'EVENT_READ_ONLY')
@@ -379,6 +365,7 @@ export const taskHandlers = [
     if (!check.ok) return problem(400, check.message, 'INVALID_FILE')
     const stored = { id: newId('f'), name: file.name, size: file.size, contentType: file.type, uploadedBy: user.value.id, uploadedAt: nowIso() }
     db.attachments.push(stored)
+    db.attachmentFiles.push({ attachmentId: stored.id, file })
     const ref: FileRef = { id: stored.id, name: stored.name, size: stored.size, contentType: stored.contentType }
     return HttpResponse.json(ref, { status: 201 })
   }),

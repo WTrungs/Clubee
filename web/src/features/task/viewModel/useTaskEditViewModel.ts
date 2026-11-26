@@ -9,6 +9,7 @@ import { taskRepository } from '../model/taskRepository'
 import type { AssignableMember, TaskDetail, UpdateTaskRequest } from '../model/taskTypes'
 import { taskQueryKeys } from './taskQueryKeys'
 import { changeDueDefaults, changeDueSchema, reassignChanged, reassignDefaults, reassignSchema, type ChangeDueValues, type ReassignValues } from './taskEditSchemas'
+import { overloadWarning } from './overloadWarning'
 
 export type TaskEditMode = 'reassign' | 'due'
 
@@ -48,6 +49,7 @@ export function useTaskEditViewModel(task: TaskDetail | null) {
     onSuccess: async (saved) => {
       queryClient.setQueryData(taskQueryKeys.detail(saved.clubId, saved.id), saved)
       await queryClient.invalidateQueries({ queryKey: taskQueryKeys.lists })
+      void queryClient.invalidateQueries({ queryKey: taskQueryKeys.scopes(saved.clubId) })
       toast.success(mode === 'due' ? 'Đã đổi hạn công việc.' : 'Đã đổi người làm công việc.')
       close()
     },
@@ -77,7 +79,7 @@ export function useTaskEditViewModel(task: TaskDetail | null) {
   const scope = task ? (scopes.data?.find((candidate) => candidate.type === task.scope.type && candidate.id === task.scope.id) ?? null) : null
   const members = scope?.members ?? []
   const inScope = (id: string) => members.some((member) => member.id === id)
-  const keep = (person: { id: string; fullName: string }): PersonOption => ({ id: person.id, fullName: person.fullName, departmentName: null, outOfScope: true })
+  const keep = (person: { id: string; fullName: string }): PersonOption => ({ id: person.id, fullName: person.fullName, departmentName: null, openTaskCount: 0, outOfScope: true })
   const ownerOptions: PersonOption[] = [
     ...members.map((member) => ({ ...member, outOfScope: false })),
     ...(task && !inScope(task.owner.id) ? [keep(task.owner)] : []),
@@ -113,6 +115,8 @@ export function useTaskEditViewModel(task: TaskDetail | null) {
     ownerId,
     collaboratorIds,
     ownerOptions,
+    /** FR-TASK-09: chỉ cảnh báo khi đổi sang người khác người đang giữ việc. */
+    ownerWarning: task && ownerId !== task.owner.id ? overloadWarning(members.find((member) => member.id === ownerId), scope?.overloadThreshold) : null,
     collaboratorOptions,
     selectOwner: (id: string) => {
       reassignForm.setValue('ownerId', id, { shouldValidate: true })

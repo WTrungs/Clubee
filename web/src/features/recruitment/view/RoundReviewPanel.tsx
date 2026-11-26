@@ -13,7 +13,7 @@ import { FilterChip, Pagination } from '@/shared/ui/ListControls'
 import { Skeleton } from '@/shared/ui/Skeleton'
 import { EmptyState, ErrorState } from '@/shared/ui/StateViews'
 import type { RecruitmentDetail, RoundResultValue } from '../model/recruitmentTypes'
-import { choicesText } from '../viewModel/recruitmentDisplay'
+import { choicesText, priorHistoryText } from '../viewModel/recruitmentDisplay'
 import { parseScore, useRoundReviewViewModel, type ReviewTarget, type RoundReviewViewModel } from '../viewModel/useRoundReviewViewModel'
 
 function ReviewForm({ target, vm }: { target: ReviewTarget; vm: RoundReviewViewModel }) {
@@ -48,6 +48,11 @@ function ReviewForm({ target, vm }: { target: ReviewTarget; vm: RoundReviewViewM
         </>
       }
     >
+      {target.application.priorHistory && (
+        <p role="note" className="mb-4 rounded-xl bg-status-warning-soft p-3 text-sm text-status-warning">
+          {priorHistoryText(target.application.priorHistory)} Xem đơn cũ, điểm cũ và lý do ở tab Đơn ứng tuyển.
+        </p>
+      )}
       <form
         id={formId}
         noValidate
@@ -121,7 +126,11 @@ export function RoundReviewPanel({ clubId, recruitment, active }: { clubId: stri
               return (
                 <li key={application.id} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-start sm:justify-between">
                   <div className="min-w-0 space-y-1">
-                    <p className="font-semibold">{application.applicant.fullName}</p>
+                    <p className="flex flex-wrap items-center gap-1.5 font-semibold">
+                      {application.applicant.fullName}
+                      {application.priorHistory && <Badge tone="warning">Ứng viên cũ</Badge>}
+                    </p>
+                    {application.priorHistory && <p className="text-xs text-status-warning">{priorHistoryText(application.priorHistory)}</p>}
                     <p className="text-xs text-muted-foreground">
                       {choicesText(application.choices)} · tổng điểm {application.totalScore}
                     </p>

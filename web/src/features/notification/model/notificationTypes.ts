@@ -42,12 +42,32 @@ export interface NotificationSummary {
   createdAt: string
   readAt: string | null
   target: NotificationTarget | null
+  /** FR-NOT-05: người gửi ghim; đứng đầu hộp thư. */
+  pinned: boolean
 }
 
 /** Nội dung chỉ trả khi mở chi tiết, sau khi máy chủ kiểm tra lại quyền (BR-SEC-02). */
 export interface NotificationDetail extends NotificationSummary {
   body: string
   sender: PersonRef | null
+}
+
+/** FR-ACC-07: kênh gửi ngoài hệ thống cho một loại thông báo; thông báo trong hệ thống luôn bật. Push chỉ tới ứng dụng Android. */
+export interface NotificationChannelPreference {
+  category: NotificationCategory
+  email: boolean
+  push: boolean
+}
+
+export interface NotificationPreferences {
+  categories: NotificationChannelPreference[]
+  updatedAt: string | null
+  version: number
+}
+
+export interface UpdateNotificationPreferencesRequest {
+  categories: NotificationChannelPreference[]
+  version: number
 }
 
 export interface UnreadCount {
@@ -87,4 +107,30 @@ export interface NotificationQuery {
   q?: string
   page?: number
   size?: number
+}
+
+/** FR-NOT-05: thông báo người gọi đã gửi, kèm số người đã đọc. */
+export type SentAnnouncementAction = 'PIN' | 'UNPIN'
+
+export interface SentAnnouncement {
+  id: string
+  clubId: string
+  clubName: string
+  title: string
+  audienceLabel: string
+  createdAt: string
+  recipientCount: number
+  readCount: number
+  pinned: boolean
+  allowedActions: SentAnnouncementAction[]
+}
+
+export interface AnnouncementReceipt {
+  person: PersonRef
+  readAt: string | null
+}
+
+export interface AnnouncementReceiptQuery {
+  read?: boolean
+  page?: number
 }

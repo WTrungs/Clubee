@@ -53,6 +53,28 @@ export function createRecruitmentSeed(): DbRecruitment[] {
       closedAt: null,
       version: 1,
     },
+    {
+      // Đợt cũ đã đóng, giữ đơn bị loại của Đạt để thử cảnh báo ứng viên cũ (FR-REC-04).
+      id: 'rec-guitar-k0',
+      clubId: 'c-guitar',
+      name: 'Tuyển thành viên học kỳ 1 năm học 2025–2026',
+      description: 'Đợt tuyển đầu năm học trước.',
+      opensAt: vnDayAt(-420, 8),
+      closesAt: vnDayAt(-405, 22),
+      quotas: [{ departmentId: 'd-logistics', quota: 3 }],
+      rounds: [
+        { id: 'rr-k0-screen', name: 'Lọc đơn' },
+        { id: 'rr-k0-interview', name: 'Phỏng vấn' },
+      ],
+      questions: [{ id: 'rq-k0-why', text: 'Vì sao bạn muốn tham gia CLB Guitar?', required: true }],
+      judgeIds: [],
+      createdBy: 'u-anh',
+      createdAt: vnDayAt(-425, 20),
+      finalizedAt: vnDayAt(-400, 21),
+      responseDays: 7,
+      closedAt: vnDayAt(-392, 21),
+      version: 3,
+    },
   ]
 }
 
@@ -108,5 +130,17 @@ export function createApplicationSeed(): DbApplication[] {
       version: 2,
     },
     application('ap-dat', 'u-dat', ['d-logistics', 'd-music'], ['Muốn quay lại CLB sau một năm nghỉ.', 'Guitar 3 năm.', '3 buổi'], 2, '21520099'),
+    {
+      ...application('ap-dat-k0', 'u-dat', ['d-logistics'], ['Thích làm hậu cần cho các đêm nhạc.'], 415, '21520099'),
+      recruitmentId: 'rec-guitar-k0',
+      answers: [{ questionId: 'rq-k0-why', text: 'Thích làm hậu cần cho các đêm nhạc.' }],
+      status: 'ELIMINATED',
+      roundResults: [
+        { roundId: 'rr-k0-screen', result: 'PASS', score: 70, note: 'Có kinh nghiệm hậu cần ở lớp.', by: 'u-anh', at: vnDayAt(-404, 20) },
+        { roundId: 'rr-k0-interview', result: 'FAIL', score: null, note: 'Chưa sắp xếp được lịch sinh hoạt cố định.', by: 'u-anh', at: vnDayAt(-402, 20) },
+      ],
+      outcome: { departmentId: null, reserveOrder: null, respondBy: null },
+      version: 3,
+    },
   ]
 }

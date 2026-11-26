@@ -6,6 +6,8 @@ import type { TransactionStatus } from '@/features/finance/model/financeTypes'
 import { transactionStatusDisplay } from '@/features/finance/viewModel/financeDisplay'
 import type { HandoverItemStatus } from '@/features/term/model/handoverTypes'
 import { handoverItemStatusDisplay } from '@/features/term/viewModel/handoverDisplay'
+import type { ClubStatus } from '@/features/club/model/clubTypes'
+import { clubStatusDisplay } from '@/features/club/viewModel/clubStatusDisplay'
 import { formatDate } from '@/shared/format/formatDate'
 import { formatMoney } from '@/shared/format/formatMoney'
 import type { AuditLogEntry, AuditObjectType } from '../model/auditLogTypes'
@@ -42,6 +44,9 @@ const actionLabels: Record<string, string> = {
   LOCK_ACCOUNT: 'Khóa tài khoản',
   UNLOCK_ACCOUNT: 'Mở khóa tài khoản',
   SEND_PASSWORD_RESET: 'Gửi đặt lại mật khẩu',
+  CHANGE_CLUB_STATUS: 'Đổi trạng thái CLB',
+  EXPORT_MEMBERS: 'Xuất danh sách thành viên',
+  EXPORT_REPORT: 'Xuất báo cáo',
 }
 
 /** Thao tác chưa có nhãn thì hiện mã để không mất thông tin. */
@@ -56,6 +61,10 @@ const fieldLabels: Record<string, string> = {
   eventLead: 'Trưởng BTC giữ lại',
   movedPositions: 'Số chức vụ được dời',
   presidents: 'Chủ nhiệm',
+  rows: 'Số dòng',
+  filters: 'Bộ lọc',
+  report: 'Báo cáo',
+  format: 'Định dạng',
 }
 /** Trường kỹ thuật, không có ý nghĩa với người đọc. */
 const HIDDEN_FIELDS = new Set(['positionIds'])
@@ -69,6 +78,7 @@ function statusLabel(objectType: AuditObjectType, value: string): string {
   if (objectType === 'ATTENDANCE') return attendanceStatusDisplay[value as AttendanceStatus]?.label ?? value
   if (objectType === 'HANDOVER_ITEM') return handoverItemStatusDisplay[value as HandoverItemStatus]?.label ?? value
   if (objectType === 'TRANSFER_REQUEST') return transferStatusLabel[value] ?? value
+  if (objectType === 'CLUB') return clubStatusDisplay[value as ClubStatus]?.label ?? value
   return value
 }
 

@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { DOCUMENT_TAG_MAX_LENGTH, DOCUMENT_TAGS_MAX } from '@/shared/lib/documentRules'
+import { REASON_MAX, REASON_MIN } from '@/shared/lib/reasonRules'
 import type { DocumentScopeOption, DocumentVisibility, UploadDocumentRequest } from '../model/documentTypes'
 
 export { DOCUMENT_TAG_MAX_LENGTH, DOCUMENT_TAGS_MAX } from '@/shared/lib/documentRules'
@@ -50,3 +51,15 @@ export function toUploadRequest(values: DocumentFormValues): UploadDocumentReque
     visibility: values.visibility,
   }
 }
+
+/** FR-DOC-03: phiên bản mới cần tệp và ghi chú thay đổi. */
+export const versionFormSchema = z
+  .object({
+    file: z.instanceof(File).nullable(),
+    note: z.string().trim().min(REASON_MIN, `Ghi chú thay đổi cần ít nhất ${REASON_MIN} ký tự.`).max(REASON_MAX, `Ghi chú tối đa ${REASON_MAX} ký tự.`),
+  })
+  .superRefine((values, context) => {
+    if (values.file === null) context.addIssue({ code: 'custom', path: ['file'], message: 'Chọn tệp của phiên bản mới.' })
+  })
+
+export type VersionFormValues = z.infer<typeof versionFormSchema>

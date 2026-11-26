@@ -5,6 +5,7 @@ import { useCurrentClub } from '@/features/club/viewModel/clubContext'
 import { getErrorMessage } from '@/api/apiError'
 import { useClampPage } from '@/shared/hooks/useClampPage'
 import { useDebouncedValue } from '@/shared/hooks/useDebouncedValue'
+import { useFileDownload } from '@/shared/hooks/useFileDownload'
 import { memberRepository } from '../model/memberRepository'
 import type { MemberQuery, MemberRoleFilter } from '../model/memberTypes'
 import { memberQueryKeys } from './memberQueryKeys'
@@ -43,12 +44,17 @@ export function useMemberListViewModel() {
     setter(value)
     setPage(0)
   }
+  const exporter = useFileDownload('thanh-vien.xlsx')
   const activeCount = statuses.length + Number(Boolean(departmentId)) + Number(Boolean(role)) + Number(Boolean(joinYear))
 
   return {
     clubName: club.name,
     /** Ban chủ nhiệm thấy liên hệ, MSSV và tìm theo các trường đó; máy chủ quyết định (SRS 3.5). */
     canManage: club.allowedActions.includes('MANAGE_MEMBERS'),
+    /** FR-MEM-11: xuất Excel theo bộ lọc đang chọn (không theo trang). */
+    canExport: club.allowedActions.includes('EXPORT_MEMBERS'),
+    exportExcel: () => exporter.download(() => memberRepository.exportList(clubId, { ...query, page: undefined, size: undefined })),
+    exporting: exporter.pending,
     keyword,
     setKeyword: resetPage(setKeyword),
     statuses,

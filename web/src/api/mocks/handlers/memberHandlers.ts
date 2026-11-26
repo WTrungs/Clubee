@@ -22,7 +22,9 @@ import { DISPLAY_TITLE_MAX, INTERNAL_NOTE_MAX, STUDENT_ID_MESSAGE, STUDENT_ID_PA
 import { db, type DbBacklogItem, type DbInvitation, type DbMembership, type DbPosition } from '../db'
 import { can, forbidden } from '../mockAccess'
 import { backlogState } from '../mockBacklog'
-import { API, currentUser, matchesKeyword, networkDelay, newId, paginate, problem, writer } from '../mockHttp'
+import { API, currentUser, downloadResponse, matchesKeyword, networkDelay, newId, paginate, problem, writer } from '../mockHttp'
+import { audit } from '../mockAudit'
+import { dropEmptyColumns, exportFile } from '../mockExport'
 import { invitationIsFor, invitationStatus } from '../mockInvitations'
 import { canAccessClub, closeDepartmentStint, membershipOf, openDepartmentStint, personRef, recordMembershipChange, ROSTER_STATUSES, transferDepartment } from '../mockMembers'
 import { DEPARTMENT_ROLES, endPositions, isBoardMember, isPositionOpen, positionsIn, positionTitleOf, positionTitlesOf, presidentsCoverTerm, STANDING_ROLES } from '../mockPermissions'
@@ -297,6 +299,41 @@ function memberInfoInput(membership: DbMembership, body: Partial<UpdateMemberInf
   return { values, errors }
 }
 
+/** Thành viên khớp bộ lọc của danh sách (FR-MEM-04, FR-RPT-01); dùng chung cho xem và xuất. */
+function filteredMembers(viewerId: string, clubId: string, url: URL): DbMembership[] {
+  const requested = url.searchParams.getAll('status').filter((status): status is MemberStatus => LISTABLE.includes(status as MemberStatus))
+  const statuses = requested.length > 0 ? requested : ROSTER_STATUSES
+  const departmentId = url.searchParams.get('departmentId')
+  const joinYear = url.searchParams.get('joinYear')
+  const keyword = url.searchParams.get('q')
+  const board = isBoardMember(viewerId, clubId)
+  return db.memberships
+    .filter((membership) => membership.clubId === clubId && statuses.includes(membership.status) && wasMember(membership))
+    .filter((membership) => !departmentId || membership.departmentId === departmentId)
+    .filter((membership) => !joinYear || membership.joinedOn?.startsWith(joinYear))
+    .filter((membership) => matchesRole(membership, url.searchParams.get('role')))
+    .filter((membership) => {
+      const user = db.users.find((candidate) => candidate.id === membership.userId)
+      // Chỉ ban chủ nhiệm tìm được theo email, MSSV vì chỉ họ được xem các trường này.
+      const visible = `${user?.fullName ?? ''} ${membership.displayTitle ?? ''}`
+      const searchable = board ? `${visible} ${user?.email ?? ''} ${membership.studentId ?? ''}` : visible
+      return matchesKeyword(searchable, keyword)
+    })
+    .toSorted((a, b) => personRef(a.userId).fullName.localeCompare(personRef(b.userId).fullName, 'vi'))
+}
+
+/** Bộ lọc lúc xuất, ghi vào nhật ký cho dễ đọc. */
+function exportFilterText(url: URL): string {
+  const parts = [
+    ...url.searchParams.getAll('status').map((status) => statusLabel[status as MemberStatus] ?? status),
+    url.searchParams.get('departmentId') ? `ban ${db.departments.find((department) => department.id === url.searchParams.get('departmentId'))?.name ?? ''}` : null,
+    url.searchParams.get('role') ? `chức vụ ${url.searchParams.get('role')}` : null,
+    url.searchParams.get('joinYear') ? `vào năm ${url.searchParams.get('joinYear')}` : null,
+    url.searchParams.get('q') ? `từ khóa "${url.searchParams.get('q')}"` : null,
+  ].filter((part): part is string => Boolean(part))
+  return parts.length > 0 ? parts.join(', ') : 'Không lọc'
+}
+
 export const memberHandlers = [
   http.post(`${API}/clubs/:clubId/join-requests`, async ({ request, params }) => {
     await networkDelay()
@@ -308,6 +345,7 @@ export const memberHandlers = [
     if (current) {
       return problem(409, `Bạn đang có tư cách ${statusLabel[current.status]} ở CLB này; mỗi người chỉ có một tư cách đang hoạt động.`, 'ALREADY_MEMBER')
     }
+    if (club.status === 'DISSOLVED') return problem(422, 'CLB đã giải thể nên không nhận thành viên mới.', 'CLUB_DISSOLVED')
     const body = (await request.json()) as Partial<CreateJoinRequest>
     // FR-MEM-01: đi qua lời mời vẫn tạo yêu cầu Chờ duyệt, chỉ ghi lại lời mời đã dùng.
     let invitation: DbInvitation | undefined
@@ -396,27 +434,52 @@ export const memberHandlers = [
     const clubId = String(params.clubId)
     if (!canAccessClub(user.value.id, clubId)) return notMember()
     const url = new URL(request.url)
-    const requested = url.searchParams.getAll('status').filter((status): status is MemberStatus => LISTABLE.includes(status as MemberStatus))
-    const statuses = requested.length > 0 ? requested : ROSTER_STATUSES
-    const departmentId = url.searchParams.get('departmentId')
-    const joinYear = url.searchParams.get('joinYear')
-    const keyword = url.searchParams.get('q')
-    const board = isBoardMember(user.value.id, clubId)
-    const rows = db.memberships
-      .filter((membership) => membership.clubId === clubId && statuses.includes(membership.status) && wasMember(membership))
-      .filter((membership) => !departmentId || membership.departmentId === departmentId)
-      .filter((membership) => !joinYear || membership.joinedOn?.startsWith(joinYear))
-      .filter((membership) => matchesRole(membership, url.searchParams.get('role')))
-      .filter((membership) => {
-        const user = db.users.find((candidate) => candidate.id === membership.userId)
-        // Chỉ ban chủ nhiệm tìm được theo email, MSSV vì chỉ họ được xem các trường này.
-        const visible = `${user?.fullName ?? ''} ${membership.displayTitle ?? ''}`
-        const searchable = board ? `${visible} ${user?.email ?? ''} ${membership.studentId ?? ''}` : visible
-        return matchesKeyword(searchable, keyword)
-      })
-      .toSorted((a, b) => personRef(a.userId).fullName.localeCompare(personRef(b.userId).fullName, 'vi'))
-    const page = paginate(rows, url, 50)
+    const page = paginate(filteredMembers(user.value.id, clubId, url), url, 50)
     return HttpResponse.json({ ...page, content: page.content.map((membership) => toSummary(membership, user.value.id)) })
+  }),
+
+  // FR-MEM-11: xuất đúng bộ lọc đang xem, chỉ trường người xuất được xem (dựng từ toSummary), ghi nhật ký.
+  http.get(`${API}/clubs/:clubId/members/export`, async ({ request, params }) => {
+    await networkDelay()
+    const user = currentUser()
+    if (!user.ok) return user.response
+    const clubId = String(params.clubId)
+    if (!canAccessClub(user.value.id, clubId)) return notMember()
+    if (!isBoardMember(user.value.id, clubId)) return problem(403, 'Chỉ ban chủ nhiệm xuất được danh sách thành viên.', 'FORBIDDEN')
+    const url = new URL(request.url)
+    if (url.searchParams.get('format') !== 'xlsx') return problem(400, 'Danh sách thành viên xuất dạng Excel.', 'VALIDATION', [{ field: 'format', message: 'Chọn định dạng xlsx.' }])
+    const club = clubOf(clubId)
+    const members = filteredMembers(user.value.id, clubId, url).map((membership) => toSummary(membership, user.value.id))
+    const sheet = dropEmptyColumns({
+      name: 'Thành viên',
+      columns: [{ label: 'Họ tên' }, { label: 'Trạng thái' }, { label: 'Ban' }, { label: 'Chức vụ' }, { label: 'Ngày vào' }, { label: 'Email' }, { label: 'Số điện thoại' }, { label: 'MSSV' }],
+      rows: members.map((member) => [
+        member.person.fullName,
+        statusLabel[member.status],
+        member.department?.name ?? null,
+        member.positionTitles.join(', ') || null,
+        member.joinedOn ? formatDate(member.joinedOn) : null,
+        member.contact?.email ?? null,
+        member.contact?.phone ?? null,
+        member.studentId,
+      ]),
+    })
+    const file = await exportFile(
+      { title: `Danh sách thành viên ${club?.name ?? ''}`, subtitle: `${members.length} người · xuất ngày ${formatDate(vnToday())}`, fileBase: `thanh-vien-${(club?.shortName ?? clubId).toLowerCase()}`, sheets: [sheet] },
+      'xlsx',
+    )
+    audit({
+      actorId: user.value.id,
+      clubId,
+      action: 'EXPORT_MEMBERS',
+      objectType: 'CLUB',
+      objectId: clubId,
+      objectLabel: club?.name ?? clubId,
+      before: null,
+      after: { rows: members.length, filters: exportFilterText(url) },
+      reason: null,
+    })
+    return downloadResponse(file.blob, file.fileName, file.contentType)
   }),
 
   http.get(`${API}/clubs/:clubId/members/:membershipId`, async ({ params }) => {

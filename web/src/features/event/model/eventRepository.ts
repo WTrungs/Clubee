@@ -1,4 +1,5 @@
 import { httpClient } from '@/api/httpClient'
+import type { ExportFormat } from '@/shared/lib/exportFormat'
 import type { Page } from '@/api/pagination'
 import type {
   CoHost,
@@ -10,13 +11,19 @@ import type {
   EventQuery,
   EventSummary,
   EventTransitionRequest,
+  GuestRegistrationRow,
+  InviteCandidate,
   InviteCoHostRequest,
   MyRegistration,
+  PendingStaffSignup,
   Registration,
   RemoveCoHostRequest,
   RescheduleEventRequest,
   SetSubcommitteeLeadRequest,
   SharedEvent,
+  StaffSignupInfo,
+  StaffSignupRequest,
+  StaffSignupSetting,
   StaffCandidate,
   Subcommittee,
 } from './eventTypes'
@@ -38,6 +45,7 @@ export const eventRepository = {
 
   /** FR-RPT-05: báo cáo sự kiện thay cho tiến độ (FR-EVT-09 nằm trong phần công việc). */
   report: (clubId: string, eventId: string) => httpClient.get<EventReport>(`${event(clubId, eventId)}/report`),
+  exportReport: (clubId: string, eventId: string, format: ExportFormat) => httpClient.download(`${event(clubId, eventId)}/report/export`, { query: { format } }),
   subcommittees: (clubId: string, eventId: string) => httpClient.get<Subcommittee[]>(`${event(clubId, eventId)}/subcommittees`),
   createSubcommittee: (clubId: string, eventId: string, request: CreateSubcommitteeRequest) =>
     httpClient.post<Subcommittee>(`${event(clubId, eventId)}/subcommittees`, request),
@@ -49,7 +57,7 @@ export const eventRepository = {
   setSubcommitteeLead: (clubId: string, eventId: string, subcommitteeId: string, request: SetSubcommitteeLeadRequest) =>
     httpClient.put<Subcommittee>(`${subcommittee(clubId, eventId, subcommitteeId)}/lead`, request),
   staffCandidates: (clubId: string, eventId: string, q: string, coHostId: string | null = null) =>
-    httpClient.get<StaffCandidate[]>(`${event(clubId, eventId)}/staff-candidates`, { query: { q, coHostId: coHostId ?? undefined } }),
+    httpClient.get<InviteCandidate[]>(`${event(clubId, eventId)}/staff-candidates`, { query: { q, coHostId: coHostId ?? undefined } }),
 
   coHosts: (clubId: string, eventId: string) => httpClient.get<CoHost[]>(`${event(clubId, eventId)}/co-hosts`),
   inviteCoHost: (clubId: string, eventId: string, request: InviteCoHostRequest) => httpClient.post<CoHost>(`${event(clubId, eventId)}/co-hosts`, request),
@@ -69,4 +77,18 @@ export const eventRepository = {
   /** FR-EVT-14: xác nhận vẫn tham dự sau khi sự kiện dời giờ. */
   reconfirmRegistration: (clubId: string, eventId: string, registrationId: string) =>
     httpClient.post<MyRegistration>(`${event(clubId, eventId)}/registrations/${encodeURIComponent(registrationId)}/reconfirmation`),
+  /** FR-EVT-12, FR-ATT-07: BTC tra khách mời theo mã, email, SĐT và ghi có mặt theo ngày. */
+  guestRegistrations: (clubId: string, eventId: string, query: { q?: string; day?: string | null }) =>
+    httpClient.get<GuestRegistrationRow[]>(`${event(clubId, eventId)}/guest-registrations`, { query: { q: query.q, day: query.day ?? undefined } }),
+  checkInGuest: (clubId: string, eventId: string, registrationId: string, day: string | null) =>
+    httpClient.post<GuestRegistrationRow>(`${event(clubId, eventId)}/guest-registrations/${encodeURIComponent(registrationId)}/check-ins`, { day }),
+  /** FR-EVT-06: BTC mở, đóng đăng ký nhân sự; thành viên tự vào tiểu ban, đủ chỉ tiêu thì gửi yêu cầu cho Trưởng BTC. */
+  setStaffSignup: (clubId: string, eventId: string, setting: StaffSignupSetting) => httpClient.put<StaffSignupSetting>(`${event(clubId, eventId)}/staff-signup`, setting),
+  staffSignup: (clubId: string, eventId: string) => httpClient.get<StaffSignupInfo>(`${event(clubId, eventId)}/staff-signup`),
+  signUpStaff: (clubId: string, eventId: string, request: StaffSignupRequest) => httpClient.post<StaffSignupInfo>(`${event(clubId, eventId)}/staff-signups`, request),
+  staffSignupRequests: (clubId: string, eventId: string) => httpClient.get<PendingStaffSignup[]>(`${event(clubId, eventId)}/staff-signup-requests`),
+  approveStaffSignup: (clubId: string, eventId: string, requestId: string) =>
+    httpClient.post<PendingStaffSignup>(`${event(clubId, eventId)}/staff-signup-requests/${encodeURIComponent(requestId)}/approval`),
+  rejectStaffSignup: (clubId: string, eventId: string, requestId: string, reason: string) =>
+    httpClient.post<PendingStaffSignup>(`${event(clubId, eventId)}/staff-signup-requests/${encodeURIComponent(requestId)}/rejection`, { reason }),
 }

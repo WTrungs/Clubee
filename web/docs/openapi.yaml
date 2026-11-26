@@ -113,7 +113,9 @@ paths:
       tags: [ACC]
       operationId: requestPasswordReset
       summary: Quên mật khẩu (FR-ACC-03)
-      description: Trả 202 với mọi email để không lộ email nào đã đăng ký. Liên kết dùng một lần, hết hạn sau 30 phút (SRS 9.2).
+      description: |
+        Trả 202 với mọi email để không lộ email nào đã đăng ký. Chỉ tài khoản Hoạt động được gửi liên kết (IF-03).
+        Liên kết dùng một lần, hết hạn sau 30 phút (SRS 9.2); liên kết mới làm liên kết chưa dùng trước đó mất hiệu lực.
       security:
         - csrfHeader: []
       requestBody:
@@ -125,6 +127,56 @@ paths:
         '202':
           description: Đã nhận yêu cầu.
         '403': { $ref: '#/components/responses/Forbidden' }
+  /auth/password-resets/{token}:
+    get:
+      tags: [ACC]
+      operationId: getPasswordResetLink
+      summary: Kiểm liên kết đặt lại mật khẩu (FR-ACC-03)
+      description: |
+        Không cần đăng nhập. Hết hạn hoặc đã dùng (kể cả đã có liên kết mới hơn) vẫn trả 200 kèm `status` để trang nêu lý do.
+        Email đã che bớt. Lỗi: 404 `RESET_LINK_NOT_FOUND`.
+      security: []
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Trạng thái liên kết.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PasswordResetLink' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /auth/password-resets/{token}/completion:
+    post:
+      tags: [ACC]
+      operationId: completePasswordReset
+      summary: Đặt mật khẩu mới qua liên kết (FR-ACC-03)
+      description: |
+        Không cần đăng nhập. Thành công thì liên kết thành đã dùng, các liên kết khác của tài khoản mất hiệu lực và mọi phiên
+        của tài khoản bị thu hồi (NFR-SEC-01).
+        Lỗi theo thứ tự: 403 `CSRF`; 404 `RESET_LINK_NOT_FOUND`; 422 `RESET_LINK_USED`, `RESET_LINK_EXPIRED`, `ACCOUNT_LOCKED`;
+        400 `VALIDATION` (`newPassword` 8–72 ký tự).
+      security:
+        - csrfHeader: []
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CompletePasswordResetRequest' }
+      responses:
+        '204':
+          description: Đã đặt mật khẩu mới.
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
   /me:
     get:
       tags: [ACC]
@@ -223,7 +275,7 @@ paths:
       operationId: sendPasswordResetLink
       summary: Gửi lại liên kết đặt mật khẩu (FR-ACC-09)
       description: |
-        Chỉ tài khoản Admin, chỉ tài khoản Hoạt động. Máy chủ gửi thư (IF-03) và ghi nhật ký.
+        Chỉ tài khoản Admin, chỉ tài khoản Hoạt động. Tạo liên kết như Quên mật khẩu (FR-ACC-03), máy chủ gửi thư (IF-03) và ghi nhật ký.
         Lỗi: 403 `ADMIN_ONLY`; 404 `ACCOUNT_NOT_FOUND`; 422 `ACCOUNT_LOCKED`, `INVALID_TRANSITION` (chưa xác thực).
       security:
         - sessionCookie: []
@@ -446,6 +498,22 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+  /me/sent-announcements:
+    get:
+      tags: [NOT]
+      operationId: listSentAnnouncements
+      summary: Thông báo tôi đã gửi (FR-NOT-05)
+      description: Thông báo gửi tay của người gọi ở các CLB còn là thành viên, mới nhất trước, kèm số người nhận và đã đọc.
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200':
+          description: Trang thông báo đã gửi.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SentAnnouncementPage' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
   /me/notifications:
     get:
       tags: [NOT]
@@ -543,6 +611,198 @@ paths:
           description: Đã đánh dấu.
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+  /public/clubs:
+    get:
+      tags: [CLB]
+      operationId: listPublicClubs
+      summary: Danh bạ CLB công khai (FR-CLB-05)
+      description: |
+        Không cần đăng nhập (BE cấu hình `permitAll` cho `/api/v1/public/**`). CLB Hoạt động, xếp theo tên; `q` tìm theo tên
+        hoặc tên viết tắt, `field` lọc đúng lĩnh vực. Chỉ thông tin công khai (SRS 3.5) và số đợt tuyển đang nhận đơn.
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/Q'
+        - name: field
+          in: query
+          schema: { type: string }
+        - $ref: '#/components/parameters/Page'
+        - name: size
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 12 }
+      responses:
+        '200':
+          description: Trang CLB.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PublicClubPage' }
+  /public/club-fields:
+    get:
+      tags: [CLB]
+      operationId: listPublicClubFields
+      summary: Các lĩnh vực của CLB đang hoạt động (FR-CLB-05)
+      description: Không cần đăng nhập. Dùng cho ô lọc lĩnh vực của danh bạ công khai.
+      security: []
+      responses:
+        '200':
+          description: Lĩnh vực, xếp theo tên.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { type: string }
+  /public/clubs/{clubId}:
+    get:
+      tags: [CLB]
+      operationId: getPublicClub
+      summary: Trang công khai của CLB (FR-CLB-05)
+      description: |
+        Không cần đăng nhập. Thông tin công khai (SRS 3.5) và các đợt tuyển đang nhận đơn; không có sĩ số, nội quy, cơ cấu,
+        người giữ chức vụ. FR-CLB-07: thêm 6 tin đã xuất bản mới nhất và các sự kiện mở cho khách đang nhận đăng ký.
+        Lỗi: 404 `CLUB_NOT_FOUND` (không có hoặc không hoạt động).
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+      responses:
+        '200':
+          description: Thông tin công khai của CLB.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PublicClubProfile' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /public/clubs/{clubId}/news:
+    get:
+      tags: [CLB]
+      operationId: listPublicNews
+      summary: Tin đã xuất bản của CLB trên trang công khai (FR-CLB-07)
+      description: Không cần đăng nhập. Mới nhất trước, 12 tin một trang; không ghi người viết. Lỗi 404 `CLUB_NOT_FOUND`.
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - $ref: '#/components/parameters/Page'
+      responses:
+        '200':
+          description: Trang tin.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PublicNewsPage' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /public/clubs/{clubId}/news/{newsId}:
+    get:
+      tags: [CLB]
+      operationId: getPublicNews
+      summary: Một tin đã xuất bản (FR-CLB-07)
+      description: Không cần đăng nhập. Tin Nháp, Đã ẩn trả 404 `NEWS_NOT_FOUND`; CLB không hoạt động trả 404 `CLUB_NOT_FOUND`.
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - name: newsId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Tin.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PublicNewsDetail' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /public/events/{eventId}:
+    get:
+      tags: [EVT]
+      operationId: getPublicEvent
+      summary: Trang công khai của sự kiện mở cho khách (FR-CLB-07, FR-EVT-12)
+      description: |
+        Không cần đăng nhập. Chỉ sự kiện mở cho khách đang Mở đăng ký hoặc Đang diễn ra, của CLB còn Hoạt động; không có BTC,
+        quỹ, danh sách người đăng ký. Lỗi 404 `EVENT_NOT_FOUND`.
+      security: []
+      parameters:
+        - name: eventId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Thông tin công khai của sự kiện.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PublicEventDetail' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /public/events/{eventId}/guest-registrations:
+    post:
+      tags: [EVT]
+      operationId: registerGuest
+      summary: Khách mời đăng ký sự kiện mở cho khách (FR-EVT-12)
+      description: |
+        Không cần đăng nhập, vẫn cần token CSRF. Họ tên 2–100 ký tự và ít nhất một trong email, SĐT. Dùng chung số chỗ với thành viên:
+        còn chỗ thì Nhận chỗ, hết chỗ vào danh sách chờ (BR-EVT-03). Gửi mã tham dự dạng QR qua email nếu có email.
+        Lỗi: 403 `CSRF`; 404 `EVENT_NOT_FOUND`; 409 `ALREADY_REGISTERED` (email hoặc SĐT đã có đăng ký còn hiệu lực, BR-EVT-04);
+        422 `REGISTRATION_CLOSED` (BR-EVT-02); 400 `VALIDATION`.
+      security:
+        - csrfHeader: []
+      parameters:
+        - name: eventId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/GuestRegistrationRequest' }
+      responses:
+        '201':
+          description: Vé của khách vừa đăng ký.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/GuestPass' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+  /public/guest-passes/{code}:
+    get:
+      tags: [EVT]
+      operationId: getGuestPass
+      summary: Vé của khách mời theo mã tham dự (FR-EVT-12)
+      description: Không cần đăng nhập; liên hệ của khách đã che bớt. Lỗi 404 `GUEST_PASS_NOT_FOUND`.
+      security: []
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Vé.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/GuestPass' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /public/guest-passes/{code}/cancellation:
+    post:
+      tags: [EVT]
+      operationId: cancelGuestPass
+      summary: Khách mời tự hủy đăng ký (FR-EVT-12)
+      description: |
+        Tới trước giờ bắt đầu. Chỗ trống được đôn cho người đầu danh sách chờ (FR-EVT-13).
+        Lỗi: 403 `CSRF`; 404 `GUEST_PASS_NOT_FOUND`; 422 `REGISTRATION_CANCELLED`, `REGISTRATION_LOCKED`.
+      security:
+        - csrfHeader: []
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Vé sau khi hủy.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/GuestPass' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
   /clubs:
     get:
       tags: [CLB]
@@ -912,6 +1172,40 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+  /clubs/{clubId}/transitions:
+    post:
+      tags: [CLB]
+      operationId: transitionClub
+      summary: Tạm ngừng, cho hoạt động lại, giải thể CLB (FR-CLB-04)
+      description: |
+        Chỉ ban chủ nhiệm. ST-CLB: Hoạt động ↔ Tạm ngừng; Hoạt động, Tạm ngừng → Giải thể. Lý do 5–500 ký tự. Tăng `version`,
+        ghi nhật ký `CHANGE_CLUB_STATUS`, báo mọi thành viên. Tạm ngừng: không tạo buổi sinh hoạt, sự kiện, đợt tuyển mới
+        (422 `CLUB_SUSPENDED`). Giải thể: từ chối yêu cầu gia nhập đang chờ, đợt tuyển thôi nhận đơn; mọi lệnh ghi khác của
+        CLB trả 422 `CLUB_DISSOLVED`, `allowedActions` chỉ còn hành động xem.
+        Lỗi: 403 `NOT_A_MEMBER`, `FORBIDDEN`; 404 `CLUB_NOT_FOUND`; 409 `VERSION_CONFLICT`; 422 `INVALID_TRANSITION`,
+        `CLUB_HAS_OPEN_EVENTS` (còn sự kiện chưa Đã đóng, hoặc Đã hủy mà quỹ chưa quyết toán), `CLUB_DISSOLVED`; 400 `VALIDATION`.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ClubTransitionRequest' }
+      responses:
+        '200':
+          description: CLB sau khi đổi trạng thái.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ClubDetail' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
   /clubs/{clubId}/announcement-audiences:
     get:
       tags: [NOT]
@@ -932,6 +1226,65 @@ paths:
               schema:
                 type: array
                 items: { $ref: '#/components/schemas/AnnouncementAudience' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /clubs/{clubId}/announcements/{announcementId}/receipts:
+    get:
+      tags: [NOT]
+      operationId: listAnnouncementReceipts
+      summary: Ai đã đọc, ai chưa (FR-NOT-05)
+      description: Chỉ người gửi, khi còn là thành viên CLB. `read` lọc đã đọc hoặc chưa đọc. Lỗi 404 `NOTIFICATION_NOT_FOUND`; 403 `FORBIDDEN`.
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - name: announcementId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: read
+          in: query
+          schema: { type: boolean }
+        - $ref: '#/components/parameters/Page'
+      responses:
+        '200':
+          description: Người nhận.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AnnouncementReceiptPage' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /clubs/{clubId}/announcements/{announcementId}/pin:
+    put:
+      tags: [NOT]
+      operationId: pinAnnouncement
+      summary: Ghim, bỏ ghim thông báo (FR-NOT-05)
+      description: Chỉ người gửi. Tin ghim đứng đầu hộp thư người nhận. Lỗi 404; 403 `FORBIDDEN`; 400 `VALIDATION`.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - name: announcementId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [pinned]
+              properties:
+                pinned: { type: boolean }
+      responses:
+        '200':
+          description: Thông báo sau khi đổi.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SentAnnouncement' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -1132,6 +1485,50 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+  /clubs/{clubId}/members/export:
+    get:
+      tags: [MEM]
+      operationId: exportMembers
+      summary: Xuất danh sách thành viên ra Excel (FR-MEM-11)
+      description: |
+        Chỉ ban chủ nhiệm (`EXPORT_MEMBERS`). Cùng bộ lọc với danh sách, không phân trang. Tệp chỉ có trường người xuất được xem
+        (dựng từ cùng dữ liệu với `MemberSummary`; cột trống ở mọi dòng bị bỏ). Ghi nhật ký `EXPORT_MEMBERS` (số dòng, bộ lọc; BR-DATA-03).
+        Lỗi 403 `NOT_A_MEMBER`, `FORBIDDEN`; 400 `VALIDATION` (`format` khác `xlsx`).
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - name: format
+          in: query
+          schema: { type: string, enum: [xlsx] }
+        - $ref: '#/components/parameters/Q'
+        - name: status
+          in: query
+          description: Lặp lại tham số để lọc nhiều trạng thái.
+          schema:
+            type: array
+            items:
+              type: string
+              enum: [PROBATION, ACTIVE, ON_LEAVE, LEFT]
+          style: form
+          explode: true
+        - name: departmentId
+          in: query
+          description: Ban chính.
+          schema: { type: string }
+        - name: role
+          in: query
+          schema: { $ref: '#/components/schemas/MemberRoleFilter' }
+        - name: joinYear
+          in: query
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Tệp Excel; tên tệp ở `Content-Disposition`.
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema: { type: string, format: binary }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
   /clubs/{clubId}/members/facets:
     get:
       tags: [MEM]
@@ -2544,14 +2941,116 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
         '422': { $ref: '#/components/responses/UnprocessableEntity' }
+  /clubs/{clubId}/tasks/{taskId}/comments:
+    get:
+      tags: [TASK]
+      operationId: listTaskComments
+      summary: Bình luận của công việc (FR-TASK-07)
+      description: |
+        Ai xem được việc thì đọc được, cũ trước. Bình luận đã ẩn không trả `body`, tệp; chỉ ghi ai ẩn, lúc nào.
+        `canComment`: người giao, người chính, người phối hợp khi việc chưa hủy và sự kiện chưa khóa.
+        Lỗi 404 `TASK_NOT_FOUND`; 403 `FORBIDDEN`.
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - $ref: '#/components/parameters/TaskId'
+      responses:
+        '200':
+          description: Bình luận.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TaskCommentList' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [TASK]
+      operationId: createTaskComment
+      summary: Viết bình luận kèm tệp (FR-TASK-07)
+      description: |
+        Người giao, người chính, người phối hợp. Nội dung 1–2000 ký tự; tối đa 5 tệp do chính người viết vừa tải lên. Báo những người
+        còn lại (loại TASK). Lỗi: 404; 403 `FORBIDDEN`; 422 `TASK_CANCELLED`, `EVENT_READ_ONLY`; 400 `VALIDATION`.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - $ref: '#/components/parameters/TaskId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateTaskCommentRequest' }
+      responses:
+        '201':
+          description: Bình luận vừa viết.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TaskComment' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+  /clubs/{clubId}/tasks/{taskId}/comments/{commentId}/hiding:
+    post:
+      tags: [TASK]
+      operationId: hideTaskComment
+      summary: Ẩn bình luận (FR-TASK-07)
+      description: |
+        Người viết hoặc người giao việc; không xóa (BR-DATA-01). Lỗi: 404 `COMMENT_NOT_FOUND`; 403 `FORBIDDEN`;
+        422 `COMMENT_HIDDEN`, `EVENT_READ_ONLY`.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - $ref: '#/components/parameters/TaskId'
+        - name: commentId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Bình luận sau khi ẩn.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TaskComment' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+  /clubs/{clubId}/tasks/{taskId}/attachments/{attachmentId}/file:
+    get:
+      tags: [TASK]
+      operationId: downloadTaskAttachment
+      summary: Tải tệp của kết quả đã nộp hoặc bình luận (FR-TASK-03, 07)
+      description: |
+        Ai xem được việc thì tải được; quyền kiểm lại mỗi lần. Tệp của bình luận đã ẩn coi như không có.
+        Lỗi 404 `TASK_NOT_FOUND`, `FILE_NOT_FOUND`; 403 `FORBIDDEN`.
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - $ref: '#/components/parameters/TaskId'
+        - name: attachmentId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Nội dung tệp.
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
   /clubs/{clubId}/tasks/{taskId}/attachments:
     post:
       tags: [TASK]
       operationId: uploadTaskAttachment
       summary: Đính kèm tệp cho công việc (FR-TASK-03)
       description: |
-        Chỉ người chính và người phối hợp. Trường `file`: JPG, PNG, PDF, DOCX, XLSX, PPTX, tối đa 15 MB (IF-05).
-        Trả `FileRef` để gửi kèm `attachmentIds` khi nộp kết quả.
+        Người giao, người chính, người phối hợp. Trường `file`: JPG, PNG, PDF, DOCX, XLSX, PPTX, tối đa 15 MB (IF-05).
+        Trả `FileRef` để gửi kèm `attachmentIds` khi nộp kết quả hoặc viết bình luận (FR-TASK-07).
         Lỗi: 400 `VALIDATION` (thiếu tệp), `INVALID_FILE`; 403 `FORBIDDEN`; 404 `TASK_NOT_FOUND`;
         422 `EVENT_READ_ONLY` (việc của tiểu ban thuộc sự kiện Đã đóng hoặc Đã hủy, FR-EVT-16).
       security:
@@ -2844,6 +3343,215 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+  /clubs/{clubId}/events/{eventId}/report/export:
+    get:
+      tags: [RPT]
+      operationId: exportEventReport
+      summary: Xuất báo cáo sự kiện (FR-RPT-07)
+      description: |
+        Cùng quyền với báo cáo sự kiện; thống kê nhân sự chỉ có khi người xuất được xem (Trưởng BTC, ban chủ nhiệm CLB chủ trì) và khi đó
+        ghi nhật ký `EXPORT_REPORT`. Quỹ sự kiện chỉ có khi người xuất xem được quỹ.
+      parameters:
+        - name: format
+          in: query
+          schema: { type: string, enum: [xlsx, pdf] }
+        - $ref: '#/components/parameters/ClubId'
+        - $ref: '#/components/parameters/EventId'
+      responses:
+        '200':
+          description: Tệp báo cáo; tên tệp ở `Content-Disposition`.
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema: { type: string, format: binary }
+            application/pdf:
+              schema: { type: string, format: binary }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /clubs/{clubId}/events/{eventId}/staff-signup:
+    get:
+      tags: [EVT]
+      operationId: getStaffSignup
+      summary: Đăng ký nhân sự của sự kiện cho thành viên (FR-EVT-06)
+      description: |
+        Thành viên CLB chủ trì: BTC có đang mở đăng ký không, các tiểu ban với chỉ tiêu và số người, tiểu ban của tôi, yêu cầu gần nhất.
+        Lỗi 404 `EVENT_NOT_FOUND` (cả khi không phải thành viên CLB chủ trì).
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - name: eventId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Thông tin đăng ký nhân sự.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StaffSignupInfo' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [EVT]
+      operationId: setStaffSignup
+      summary: Mở, đóng đăng ký nhân sự (FR-EVT-06)
+      description: |
+        Người có quyền quản lý nhân sự ở cả sự kiện (Trưởng BTC, ban chủ nhiệm). Đổi trạng thái thì tăng `version` của sự kiện.
+        Lỗi: 404; 403 `FORBIDDEN`; 409 `VERSION_CONFLICT`; 422 `EVENT_READ_ONLY`; 400 `VALIDATION`.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - name: eventId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/StaffSignupSetting' }
+      responses:
+        '200':
+          description: Trạng thái mới.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StaffSignupSetting' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+  /clubs/{clubId}/events/{eventId}/staff-signups:
+    post:
+      tags: [EVT]
+      operationId: signUpStaff
+      summary: Thành viên tự vào tiểu ban (FR-EVT-06, BR-EVT-07)
+      description: |
+        Thành viên Thử việc, Chính thức của CLB chủ trì khi BTC đang mở. Tiểu ban còn chỗ thì vào ngay; đủ chỉ tiêu thì bắt buộc `note`
+        5–500 ký tự và tạo yêu cầu chờ Trưởng BTC duyệt. Báo Trưởng BTC.
+        Lỗi: 404; 403 `FORBIDDEN`; 409 `ALREADY_STAFF`, `REQUEST_PENDING`; 422 `SIGNUP_CLOSED`; 400 `VALIDATION`.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - name: eventId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/StaffSignupRequest' }
+      responses:
+        '201':
+          description: Thông tin đăng ký nhân sự sau khi gửi.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StaffSignupInfo' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+  /clubs/{clubId}/events/{eventId}/staff-signup-requests:
+    get:
+      tags: [EVT]
+      operationId: listStaffSignupRequests
+      summary: Yêu cầu vượt chỉ tiêu chờ duyệt (FR-EVT-06)
+      description: Chỉ Trưởng BTC. Lỗi 404; 403 `FORBIDDEN`.
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - name: eventId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Yêu cầu đang chờ.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/PendingStaffSignup' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /clubs/{clubId}/events/{eventId}/staff-signup-requests/{requestId}/approval:
+    post:
+      tags: [EVT]
+      operationId: approveStaffSignup
+      summary: Trưởng BTC nhận vào tiểu ban vượt chỉ tiêu (BR-EVT-07)
+      description: |
+        Nhân sự mới được đánh dấu `overQuota` để ghi nhận ngoại lệ; báo người gửi.
+        Lỗi: 404; 403 `FORBIDDEN`; 422 `REQUEST_DECIDED`, `ALREADY_STAFF`, `NOT_ELIGIBLE`.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - name: eventId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: requestId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Yêu cầu sau khi duyệt.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PendingStaffSignup' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+  /clubs/{clubId}/events/{eventId}/staff-signup-requests/{requestId}/rejection:
+    post:
+      tags: [EVT]
+      operationId: rejectStaffSignup
+      summary: Trưởng BTC từ chối yêu cầu vượt chỉ tiêu (FR-EVT-06)
+      description: Lý do 5–500 ký tự, báo người gửi. Lỗi 404; 403 `FORBIDDEN`; 422 `REQUEST_DECIDED`; 400 `VALIDATION`.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - name: eventId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: requestId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: { type: string, minLength: 5, maxLength: 500 }
+      responses:
+        '200':
+          description: Yêu cầu sau khi từ chối.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PendingStaffSignup' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
   /clubs/{clubId}/events/{eventId}/subcommittees:
     get:
       tags: [EVT]
@@ -2920,7 +3628,7 @@ paths:
             application/json:
               schema:
                 type: array
-                items: { $ref: '#/components/schemas/StaffCandidate' }
+                items: { $ref: '#/components/schemas/InviteCandidate' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -3185,6 +3893,79 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+  /clubs/{clubId}/events/{eventId}/guest-registrations:
+    get:
+      tags: [ATT]
+      operationId: listGuestRegistrations
+      summary: Tra khách mời của sự kiện (FR-EVT-12, FR-ATT-07)
+      description: |
+        Người xem được điểm danh sự kiện. `q` khớp trọn mã tham dự, email hoặc SĐT, hoặc một phần họ tên; liên hệ đã che bớt.
+        `day` là ngày của sự kiện để biết đã ghi có mặt chưa (mặc định ngày đầu).
+        Lỗi: 404 `EVENT_NOT_FOUND`; 403 `FORBIDDEN`; 422 `ATTENDANCE_UNAVAILABLE`.
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - name: eventId
+          in: path
+          required: true
+          schema: { type: string }
+        - $ref: '#/components/parameters/Q'
+        - name: day
+          in: query
+          schema: { type: string, format: date }
+      responses:
+        '200':
+          description: Khách mời còn đăng ký.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/GuestRegistrationRow' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+  /clubs/{clubId}/events/{eventId}/guest-registrations/{registrationId}/check-ins:
+    post:
+      tags: [ATT]
+      operationId: checkInGuest
+      summary: Ghi khách mời có mặt một ngày của sự kiện (FR-ATT-07)
+      description: |
+        Nhân sự BTC đang hoạt động, Trưởng BTC, ban chủ nhiệm. Theo khung giờ và trạng thái chốt của bảng điểm danh ngày đó.
+        Lỗi: 404 `GUEST_NOT_FOUND`; 403 `FORBIDDEN`; 422 `ATTENDANCE_NOT_OPEN`, `ATTENDANCE_CLOSED`, `EVENT_READ_ONLY`,
+        `GUEST_NOT_SEATED`, `ALREADY_CHECKED_IN`; 400 `VALIDATION` (ngày không thuộc sự kiện).
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - name: eventId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: registrationId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [day]
+              properties:
+                day: { type: string, format: date }
+      responses:
+        '200':
+          description: Dòng khách mời sau khi ghi.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/GuestRegistrationRow' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
         '422': { $ref: '#/components/responses/UnprocessableEntity' }
   /clubs/{clubId}/events/{eventId}/registrations:
     get:
@@ -3920,6 +4701,224 @@ paths:
                 items: { $ref: '#/components/schemas/JudgeCandidate' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+  /clubs/{clubId}/news:
+    get:
+      tags: [CLB]
+      operationId: listNews
+      summary: Tin tức của CLB (FR-CLB-06)
+      description: |
+        Thành viên chỉ thấy tin Đã xuất bản; ban chủ nhiệm thấy cả Nháp, Đã ẩn và lọc được bằng `status`. `q` tìm theo tiêu đề.
+        Mới nhất trước (tin đã xuất bản theo lúc xuất bản, nháp theo lúc sửa), 12 tin một trang. Lỗi 403 `NOT_A_MEMBER`.
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - $ref: '#/components/parameters/Q'
+        - name: status
+          in: query
+          description: Chỉ có tác dụng với ban chủ nhiệm.
+          schema: { $ref: '#/components/schemas/NewsStatus' }
+        - $ref: '#/components/parameters/Page'
+      responses:
+        '200':
+          description: Trang tin.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NewsPage' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [CLB]
+      operationId: createNews
+      summary: Viết tin mới, lưu thành Nháp (FR-CLB-06)
+      description: |
+        Chỉ ban chủ nhiệm. Tiêu đề 5–150, nội dung 20–10.000 ký tự, chữ thuần (không phải HTML).
+        Lỗi: 403 `NOT_A_MEMBER`, `FORBIDDEN`; 422 `CLUB_DISSOLVED`; 400 `VALIDATION`.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/NewsRequest' }
+      responses:
+        '201':
+          description: Tin vừa tạo.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NewsDetail' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+  /clubs/{clubId}/news/{newsId}:
+    get:
+      tags: [CLB]
+      operationId: getNews
+      summary: Chi tiết tin (FR-CLB-06)
+      description: Tin Nháp, Đã ẩn chỉ ban chủ nhiệm xem; người khác nhận 404 `NEWS_NOT_FOUND`. Lỗi 403 `NOT_A_MEMBER`.
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - name: newsId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Tin.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NewsDetail' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [CLB]
+      operationId: updateNews
+      summary: Sửa tin (FR-CLB-06)
+      description: |
+        Chỉ ban chủ nhiệm, ở mọi trạng thái. Tăng `version`.
+        Lỗi: 404 `NEWS_NOT_FOUND`; 403 `NOT_A_MEMBER`, `FORBIDDEN`; 409 `VERSION_CONFLICT`; 422 `CLUB_DISSOLVED`; 400 `VALIDATION`.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - name: newsId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateNewsRequest' }
+      responses:
+        '200':
+          description: Tin sau khi sửa.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NewsDetail' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+  /clubs/{clubId}/news/{newsId}/image:
+    post:
+      tags: [CLB]
+      operationId: uploadNewsImage
+      summary: Đặt ảnh bìa cho tin (FR-CLB-06)
+      description: |
+        Chỉ ban chủ nhiệm. Trường `file`: JPG, PNG, tối đa 15 MB (IF-05). Tăng `version`.
+        Lỗi: 404 `NEWS_NOT_FOUND`; 403 `NOT_A_MEMBER`, `FORBIDDEN`; 400 `VALIDATION`, `INVALID_FILE`.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - name: newsId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  contentMediaType: application/octet-stream
+      responses:
+        '200':
+          description: Tin với ảnh bìa mới.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NewsDetail' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+  /clubs/{clubId}/news/{newsId}/publication:
+    post:
+      tags: [CLB]
+      operationId: publishNews
+      summary: Xuất bản hoặc hiện lại tin (FR-CLB-06)
+      description: |
+        Nháp hoặc Đã ẩn → Đã xuất bản. Chỉ ban chủ nhiệm. Lần xuất bản đầu ghi `publishedAt`.
+        Lỗi: 404; 403 `FORBIDDEN`; 409 `VERSION_CONFLICT`; 422 `NEWS_ALREADY_PUBLISHED`, `CLUB_DISSOLVED`.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - name: newsId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [version]
+              properties:
+                version: { type: integer }
+      responses:
+        '200':
+          description: Tin đã xuất bản.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NewsDetail' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+  /clubs/{clubId}/news/{newsId}/hiding:
+    post:
+      tags: [CLB]
+      operationId: hideNews
+      summary: Ẩn tin đang xuất bản (FR-CLB-06)
+      description: |
+        Đã xuất bản → Đã ẩn; không xóa (BR-DATA-01). Chỉ ban chủ nhiệm.
+        Lỗi: 404; 403 `FORBIDDEN`; 409 `VERSION_CONFLICT`; 422 `NEWS_NOT_PUBLISHED`, `CLUB_DISSOLVED`.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - name: newsId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [version]
+              properties:
+                version: { type: integer }
+      responses:
+        '200':
+          description: Tin đã ẩn.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NewsDetail' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
   /clubs/{clubId}/documents:
     get:
       tags: [DOC]
@@ -3927,10 +4926,16 @@ paths:
       summary: Tìm tài liệu (FR-DOC-02)
       description: |
         Chỉ trả tài liệu người gọi được xem: `CLUB` mọi thành viên; `OWNER` thành viên có ban chính là ban sở hữu, hoặc BTC sự kiện sở hữu;
-        ban chủ nhiệm xem mọi tài liệu. `q` tìm theo tên, tên tệp, nhãn. Mới tải lên trước, 50 dòng một trang. Lỗi 403 `NOT_A_MEMBER`.
+        ban chủ nhiệm xem mọi tài liệu. `q` tìm theo tên, tên tệp, nhãn. Mới tải lên trước, 50 dòng một trang.
+        Tài liệu đã ẩn (FR-DOC-04) không có ở danh sách thường; ban chủ nhiệm xem riêng bằng `hidden=true`.
+        Lỗi 403 `NOT_A_MEMBER`, `FORBIDDEN` (`hidden=true` mà không phải ban chủ nhiệm).
       parameters:
         - $ref: '#/components/parameters/ClubId'
         - $ref: '#/components/parameters/Q'
+        - name: hidden
+          in: query
+          description: '`true` chỉ ban chủ nhiệm: danh sách tài liệu đã ẩn (FR-DOC-04); người khác 403.'
+          schema: { type: boolean, default: false }
         - name: tag
           in: query
           schema: { type: string }
@@ -3999,9 +5004,13 @@ paths:
       tags: [DOC]
       operationId: getDocumentFacets
       summary: Nhãn, nhiệm kỳ, nơi sở hữu để lọc (FR-DOC-02)
-      description: Chỉ tính trên tài liệu người gọi xem được. Lỗi 403 `NOT_A_MEMBER`.
+      description: Chỉ tính trên tài liệu người gọi xem được, theo danh sách đang hiện hoặc đã ẩn (`hidden`). Lỗi 403 `NOT_A_MEMBER`, `FORBIDDEN`.
       parameters:
         - $ref: '#/components/parameters/ClubId'
+        - name: hidden
+          in: query
+          description: '`true` chỉ ban chủ nhiệm: danh sách tài liệu đã ẩn (FR-DOC-04); người khác 403.'
+          schema: { type: boolean, default: false }
       responses:
         '200':
           description: Giá trị lọc.
@@ -4038,7 +5047,7 @@ paths:
       summary: Tải tài liệu xuống (FR-DOC-02)
       description: |
         Kiểm lại quyền xem mỗi lần tải. Trả nội dung tệp kèm `Content-Disposition: attachment` (`filename*` UTF-8) và `Cache-Control: no-store`.
-        Lỗi 403 `NOT_A_MEMBER`, `FORBIDDEN`; 404 `DOCUMENT_NOT_FOUND`.
+        Lỗi 403 `NOT_A_MEMBER`, `FORBIDDEN`, `DOCUMENT_HIDDEN` (đã ẩn, không phải ban chủ nhiệm); 404 `DOCUMENT_NOT_FOUND`.
       parameters:
         - $ref: '#/components/parameters/ClubId'
         - name: documentId
@@ -4054,6 +5063,250 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+  /clubs/{clubId}/documents/{documentId}/versions:
+    post:
+      tags: [DOC]
+      operationId: uploadDocumentVersion
+      summary: Tải phiên bản mới (FR-DOC-03)
+      description: |
+        Người tạo tài liệu (còn xem được) hoặc người có `MANAGE_DOCUMENTS` ở nơi sở hữu (`allowedActions` có `UPLOAD_VERSION`).
+        Mọi bản cũ được giữ; tệp, người tải, lúc tải của tài liệu đổi theo bản mới. Kiểm quyền trước khi đọc tệp.
+        Lỗi theo thứ tự: 403 `NOT_A_MEMBER`, `CSRF`; 404 `DOCUMENT_NOT_FOUND`; 403 `FORBIDDEN`; 409 `VERSION_CONFLICT`;
+        400 `VALIDATION` (`file` như tải lên, `note` 5–500 ký tự).
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - name: documentId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file, note, version]
+              properties:
+                file: { type: string, format: binary }
+                note: { type: string, minLength: 5, maxLength: 500 }
+                version: { type: integer }
+      responses:
+        '201':
+          description: Tài liệu sau khi thêm bản.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DocumentDetail' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /clubs/{clubId}/documents/{documentId}/versions/{versionNumber}/file:
+    get:
+      tags: [DOC]
+      operationId: downloadDocumentVersion
+      summary: Tải lại một phiên bản (FR-DOC-03)
+      description: |
+        Kiểm lại quyền xem mỗi lần tải, giống tải bản hiện hành. Lỗi 403 `NOT_A_MEMBER`, `FORBIDDEN`; 404 `DOCUMENT_NOT_FOUND`, `VERSION_NOT_FOUND`.
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - name: documentId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: versionNumber
+          in: path
+          required: true
+          schema: { type: integer, minimum: 1 }
+      responses:
+        '200':
+          description: Nội dung tệp của bản đó.
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /clubs/{clubId}/documents/{documentId}/hiding:
+    post:
+      tags: [DOC]
+      operationId: hideDocument
+      summary: Ẩn tài liệu (FR-DOC-04)
+      description: |
+        Ẩn thay cho xóa (BR-DATA-01): tài liệu biến khỏi danh sách, chi tiết và tải xuống của mọi người trừ ban chủ nhiệm
+        (403 `DOCUMENT_HIDDEN`); không xóa bản ghi hay tệp. Người có `MANAGE_DOCUMENTS` ở nơi sở hữu.
+        Lỗi theo thứ tự: 403 `NOT_A_MEMBER`, `CSRF`; 404 `DOCUMENT_NOT_FOUND`; 403 `FORBIDDEN`; 409 `VERSION_CONFLICT`;
+        422 `DOCUMENT_HIDDEN`; 400 `VALIDATION` (`reason` 5–500 ký tự).
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - name: documentId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason, version]
+              properties:
+                reason: { type: string, minLength: 5, maxLength: 500 }
+                version: { type: integer }
+      responses:
+        '200':
+          description: Tài liệu sau khi ẩn.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DocumentDetail' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+  /clubs/{clubId}/documents/{documentId}/restoration:
+    post:
+      tags: [DOC]
+      operationId: restoreDocument
+      summary: Khôi phục tài liệu đã ẩn (FR-DOC-04)
+      description: |
+        Chỉ ban chủ nhiệm. Tài liệu hiện lại với những người được xem như trước khi ẩn.
+        Lỗi theo thứ tự: 403 `NOT_A_MEMBER`, `CSRF`; 404 `DOCUMENT_NOT_FOUND`; 403 `FORBIDDEN`; 409 `VERSION_CONFLICT`; 422 `DOCUMENT_NOT_HIDDEN`.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - name: documentId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [version]
+              properties:
+                version: { type: integer }
+      responses:
+        '200':
+          description: Tài liệu sau khi khôi phục.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DocumentDetail' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+  /clubs/{clubId}/workload-scopes:
+    get:
+      tags: [TASK]
+      operationId: listWorkloadScopes
+      summary: Phạm vi xem khối lượng việc (FR-TASK-08)
+      description: |
+        Ban chủ nhiệm: Toàn CLB, mọi ban đang hoạt động, mọi sự kiện còn hoạt động. Trưởng ban, Phó ban: ban mình. Trưởng BTC:
+        sự kiện mình. Người khác nhận danh sách rỗng. Lỗi 403 `NOT_A_MEMBER`.
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+      responses:
+        '200':
+          description: Các phạm vi.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/WorkloadScope' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /clubs/{clubId}/workload:
+    get:
+      tags: [TASK]
+      operationId: getWorkload
+      summary: Khối lượng việc theo người (FR-TASK-08)
+      description: |
+        Mỗi người trong phạm vi (CLB: thành viên Thử việc, Chính thức, Tạm nghỉ; ban: thành viên có ban chính đó; sự kiện: Trưởng
+        BTC và nhân sự còn trong tiểu ban) cùng người ngoài phạm vi còn giữ việc mở: `open` việc làm chính còn mở (Mới giao, Đang
+        làm, Chờ nghiệm thu), `overdue` trong đó đã quá hạn, `collaborating` việc phối hợp còn mở. Việc của sự kiện đã đóng, hủy
+        không tính. Nhiều việc mở trước.
+        Lỗi: 403 `NOT_A_MEMBER`, `FORBIDDEN` (không có phạm vi nào); 400 `VALIDATION`; 404 `SCOPE_NOT_FOUND`; 403 `FORBIDDEN` (phạm vi không được xem).
+      parameters:
+        - $ref: '#/components/parameters/ClubId'
+        - name: scopeType
+          in: query
+          required: true
+          schema: { type: string, enum: [CLUB, DEPARTMENT, EVENT] }
+        - name: scopeId
+          in: query
+          description: Bắt buộc với `DEPARTMENT`, `EVENT`.
+          schema: { type: string }
+      responses:
+        '200':
+          description: Khối lượng việc.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Workload' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /me/notification-preferences:
+    get:
+      tags: [ACC]
+      operationId: getNotificationPreferences
+      summary: Tùy chọn thông báo (FR-ACC-07)
+      description: |
+        Email và push theo từng loại thông báo (9 loại của hộp thông báo). Chưa lưu lần nào thì bật hết, `version` 0.
+        Thông báo trong hệ thống luôn bật, không có trong tùy chọn. Push chỉ gửi tới ứng dụng Android (FR-NOT-04).
+      responses:
+        '200':
+          description: Tùy chọn hiện tại.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NotificationPreferences' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    put:
+      tags: [ACC]
+      operationId: updateNotificationPreferences
+      summary: Lưu tùy chọn thông báo (FR-ACC-07)
+      description: |
+        Gửi đủ 9 loại, mỗi loại một lần. Từ đó mỗi thông báo mới ghi kênh sẽ gửi cho từng người nhận theo tùy chọn của họ;
+        thông báo gửi tay chỉ có email khi người gửi chọn gửi kèm email và người nhận bật email.
+        Lỗi theo thứ tự: 403 `CSRF`; 409 `VERSION_CONFLICT`; 400 `VALIDATION` (`categories`).
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [categories, version]
+              properties:
+                categories:
+                  type: array
+                  items: { $ref: '#/components/schemas/NotificationChannelPreference' }
+                version: { type: integer }
+      responses:
+        '200':
+          description: Tùy chọn sau khi lưu.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NotificationPreferences' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
   /me/club-history:
     get:
       tags: [RPT]
@@ -4169,6 +5422,49 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+  /me/report/export:
+    get:
+      tags: [RPT]
+      operationId: exportMyReport
+      summary: Xuất báo cáo cá nhân (FR-RPT-07)
+      description: |
+        Dữ liệu của chính người gọi nên không ghi nhật ký.
+      parameters:
+        - name: format
+          in: query
+          schema: { type: string, enum: [xlsx, pdf] }
+        - name: clubId
+          in: query
+          required: true
+          schema: { type: string }
+        - name: period
+          in: query
+          required: true
+          schema: { type: string, enum: [MONTH, SEMESTER, TERM, CUSTOM] }
+        - name: key
+          in: query
+          description: Mã kỳ trong `GET /me/report-periods` (tháng, học kỳ, nhiệm kỳ).
+          schema: { type: string }
+        - name: from
+          in: query
+          description: Bắt buộc khi `period=CUSTOM`.
+          schema: { type: string, format: date }
+        - name: to
+          in: query
+          description: Bắt buộc khi `period=CUSTOM`; tối đa 5 năm sau `from`.
+          schema: { type: string, format: date }
+      responses:
+        '200':
+          description: Tệp báo cáo; tên tệp ở `Content-Disposition`.
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema: { type: string, format: binary }
+            application/pdf:
+              schema: { type: string, format: binary }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
   /me/calendar:
     get:
       tags: [ATT]
@@ -5318,6 +6614,27 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
         '422': { $ref: '#/components/responses/UnprocessableEntity' }
+  /me/dues:
+    get:
+      tags: [FIN]
+      operationId: listMyDues
+      summary: Khoản đóng của tôi (FR-FIN-13)
+      description: |
+        Chỉ dòng của chính người gọi trong các đợt đóng quỹ (kể cả đợt đã đóng), đợt mở gần nhất trước; không cần quyền xem
+        đợt. `overdue` khi đợt còn mở đã qua hạn mà còn thiếu. Lọc `clubId` tùy chọn.
+      parameters:
+        - name: clubId
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: Các khoản đóng của tôi.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/MyDuesItem' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
   /clubs/{clubId}/dues-campaigns:
     get:
       tags: [FIN]
@@ -5645,6 +6962,34 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+  /clubs/{clubId}/club-report/export:
+    get:
+      tags: [RPT]
+      operationId: exportClubReport
+      summary: Xuất báo cáo CLB (FR-RPT-07)
+      description: |
+        Cùng quyền, cùng kỳ với báo cáo CLB. Số liệu gộp nên không ghi nhật ký. Lỗi như báo cáo CLB; 400 `VALIDATION` khi `format` sai.
+      parameters:
+        - name: format
+          in: query
+          schema: { type: string, enum: [xlsx, pdf] }
+        - $ref: '#/components/parameters/ClubId'
+        - { name: period, in: query, required: true, schema: { type: string, enum: [MONTH, SEMESTER, TERM, CUSTOM] } }
+        - { name: key, in: query, schema: { type: string } }
+        - { name: from, in: query, schema: { type: string, format: date } }
+        - { name: to, in: query, schema: { type: string, format: date } }
+      responses:
+        '200':
+          description: Tệp báo cáo; tên tệp ở `Content-Disposition`.
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema: { type: string, format: binary }
+            application/pdf:
+              schema: { type: string, format: binary }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
   /clubs/{clubId}/departments/{departmentId}/report:
     get:
       tags: [RPT]
@@ -5668,6 +7013,35 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/DepartmentReport' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /clubs/{clubId}/departments/{departmentId}/report/export:
+    get:
+      tags: [RPT]
+      operationId: exportDepartmentReport
+      summary: Xuất báo cáo ban (FR-RPT-07)
+      description: |
+        Cùng quyền với báo cáo ban. Có số liệu từng thành viên nên ghi nhật ký `EXPORT_REPORT` (BR-DATA-03).
+      parameters:
+        - name: format
+          in: query
+          schema: { type: string, enum: [xlsx, pdf] }
+        - $ref: '#/components/parameters/ClubId'
+        - $ref: '#/components/parameters/DepartmentId'
+        - { name: period, in: query, required: true, schema: { type: string, enum: [MONTH, SEMESTER, TERM, CUSTOM] } }
+        - { name: key, in: query, schema: { type: string } }
+        - { name: from, in: query, schema: { type: string, format: date } }
+        - { name: to, in: query, schema: { type: string, format: date } }
+      responses:
+        '200':
+          description: Tệp báo cáo; tên tệp ở `Content-Disposition`.
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema: { type: string, format: binary }
+            application/pdf:
+              schema: { type: string, format: binary }
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
@@ -5698,6 +7072,36 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/AuditLogPage' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /clubs/{clubId}/audit-logs/export:
+    get:
+      tags: [RPT]
+      operationId: exportAuditLogs
+      summary: Xuất nhật ký thao tác (FR-RPT-07)
+      description: |
+        Chỉ ban chủ nhiệm, theo bộ lọc, không phân trang. Ghi nhật ký `EXPORT_REPORT`.
+      parameters:
+        - name: format
+          in: query
+          schema: { type: string, enum: [xlsx, pdf] }
+        - $ref: '#/components/parameters/ClubId'
+        - { name: actorId, in: query, schema: { type: string } }
+        - { name: objectType, in: query, schema: { $ref: '#/components/schemas/AuditObjectType' } }
+        - { name: objectId, in: query, schema: { type: string } }
+        - { name: from, in: query, schema: { type: string, format: date } }
+        - { name: to, in: query, schema: { type: string, format: date } }
+        - { name: size, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 50 } }
+      responses:
+        '200':
+          description: Tệp báo cáo; tên tệp ở `Content-Disposition`.
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema: { type: string, format: binary }
+            application/pdf:
+              schema: { type: string, format: binary }
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
@@ -5771,6 +7175,36 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/FinanceReport' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /clubs/{clubId}/finance-report/export:
+    get:
+      tags: [RPT]
+      operationId: exportFinanceReport
+      summary: Xuất báo cáo thu chi (FR-RPT-07)
+      description: |
+        Chỉ ban chủ nhiệm. Gồm theo hạng mục, quỹ, tháng, khoản cùng người duyệt và ghi sổ, danh sách chưa nộp quỹ; ghi nhật ký `EXPORT_REPORT`.
+      parameters:
+        - name: format
+          in: query
+          schema: { type: string, enum: [xlsx, pdf] }
+        - $ref: '#/components/parameters/ClubId'
+        - { name: period, in: query, required: true, schema: { type: string, enum: [MONTH, SEMESTER, TERM, CUSTOM] } }
+        - { name: key, in: query, schema: { type: string } }
+        - { name: from, in: query, schema: { type: string, format: date } }
+        - { name: to, in: query, schema: { type: string, format: date } }
+        - { name: category, in: query, schema: { $ref: '#/components/schemas/FinanceCategory' } }
+        - { name: eventId, in: query, schema: { type: string } }
+      responses:
+        '200':
+          description: Tệp báo cáo; tên tệp ở `Content-Disposition`.
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema: { type: string, format: binary }
+            application/pdf:
+              schema: { type: string, format: binary }
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
@@ -6291,7 +7725,7 @@ components:
       enum: [PENDING, PROBATION, ACTIVE, ON_LEAVE, LEFT]
     ClubMembershipSummary:
       type: object
-      required: [clubId, clubName, shortName, logoUrl, field, memberStatus, departmentName, positionTitles, memberCount]
+      required: [clubId, clubName, shortName, logoUrl, field, memberStatus, departmentName, positionTitles, memberCount, clubStatus]
       properties:
         clubId: { type: string }
         clubName: { type: string }
@@ -6304,6 +7738,7 @@ components:
           type: array
           items: { type: string }
         memberCount: { type: integer }
+        clubStatus: { $ref: '#/components/schemas/ClubStatus' }
     StaffEventSummary:
       type: object
       description: Sự kiện người dùng đang làm BTC ở CLB mà họ không là thành viên (FR-ACC-06).
@@ -6614,6 +8049,19 @@ components:
       required: [email]
       properties:
         email: { type: string, format: email }
+    PasswordResetLink:
+      type: object
+      description: Liên kết đặt lại mật khẩu (FR-ACC-03); `USED` gồm cả liên kết đã bị thay bằng liên kết mới hơn.
+      required: [status, emailHint, expiresAt]
+      properties:
+        status: { type: string, enum: [VALID, EXPIRED, USED] }
+        emailHint: { type: string, description: 'Email đã che bớt, ví dụ `an***@demo.test`.' }
+        expiresAt: { type: string, format: date-time }
+    CompletePasswordResetRequest:
+      type: object
+      required: [newPassword]
+      properties:
+        newPassword: { type: string, minLength: 8, maxLength: 72 }
     Profile:
       type: object
       description: Hồ sơ cá nhân dùng chung cho mọi CLB (FR-ACC-05).
@@ -6676,8 +8124,10 @@ components:
         `VIEW_DUES`: thuộc ban chủ nhiệm, xem tab Đóng quỹ (FR-FIN-09). `OPEN_DUES`: ban chủ nhiệm có `RECORD_LEDGER`, mở đợt đóng quỹ.
         `VIEW_FINANCE_REPORT`: thuộc ban chủ nhiệm, xem tab Báo cáo thu chi (FR-FIN-12).
         `MANAGE_RECRUITMENT`: có quyền Quản lý thành viên, mở và quản lý đợt tuyển (FR-REC-01).
-        `VIEW_CLUB_REPORT`, `VIEW_AUDIT_LOG`: ban chủ nhiệm (FR-RPT-04, 06). `VIEW_DEPARTMENT_REPORTS`: ban chủ nhiệm, trưởng hoặc phó của một ban đang hoạt động (FR-RPT-03).
-      enum: [CREATE_EVENT, PROPOSE_EVENT, ASSIGN_TASK, MANAGE_MEMBERS, MANAGE_ORG, ASSIGN_PRESIDENCY, EDIT_CLUB, SEND_ANNOUNCEMENT, CREATE_TERM, ASSIGN_POSITION, REQUEST_PRESIDENCY_TRANSFER, VIEW_PERMISSIONS, VIEW_SHARED_EVENTS, VIEW_DUES, OPEN_DUES, VIEW_FINANCE_REPORT, MANAGE_RECRUITMENT, VIEW_CLUB_REPORT, VIEW_DEPARTMENT_REPORTS, VIEW_AUDIT_LOG]
+        `CHANGE_CLUB_STATUS`, `MANAGE_NEWS`, `EXPORT_MEMBERS`: ban chủ nhiệm (FR-CLB-04, 06, FR-MEM-11). `CREATE_RECRUITMENT`: có quyền Quản lý thành viên và CLB đang Hoạt động.
+        CLB Tạm ngừng không có `CREATE_EVENT`, `PROPOSE_EVENT`, `CREATE_RECRUITMENT`; CLB Giải thể chỉ còn các hành động `VIEW_*`.
+        `VIEW_CLUB_REPORT`, `VIEW_AUDIT_LOG`: ban chủ nhiệm (FR-RPT-04, 06). `VIEW_HIDDEN_DOCUMENTS`: ban chủ nhiệm (FR-DOC-04). `VIEW_WORKLOAD`: có ít nhất một phạm vi xem khối lượng việc (FR-TASK-08). `VIEW_DEPARTMENT_REPORTS`: ban chủ nhiệm, trưởng hoặc phó của một ban đang hoạt động (FR-RPT-03).
+      enum: [CREATE_EVENT, PROPOSE_EVENT, ASSIGN_TASK, MANAGE_MEMBERS, MANAGE_ORG, ASSIGN_PRESIDENCY, EDIT_CLUB, SEND_ANNOUNCEMENT, CREATE_TERM, ASSIGN_POSITION, REQUEST_PRESIDENCY_TRANSFER, VIEW_PERMISSIONS, VIEW_SHARED_EVENTS, VIEW_DUES, OPEN_DUES, VIEW_FINANCE_REPORT, MANAGE_RECRUITMENT, VIEW_CLUB_REPORT, VIEW_DEPARTMENT_REPORTS, VIEW_AUDIT_LOG, VIEW_HIDDEN_DOCUMENTS, VIEW_WORKLOAD, CHANGE_CLUB_STATUS, CREATE_RECRUITMENT, MANAGE_NEWS, EXPORT_MEMBERS]
     TermSummary:
       type: object
       description: Nhiệm kỳ đang phụ trách CLB (Đang chạy hoặc Đang bàn giao).
@@ -6710,6 +8160,8 @@ components:
         - allowedActions
         - generalFundId
         - viewerRole
+        - status
+        - lastStatusChange
         - version
       properties:
         id: { type: string }
@@ -6747,6 +8199,33 @@ components:
           type: string
           enum: [MEMBER, EVENT_GUEST]
           description: '`EVENT_GUEST`: người ngoài CLB đang làm BTC một sự kiện của CLB; chỉ dùng được mục Sự kiện.'
+        status: { $ref: '#/components/schemas/ClubStatus' }
+        lastStatusChange:
+          oneOf:
+            - $ref: '#/components/schemas/ClubStatusChange'
+            - type: 'null'
+        version: { type: integer }
+    ClubStatus:
+      type: string
+      description: ST-CLB.
+      enum: [ACTIVE, SUSPENDED, DISSOLVED]
+    ClubStatusChange:
+      type: object
+      description: Lần đổi trạng thái gần nhất (FR-CLB-04).
+      required: [status, at, by, reason]
+      properties:
+        status: { $ref: '#/components/schemas/ClubStatus' }
+        at: { type: string, format: date-time }
+        by: { $ref: '#/components/schemas/PersonRef' }
+        reason: { type: string }
+    ClubTransitionRequest:
+      type: object
+      required: [action, reason, version]
+      properties:
+        action:
+          type: string
+          enum: [SUSPEND, REACTIVATE, DISSOLVE]
+        reason: { type: string, minLength: 5, maxLength: 500 }
         version: { type: integer }
     CreateClubRequest:
       type: object
@@ -6786,6 +8265,7 @@ components:
         - attendanceQrRotateSeconds
         - attendanceEditHours
         - taskReminderDays
+        - taskOverloadThreshold
         - expenseReceiptThreshold
         - advanceSettleDays
         - semester1Start
@@ -6800,6 +8280,7 @@ components:
         attendanceQrRotateSeconds: { type: integer, minimum: 10, maximum: 300, description: Chu kỳ đổi mã QR, tính bằng giây. }
         attendanceEditHours: { type: integer, minimum: 1, maximum: 720, description: 'Số giờ sau khi chốt mà người chốt còn sửa được điểm danh; quá hạn chỉ ban chủ nhiệm (FR-ATT-08, BR-ATT-04).' }
         taskReminderDays: { type: integer, minimum: 0, maximum: 14, description: 'Nhắc việc trước hạn N ngày tính theo ngày lịch giờ Việt Nam: nhắc khi hạn rơi vào từ hôm nay đến hết N ngày tới (1 là từ đầu ngày trước hạn); 0 là không nhắc (FR-TASK-06, SRS 9.2).' }
+        taskOverloadThreshold: { type: integer, minimum: 1, maximum: 30, description: 'Giao thêm việc mà người nhận vượt số việc đang làm này thì cảnh báo, không chặn; mặc định 5 (FR-TASK-09, SRS 9.2).' }
         expenseReceiptThreshold: { type: integer, minimum: 0, maximum: 100000000, description: Khoản chi trên ngưỡng này phải có chứng từ (BR-FIN-03), VND. }
         advanceSettleDays: { type: integer, minimum: 1, maximum: 90, description: Hạn quyết toán tạm ứng gợi ý, tính từ ngày đề xuất (FR-FIN-07). }
         semester1Start:
@@ -6881,6 +8362,121 @@ components:
             content:
               type: array
               items: { $ref: '#/components/schemas/ClubDirectoryEntry' }
+    PublicClubCard:
+      type: object
+      description: Thẻ CLB ở danh bạ công khai (SRS 3.5).
+      required: [id, name, shortName, field, description, logoUrl, contactEmail, contactPhone, contactUrl, openRecruitmentCount]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        shortName: { type: string }
+        field: { type: string }
+        description: { type: string }
+        logoUrl: { $ref: '#/components/schemas/NullableString' }
+        contactEmail: { $ref: '#/components/schemas/NullableString' }
+        contactPhone: { $ref: '#/components/schemas/NullableString' }
+        contactUrl:
+          type: [string, 'null']
+          description: Chỉ `http://` hoặc `https://`.
+        openRecruitmentCount: { type: integer, minimum: 0 }
+    PublicClubPage:
+      allOf:
+        - $ref: '#/components/schemas/PageMeta'
+        - type: object
+          required: [content]
+          properties:
+            content:
+              type: array
+              items: { $ref: '#/components/schemas/PublicClubCard' }
+    PublicClubProfile:
+      allOf:
+        - $ref: '#/components/schemas/PublicClubCard'
+        - type: object
+          required: [openRecruitments, news, guestEvents]
+          properties:
+            news:
+              type: array
+              description: 6 tin đã xuất bản mới nhất (FR-CLB-07).
+              items: { $ref: '#/components/schemas/PublicNewsSummary' }
+            guestEvents:
+              type: array
+              description: Sự kiện mở cho khách đang nhận đăng ký, sắp diễn ra trước (FR-CLB-07).
+              items: { $ref: '#/components/schemas/PublicEventSummary' }
+            openRecruitments:
+              type: array
+              description: Đợt đang nhận đơn, hạn gần nhất trước.
+              items:
+                type: object
+                required: [id, name, closesAt, departments]
+                properties:
+                  id: { type: string }
+                  name: { type: string }
+                  closesAt: { type: string, format: date-time }
+                  departments:
+                    type: array
+                    items:
+                      type: object
+                      required: [id, name, quota]
+                      properties:
+                        id: { type: string }
+                        name: { type: string }
+                        quota: { type: integer, minimum: 1 }
+    PublicNewsSummary:
+      type: object
+      required: [id, title, excerpt, imageUrl, publishedAt]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        excerpt: { type: string }
+        imageUrl: { $ref: '#/components/schemas/NullableString' }
+        publishedAt: { type: string, format: date-time }
+    PublicNewsDetail:
+      allOf:
+        - $ref: '#/components/schemas/PublicNewsSummary'
+        - type: object
+          required: [body, clubId, clubName]
+          properties:
+            body: { type: string, description: 'Chữ thuần, giữ xuống dòng.' }
+            clubId: { type: string }
+            clubName: { type: string }
+    PublicNewsPage:
+      allOf:
+        - $ref: '#/components/schemas/PageMeta'
+        - type: object
+          required: [content]
+          properties:
+            content:
+              type: array
+              items: { $ref: '#/components/schemas/PublicNewsSummary' }
+    PublicEventSummary:
+      type: object
+      required: [id, clubId, clubName, name, startAt, endAt, format, location, capacity, seatsLeft, registrationDeadline]
+      properties:
+        id: { type: string }
+        clubId: { type: string }
+        clubName: { type: string }
+        name: { type: string }
+        startAt: { type: string, format: date-time }
+        endAt: { type: string, format: date-time }
+        format: { type: string, enum: [OFFLINE, ONLINE] }
+        location: { $ref: '#/components/schemas/NullableString' }
+        capacity: { type: [integer, 'null'] }
+        seatsLeft:
+          type: [integer, 'null']
+          description: '`null` khi không giới hạn chỗ; 0 thì đăng ký mới vào danh sách chờ.'
+        registrationDeadline: { type: [string, 'null'], format: date-time }
+    PublicEventDetail:
+      allOf:
+        - $ref: '#/components/schemas/PublicEventSummary'
+        - type: object
+          required: [description, clubShortName, clubLogoUrl, registrationOpen]
+          properties:
+            description: { type: string }
+            clubShortName: { type: string }
+            clubLogoUrl: { $ref: '#/components/schemas/NullableString' }
+            registrationOpen:
+              type: boolean
+              description: Đang Mở đăng ký và chưa quá hạn (BR-EVT-02).
     # Thành viên
     MemberTransitionAction:
       type: string
@@ -8207,6 +9803,47 @@ components:
         name: { type: string }
         eventId: { $ref: '#/components/schemas/NullableString' }
         eventName: { $ref: '#/components/schemas/NullableString' }
+    TaskComment:
+      type: object
+      required: [id, author, body, attachments, createdAt, hidden, allowedActions]
+      properties:
+        id: { type: string }
+        author: { $ref: '#/components/schemas/PersonRef' }
+        body:
+          type: [string, 'null']
+          description: Chữ thuần; null khi đã ẩn.
+        attachments:
+          type: array
+          items: { $ref: '#/components/schemas/FileRef' }
+        createdAt: { type: string, format: date-time }
+        hidden:
+          oneOf:
+            - type: object
+              required: [by, at]
+              properties:
+                by: { $ref: '#/components/schemas/PersonRef' }
+                at: { type: string, format: date-time }
+            - type: 'null'
+        allowedActions:
+          type: array
+          items: { type: string, enum: [HIDE] }
+    TaskCommentList:
+      type: object
+      required: [comments, canComment]
+      properties:
+        comments:
+          type: array
+          items: { $ref: '#/components/schemas/TaskComment' }
+        canComment: { type: boolean }
+    CreateTaskCommentRequest:
+      type: object
+      required: [body, attachmentIds]
+      properties:
+        body: { type: string, minLength: 1, maxLength: 2000 }
+        attachmentIds:
+          type: array
+          maxItems: 5
+          items: { type: string }
     FileRef:
       type: object
       required: [id, name, size, contentType]
@@ -8343,13 +9980,14 @@ components:
       allOf:
         - $ref: '#/components/schemas/PersonRef'
         - type: object
-          required: [departmentName]
+          required: [departmentName, openTaskCount]
           properties:
             departmentName: { $ref: '#/components/schemas/NullableString' }
+            openTaskCount: { type: integer, description: 'Số việc đang làm chính (Mới giao, Đang làm, Chờ nghiệm thu) trong CLB (FR-TASK-09).' }
     AssignableScope:
       type: object
       description: Phạm vi người dùng được giao việc kèm người nhận hợp lệ (BR-TASK-01).
-      required: [type, id, name, eventName, members]
+      required: [type, id, name, eventName, members, overloadThreshold]
       properties:
         type: { $ref: '#/components/schemas/TaskScopeType' }
         id: { type: string }
@@ -8358,6 +9996,7 @@ components:
         members:
           type: array
           items: { $ref: '#/components/schemas/AssignableMember' }
+        overloadThreshold: { type: integer, description: 'Tham số CLB `taskOverloadThreshold`: web cảnh báo khi `openTaskCount + 1` vượt số này.' }
     TaskFacets:
       type: object
       required: [clubs, events]
@@ -8406,9 +10045,10 @@ components:
         id: { $ref: '#/components/schemas/NullableString' }
     NotificationSummary:
       type: object
-      required: [id, kind, category, title, clubId, clubName, createdAt, readAt, target]
+      required: [id, kind, category, title, clubId, clubName, createdAt, readAt, target, pinned]
       properties:
         id: { type: string }
+        pinned: { type: boolean, description: 'FR-NOT-05: người gửi ghim; tin ghim đứng đầu hộp thư (ghim sau đứng trước).' }
         kind: { $ref: '#/components/schemas/NotificationKind' }
         category: { $ref: '#/components/schemas/NotificationCategory' }
         title: { type: string }
@@ -8420,6 +10060,46 @@ components:
           oneOf:
             - $ref: '#/components/schemas/NotificationTarget'
             - type: 'null'
+    SentAnnouncement:
+      type: object
+      required: [id, clubId, clubName, title, audienceLabel, createdAt, recipientCount, readCount, pinned, allowedActions]
+      properties:
+        id: { type: string }
+        clubId: { type: string }
+        clubName: { type: string }
+        title: { type: string }
+        audienceLabel: { type: string, description: 'Toàn CLB, Ban …, BTC ….' }
+        createdAt: { type: string, format: date-time }
+        recipientCount: { type: integer }
+        readCount: { type: integer }
+        pinned: { type: boolean }
+        allowedActions:
+          type: array
+          items: { type: string, enum: [PIN, UNPIN] }
+    SentAnnouncementPage:
+      allOf:
+        - $ref: '#/components/schemas/PageMeta'
+        - type: object
+          required: [content]
+          properties:
+            content:
+              type: array
+              items: { $ref: '#/components/schemas/SentAnnouncement' }
+    AnnouncementReceipt:
+      type: object
+      required: [person, readAt]
+      properties:
+        person: { $ref: '#/components/schemas/PersonRef' }
+        readAt: { $ref: '#/components/schemas/NullableDateTime' }
+    AnnouncementReceiptPage:
+      allOf:
+        - $ref: '#/components/schemas/PageMeta'
+        - type: object
+          required: [content]
+          properties:
+            content:
+              type: array
+              items: { $ref: '#/components/schemas/AnnouncementReceipt' }
     NotificationDetail:
       allOf:
         - $ref: '#/components/schemas/NotificationSummary'
@@ -8500,11 +10180,12 @@ components:
     EventAction:
       type: string
       description: |
+        `DECIDE_STAFF_REQUESTS`: Trưởng BTC duyệt yêu cầu vượt chỉ tiêu (FR-EVT-06).
         Chuyển trạng thái cộng các quyền khác do máy chủ tính: `MANAGE_SUBCOMMITTEES`, `REGISTER`, `RESCHEDULE` (dời thời gian, FR-EVT-14),
         `VIEW_STAFF`, `VIEW_REGISTRATIONS`, `VIEW_FUND`, `VIEW_ATTENDANCE` (dữ liệu BTC, danh sách tham dự, quỹ sự kiện, điểm danh chỉ BTC và ban chủ nhiệm xem, SRS 3.5).
         `VIEW_REPORT`: báo cáo sự kiện (FR-RPT-05, gồm số việc theo tiểu ban của FR-EVT-09). Ban chủ nhiệm CLB đồng tổ chức (đang Chấp nhận, sự kiện còn hoạt
         động) chỉ có `VIEW_REPORT`, `VIEW_STAFF`, `VIEW_FUND`: không có `VIEW_REGISTRATIONS`, `VIEW_ATTENDANCE` và không thao tác ghi nào.
-      enum: [SUBMIT, APPROVE, REJECT, OPEN_REGISTRATION, CANCEL, CLOSE, MANAGE_SUBCOMMITTEES, REGISTER, RESCHEDULE, VIEW_STAFF, VIEW_REPORT, VIEW_REGISTRATIONS, VIEW_FUND, VIEW_ATTENDANCE]
+      enum: [SUBMIT, APPROVE, REJECT, OPEN_REGISTRATION, CANCEL, CLOSE, MANAGE_SUBCOMMITTEES, REGISTER, RESCHEDULE, VIEW_STAFF, VIEW_REPORT, VIEW_REGISTRATIONS, VIEW_FUND, VIEW_ATTENDANCE, DECIDE_STAFF_REQUESTS]
     EventFormat:
       type: string
       enum: [OFFLINE, ONLINE]
@@ -8584,9 +10265,10 @@ components:
       allOf:
         - $ref: '#/components/schemas/EventSummary'
         - type: object
-          required: [description, onlineUrl, proposer, approver, rejectionReason, cancellationReason, statusBeforeCancel, allowedActions, version, createdAt, fundId, fundStatus, openAdvanceCount, lastScheduleChange, viewingAsCoHost]
+          required: [description, onlineUrl, proposer, approver, rejectionReason, cancellationReason, statusBeforeCancel, staffSignupOpen, allowedActions, version, createdAt, fundId, fundStatus, openAdvanceCount, lastScheduleChange, viewingAsCoHost]
           properties:
             description: { type: string }
+            staffSignupOpen: { type: boolean, description: 'FR-EVT-06: BTC mở cho thành viên tự đăng ký vào tiểu ban.' }
             onlineUrl: { $ref: '#/components/schemas/NullableString' }
             proposer: { $ref: '#/components/schemas/PersonRef' }
             approver:
@@ -8660,13 +10342,15 @@ components:
       properties:
         registrations:
           type: object
-          required: [capacity, confirmed, waitlisted, reconfirmPending, cancelled]
+          required: [capacity, confirmed, waitlisted, reconfirmPending, cancelled, guests, guestsCheckedIn]
           properties:
             capacity: { type: [integer, 'null'], description: Không giới hạn chỗ khi null. }
             confirmed: { type: integer }
             waitlisted: { type: integer }
             reconfirmPending: { type: integer }
             cancelled: { type: integer }
+            guests: { type: integer, description: Khách mời còn đăng ký (FR-EVT-12). }
+            guestsCheckedIn: { type: integer, description: Khách mời đã được ghi có mặt ít nhất một ngày. }
         attendance:
           type: array
           items:
@@ -8724,12 +10408,92 @@ components:
       type: string
       description: Thành viên CLB chủ trì, CTV, nhân sự CLB đồng tổ chức.
       enum: [MEMBER, COLLABORATOR, CO_HOST]
+    ScheduleConflict:
+      type: object
+      description: 'FR-TASK-09: hoạt động chồng giờ (chạm mốc không tính); ở CLB khác thì `title` null để không lộ thông tin.'
+      required: [kind, title, startAt, endAt]
+      properties:
+        kind: { type: string, enum: [SESSION, EVENT] }
+        title: { $ref: '#/components/schemas/NullableString' }
+        startAt: { type: string, format: date-time }
+        endAt: { type: string, format: date-time }
+    InviteCandidate:
+      allOf:
+        - $ref: '#/components/schemas/StaffCandidate'
+        - type: object
+          required: [conflicts]
+          properties:
+            conflicts:
+              type: array
+              description: Buổi sinh hoạt, sự kiện người này tham gia chồng giờ với sự kiện đang mời; chỉ cảnh báo, không chặn.
+              items: { $ref: '#/components/schemas/ScheduleConflict' }
+    StaffSignupSetting:
+      type: object
+      required: [open, version]
+      properties:
+        open: { type: boolean }
+        version: { type: integer, description: '`version` của sự kiện.' }
+    StaffSignupRequest:
+      type: object
+      required: [subcommitteeId]
+      properties:
+        subcommitteeId: { type: string }
+        note: { type: string, minLength: 5, maxLength: 500, description: Bắt buộc khi tiểu ban đã đủ chỉ tiêu. }
+    StaffSignupInfo:
+      type: object
+      required: [open, subcommittees, mySubcommitteeName, myRequest, canSignUp, conflicts]
+      properties:
+        open: { type: boolean }
+        subcommittees:
+          type: array
+          items:
+            type: object
+            required: [id, name, description, quota, memberCount, full]
+            properties:
+              id: { type: string }
+              name: { type: string }
+              description: { type: string }
+              quota: { type: [integer, 'null'] }
+              memberCount: { type: integer }
+              full: { type: boolean }
+        mySubcommitteeName: { $ref: '#/components/schemas/NullableString' }
+        myRequest:
+          oneOf:
+            - type: object
+              required: [id, subcommitteeName, status, note, reason, createdAt]
+              properties:
+                id: { type: string }
+                subcommitteeName: { type: string }
+                status: { type: string, enum: [PENDING, APPROVED, REJECTED] }
+                note: { type: string }
+                reason: { $ref: '#/components/schemas/NullableString' }
+                createdAt: { type: string, format: date-time }
+            - type: 'null'
+        canSignUp: { type: boolean }
+        conflicts:
+          type: array
+          description: Hoạt động của chính người gọi chồng giờ với sự kiện (FR-TASK-09).
+          items: { $ref: '#/components/schemas/ScheduleConflict' }
+    PendingStaffSignup:
+      type: object
+      required: [id, person, departmentName, subcommitteeId, subcommitteeName, quota, memberCount, note, createdAt]
+      properties:
+        id: { type: string }
+        person: { $ref: '#/components/schemas/PersonRef' }
+        departmentName: { $ref: '#/components/schemas/NullableString' }
+        subcommitteeId: { type: string }
+        subcommitteeName: { type: string }
+        quota: { type: [integer, 'null'] }
+        memberCount: { type: integer }
+        note: { type: string }
+        createdAt: { type: string, format: date-time }
     StaffMember:
       allOf:
         - $ref: '#/components/schemas/PersonRef'
         - type: object
-          required: [departmentName, kind, homeClubName]
+          required: [departmentName, kind, homeClubName, overQuota]
           properties:
+            overQuota: { type: boolean, description: Vào vượt chỉ tiêu nhờ Trưởng BTC duyệt (BR-EVT-07). }
             departmentName:
               $ref: '#/components/schemas/NullableString'
               description: Ban ở CLB chủ trì; nhân sự CLB đồng tổ chức thì ban ở CLB của họ.
@@ -8770,12 +10534,52 @@ components:
           required: [departmentName]
           properties:
             departmentName: { $ref: '#/components/schemas/NullableString' }
-    Registration:
+    GuestRegistrationRequest:
       type: object
-      required: [id, attendee, status, waitlistPosition, registeredAt, promotedAt]
+      required: [fullName]
+      properties:
+        fullName: { type: string, minLength: 2, maxLength: 100 }
+        email: { type: string, format: email }
+        phone: { type: string, description: '10–11 chữ số, bắt đầu bằng 0.' }
+    GuestPass:
+      type: object
+      required: [code, fullName, emailHint, phoneHint, status, waitlistPosition, registeredAt, checkedInDays, event, allowedActions]
+      properties:
+        code: { type: string, description: Mã tham dự in trong QR. }
+        fullName: { type: string }
+        emailHint: { $ref: '#/components/schemas/NullableString' }
+        phoneHint: { $ref: '#/components/schemas/NullableString' }
+        status: { $ref: '#/components/schemas/RegistrationStatus' }
+        waitlistPosition: { type: [integer, 'null'] }
+        registeredAt: { type: string, format: date-time }
+        checkedInDays:
+          type: array
+          items: { type: string, format: date }
+        event: { $ref: '#/components/schemas/PublicEventSummary' }
+        allowedActions:
+          type: array
+          items: { type: string, enum: [CANCEL] }
+    GuestRegistrationRow:
+      type: object
+      required: [id, fullName, emailHint, phoneHint, code, status, checkedIn, checkedInAt]
       properties:
         id: { type: string }
-        attendee: { $ref: '#/components/schemas/PersonRef' }
+        fullName: { type: string }
+        emailHint: { $ref: '#/components/schemas/NullableString' }
+        phoneHint: { $ref: '#/components/schemas/NullableString' }
+        code: { type: string }
+        status: { $ref: '#/components/schemas/RegistrationStatus' }
+        checkedIn: { type: boolean, description: Đã ghi có mặt ngày đang xem. }
+        checkedInAt: { type: [string, 'null'], format: date-time }
+    Registration:
+      type: object
+      required: [id, attendee, guest, status, waitlistPosition, registeredAt, promotedAt]
+      properties:
+        id: { type: string }
+        attendee:
+          $ref: '#/components/schemas/PersonRef'
+          description: Khách mời không có tài khoản, `id` là mã đăng ký và `fullName` là họ tên khách khai.
+        guest: { type: boolean }
         status: { $ref: '#/components/schemas/RegistrationStatus' }
         waitlistPosition: { type: [integer, 'null'] }
         registeredAt: { type: string, format: date-time }
@@ -9206,7 +11010,7 @@ components:
       $ref: '#/components/schemas/DocumentOwner'
     DocumentSummary:
       type: object
-      required: [id, title, fileName, fileSize, contentType, owner, term, tags, visibility, uploadedBy, uploadedAt]
+      required: [id, title, fileName, fileSize, contentType, owner, term, tags, visibility, uploadedBy, uploadedAt, currentVersion, allowedActions, hidden, version]
       properties:
         id: { type: string }
         title: { type: string }
@@ -9228,13 +11032,86 @@ components:
         visibility: { $ref: '#/components/schemas/DocumentVisibility' }
         uploadedBy: { $ref: '#/components/schemas/PersonRef' }
         uploadedAt: { type: string, format: date-time }
+        currentVersion: { type: integer, minimum: 1, description: 'Số bản hiện hành; tệp, người tải, lúc tải ở trên là của bản này.' }
+        allowedActions:
+          type: array
+          description: '`UPLOAD_VERSION` (FR-DOC-03); `HIDE` cho người có `MANAGE_DOCUMENTS` ở nơi sở hữu, `RESTORE` cho ban chủ nhiệm khi đã ẩn (FR-DOC-04).'
+          items: { type: string, enum: [UPLOAD_VERSION, HIDE, RESTORE] }
+        hidden:
+          description: Có khi tài liệu đã ẩn; họ tên người ẩn chụp lúc ẩn.
+          oneOf:
+            - type: 'null'
+            - type: object
+              required: [by, at, reason]
+              properties:
+                by: { $ref: '#/components/schemas/PersonRef' }
+                at: { type: string, format: date-time }
+                reason: { type: string }
+        version: { type: integer }
+    NotificationChannelPreference:
+      type: object
+      required: [category, email, push]
+      properties:
+        category: { type: string, enum: [MEMBERSHIP, POSITION, TASK, EVENT, SESSION, FINANCE, TERM, ANNOUNCEMENT, RECRUITMENT] }
+        email: { type: boolean }
+        push: { type: boolean }
+    NotificationPreferences:
+      type: object
+      required: [categories, updatedAt, version]
+      properties:
+        categories:
+          type: array
+          items: { $ref: '#/components/schemas/NotificationChannelPreference' }
+        updatedAt: { $ref: '#/components/schemas/NullableDateTime' }
+        version: { type: integer }
+    WorkloadScope:
+      type: object
+      required: [type, id, name]
+      properties:
+        type: { type: string, enum: [CLUB, DEPARTMENT, EVENT] }
+        id: { $ref: '#/components/schemas/NullableString' }
+        name: { type: string }
+    Workload:
+      type: object
+      required: [scope, rows]
+      properties:
+        scope: { $ref: '#/components/schemas/WorkloadScope' }
+        rows:
+          type: array
+          items:
+            type: object
+            required: [person, detail, onLeave, open, overdue, collaborating]
+            properties:
+              person: { $ref: '#/components/schemas/PersonRef' }
+              detail: { $ref: '#/components/schemas/NullableString' }
+              onLeave: { type: boolean }
+              open: { type: integer, minimum: 0 }
+              overdue: { type: integer, minimum: 0 }
+              collaborating: { type: integer, minimum: 0 }
+    DocumentVersion:
+      type: object
+      description: Một phiên bản tài liệu (FR-DOC-03); họ tên người tải chụp lúc tải.
+      required: [number, fileName, fileSize, contentType, note, uploadedBy, uploadedAt, current]
+      properties:
+        number: { type: integer, minimum: 1 }
+        fileName: { type: string }
+        fileSize: { type: integer }
+        contentType: { type: string }
+        note: { type: string }
+        uploadedBy: { $ref: '#/components/schemas/PersonRef' }
+        uploadedAt: { type: string, format: date-time }
+        current: { type: boolean }
     DocumentDetail:
       allOf:
         - $ref: '#/components/schemas/DocumentSummary'
         - type: object
-          required: [description]
+          required: [description, versions]
           properties:
             description: { type: string }
+            versions:
+              type: array
+              description: Mọi phiên bản, mới nhất trước.
+              items: { $ref: '#/components/schemas/DocumentVersion' }
     RecruitmentStatus:
       type: string
       description: Sắp mở, Đang nhận đơn, Đang xét (sau giờ đóng), Đã có kết quả, Đã đóng; suy ra từ giờ và thao tác.
@@ -9556,7 +11433,7 @@ components:
         studentId: { $ref: '#/components/schemas/NullableString' }
     ApplicationSummary:
       type: object
-      required: [id, applicant, status, choices, submittedAt, currentRoundId, roundResults, totalScore, outcome, version]
+      required: [id, applicant, status, choices, submittedAt, currentRoundId, roundResults, totalScore, outcome, priorHistory, version]
       properties:
         id: { type: string }
         applicant: { $ref: '#/components/schemas/PersonRef' }
@@ -9576,13 +11453,74 @@ components:
           oneOf:
             - $ref: '#/components/schemas/ApplicationOutcome'
             - type: 'null'
+        priorHistory:
+          description: |
+            FR-REC-04: tóm tắt khi ứng viên từng nộp đơn hoặc từng là thành viên CLB này; null là ứng viên mới. `eliminated` khi
+            có đơn bị Loại hoặc không trúng tuyển, từng bị đưa ra khỏi CLB hoặc bị từ chối gia nhập.
+          oneOf:
+            - type: 'null'
+            - type: object
+              required: [applications, eliminated, formerMember]
+              properties:
+                applications: { type: integer, minimum: 0 }
+                eliminated: { type: boolean }
+                formerMember: { type: boolean }
         version: { type: integer }
+    ApplicantHistory:
+      type: object
+      description: FR-REC-04, chỉ ban chủ nhiệm xem cùng đơn.
+      required: [applications, memberships]
+      properties:
+        applications:
+          type: array
+          description: Đơn khác của cùng người ở CLB này, mới nhất trước; `eliminationNote` là nhận xét của vòng bị Loại.
+          items:
+            type: object
+            required: [id, recruitment, submittedAt, status, roundResults, totalScore, eliminationNote, outcome]
+            properties:
+              id: { type: string }
+              recruitment:
+                type: object
+                required: [id, name]
+                properties:
+                  id: { type: string }
+                  name: { type: string }
+              submittedAt: { type: string, format: date-time }
+              status: { $ref: '#/components/schemas/ApplicationStatus' }
+              roundResults:
+                type: array
+                items:
+                  type: object
+                  required: [roundName, result, score, note]
+                  properties:
+                    roundName: { type: string }
+                    result: { type: string, enum: [PASS, FAIL] }
+                    score: { type: [integer, 'null'] }
+                    note: { type: string }
+              totalScore: { type: integer }
+              eliminationNote: { $ref: '#/components/schemas/NullableString' }
+              outcome:
+                oneOf:
+                  - $ref: '#/components/schemas/ApplicationOutcome'
+                  - type: 'null'
+        memberships:
+          type: array
+          description: Các lần từng là thành viên hoặc từng xin gia nhập đã kết thúc, kèm lý do.
+          items:
+            type: object
+            required: [joinedOn, leftOn, exitKind, reason]
+            properties:
+              joinedOn: { type: [string, 'null'], format: date }
+              leftOn: { type: [string, 'null'], format: date }
+              exitKind: { type: string, enum: [REJECTED, REMOVED, RESIGNED] }
+              reason: { $ref: '#/components/schemas/NullableString' }
     ApplicationDetail:
       allOf:
         - $ref: '#/components/schemas/ApplicationSummary'
         - type: object
-          required: [answers, studentId, withdrawnAt]
+          required: [history, answers, studentId, withdrawnAt]
           properties:
+            history: { $ref: '#/components/schemas/ApplicantHistory' }
             answers:
               type: array
               items: { $ref: '#/components/schemas/ApplicationAnswer' }
@@ -9693,6 +11631,67 @@ components:
         id: { type: string }
         fullName: { type: string }
         departmentName: { $ref: '#/components/schemas/NullableString' }
+    NewsStatus:
+      type: string
+      description: ST-NEWS. Nháp → Đã xuất bản ↔ Đã ẩn.
+      enum: [DRAFT, PUBLISHED, HIDDEN]
+    NewsSummary:
+      type: object
+      required: [id, title, excerpt, imageUrl, status, author, publishedAt, updatedAt]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        excerpt:
+          type: string
+          description: Đoạn đầu của nội dung trên một dòng, tối đa 160 ký tự.
+        imageUrl: { $ref: '#/components/schemas/NullableString' }
+        status: { $ref: '#/components/schemas/NewsStatus' }
+        author: { $ref: '#/components/schemas/PersonRef' }
+        publishedAt: { type: [string, 'null'], format: date-time }
+        updatedAt: { type: string, format: date-time }
+    NewsDetail:
+      allOf:
+        - $ref: '#/components/schemas/NewsSummary'
+        - type: object
+          required: [body, createdAt, hiddenAt, hiddenBy, allowedActions, version]
+          properties:
+            body:
+              type: string
+              description: Chữ thuần, giữ xuống dòng; không phải HTML.
+            createdAt: { type: string, format: date-time }
+            hiddenAt: { type: [string, 'null'], format: date-time }
+            hiddenBy:
+              oneOf:
+                - $ref: '#/components/schemas/PersonRef'
+                - type: 'null'
+            allowedActions:
+              type: array
+              items:
+                type: string
+                enum: [EDIT, PUBLISH, HIDE]
+            version: { type: integer }
+    NewsPage:
+      allOf:
+        - $ref: '#/components/schemas/PageMeta'
+        - type: object
+          required: [content]
+          properties:
+            content:
+              type: array
+              items: { $ref: '#/components/schemas/NewsSummary' }
+    NewsRequest:
+      type: object
+      required: [title, body]
+      properties:
+        title: { type: string, minLength: 5, maxLength: 150 }
+        body: { type: string, minLength: 20, maxLength: 10000 }
+    UpdateNewsRequest:
+      allOf:
+        - $ref: '#/components/schemas/NewsRequest'
+        - type: object
+          required: [version]
+          properties:
+            version: { type: integer }
     DocumentPage:
       allOf:
         - $ref: '#/components/schemas/PageMeta'
@@ -10399,6 +12398,39 @@ components:
           description: Các lần nộp, mới nhất trước (FR-FIN-10).
           items: { $ref: '#/components/schemas/DuesPayment' }
         version: { type: integer }
+    MyDuesItem:
+      type: object
+      description: Khoản đóng của chính người xem trong một đợt (FR-FIN-13).
+      required: [id, campaign, amountDue, paidAmount, remaining, status, overdue, exemption, payments]
+      properties:
+        id: { type: string }
+        campaign:
+          type: object
+          required: [id, clubId, clubName, name, amount, dueOn, status]
+          properties:
+            id: { type: string }
+            clubId: { type: string }
+            clubName: { type: string }
+            name: { type: string }
+            amount: { type: integer }
+            dueOn: { type: string, format: date }
+            status: { type: string, enum: [OPEN, CLOSED] }
+        amountDue: { type: integer, description: Mức phải đóng sau miễn giảm. }
+        paidAmount: { type: integer }
+        remaining: { type: integer }
+        status: { type: string, enum: [UNPAID, PARTIAL, PAID, EXEMPT] }
+        overdue: { type: boolean }
+        exemption:
+          oneOf:
+            - type: object
+              required: [kind, reason]
+              properties:
+                kind: { type: string, enum: [EXEMPT, REDUCED] }
+                reason: { type: string }
+            - type: 'null'
+        payments:
+          type: array
+          items: { $ref: '#/components/schemas/DuesPayment' }
     DuesPayment:
       type: object
       required: [id, amount, paidOn, confirmedBy, confirmedAt, transactionId]

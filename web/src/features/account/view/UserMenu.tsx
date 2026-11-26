@@ -1,4 +1,4 @@
-import { LogOut, UserRound } from 'lucide-react'
+import { BellRing, LogOut, UserRound } from 'lucide-react'
 import { Link } from 'react-router'
 import { Avatar } from '@/shared/ui/Avatar'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/shared/ui/DropdownMenu'
@@ -30,6 +30,12 @@ export function UserMenu() {
           <Link to="/me/profile">
             <UserRound aria-hidden />
             Hồ sơ cá nhân
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <Link to="/me/notification-settings">
+            <BellRing aria-hidden />
+            Tùy chọn thông báo
           </Link>
         </DropdownMenuItem>
         <DropdownMenuItem

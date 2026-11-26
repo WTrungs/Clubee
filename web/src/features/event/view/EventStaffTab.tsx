@@ -20,6 +20,8 @@ import { useCoHostsViewModel } from '../viewModel/useCoHostsViewModel'
 import { useEventStaffViewModel, type EventStaffViewModel } from '../viewModel/useEventStaffViewModel'
 import { useSetLeadViewModel, type SetLeadViewModel } from '../viewModel/useSetLeadViewModel'
 import { CoHostSection } from './CoHostSection'
+import { StaffSignupAdmin } from './StaffSignupAdmin'
+import { conflictText } from '../viewModel/eventDisplay'
 
 /** Nhãn cạnh tên: CTV, CLB gốc của nhân sự CLB đồng tổ chức, hoặc ban ở CLB chủ trì. */
 function StaffTag({ member }: { member: StaffMember }) {
@@ -113,6 +115,11 @@ function SubcommitteeCard({ subcommittee, onInvite, onAddCollaborator, onSetLead
           <li key={member.id} className="flex items-center gap-2.5 text-sm">
             <Avatar name={member.fullName} size="sm" />
             <span className="min-w-0 flex-1 truncate">{member.fullName}</span>
+            {member.overQuota && (
+              <Badge tone="warning" title="Trưởng BTC duyệt vào vượt chỉ tiêu">
+                Vượt chỉ tiêu
+              </Badge>
+            )}
             <StaffTag member={member} />
           </li>
         ))}
@@ -211,6 +218,9 @@ function InviteDialog({ staff, coHosts }: { staff: EventStaffViewModel; coHosts:
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-sm font-semibold">{candidate.fullName}</span>
                       <span className="block text-xs text-muted-foreground">{candidate.departmentName ? `Ban ${candidate.departmentName}` : 'Chưa có ban'}</span>
+                      {candidate.conflicts.length > 0 && (
+                        <span className="mt-0.5 block text-xs font-medium text-status-warning">Trùng giờ: {candidate.conflicts.map(conflictText).join('; ')}</span>
+                      )}
                     </span>
                     {already ? (
                       <Badge tone="success">Đã trong tiểu ban</Badge>
@@ -347,6 +357,7 @@ export function EventStaffTab({ event, clubId, canManage }: { event: EventDetail
         )}
       </div>
 
+      <StaffSignupAdmin event={event} canManage={canManage} />
       <CoHostSection vm={coHosts} canManage={canManage} eventName={event.name} />
 
       {staff.loading && (

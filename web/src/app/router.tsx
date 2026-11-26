@@ -4,6 +4,7 @@ import { FullScreenLoader } from '@/shared/ui/FullScreenLoader'
 import { AppLayout } from './layouts/AppLayout'
 import { AuthLayout } from './layouts/AuthLayout'
 import { ClubLayout } from './layouts/ClubLayout'
+import { PublicLayout } from './layouts/PublicLayout'
 import { NotFoundPage } from './NotFoundPage'
 import { RouteErrorPage } from './RouteErrorPage'
 
@@ -30,6 +31,27 @@ export const router = createBrowserRouter([
         ],
       },
       {
+        // Danh bạ công khai cho cả khách chưa đăng nhập (FR-CLB-05, SRS 3.5).
+        element: <PublicLayout />,
+        children: [
+          { path: '/explore', lazy: () => import('@/features/club/view/PublicDirectoryPage').then((module) => ({ Component: module.PublicDirectoryPage })) },
+          { path: '/explore/:clubId', lazy: () => import('@/features/club/view/PublicClubPage').then((module) => ({ Component: module.PublicClubPage })) },
+          { path: '/explore/:clubId/news/:newsId', lazy: () => import('@/features/club/view/PublicNewsPage').then((module) => ({ Component: module.PublicNewsPage })) },
+          { path: '/guest-pass/:code', lazy: () => import('@/features/event/view/GuestPassPage').then((module) => ({ Component: module.GuestPassPage })) },
+          { path: '/explore/events/:eventId', lazy: () => import('@/features/event/view/PublicEventPage').then((module) => ({ Component: module.PublicEventPage })) },
+        ],
+      },
+      {
+        // Liên kết trong email mở được cả khi đang đăng nhập (FR-ACC-03).
+        element: <AuthLayout />,
+        children: [
+          {
+            path: '/reset-password',
+            lazy: () => import('@/features/account/view/ResetPasswordPage').then((module) => ({ Component: module.ResetPasswordPage })),
+          },
+        ],
+      },
+      {
         element: <RequireAuth />,
         children: [
           {
@@ -37,6 +59,10 @@ export const router = createBrowserRouter([
             children: [
               // Trang dùng chung cho mọi loại tài khoản.
               { path: '/me/profile', lazy: () => import('@/features/account/view/ProfilePage').then((module) => ({ Component: module.ProfilePage })) },
+              {
+                path: '/me/notification-settings',
+                lazy: () => import('@/features/notification/view/NotificationSettingsPage').then((module) => ({ Component: module.NotificationSettingsPage })),
+              },
               {
                 path: '/notifications',
                 lazy: () => import('@/features/notification/view/NotificationsPage').then((module) => ({ Component: module.NotificationsPage })),
@@ -109,6 +135,7 @@ export const router = createBrowserRouter([
                         path: 'sessions/:sessionId',
                         lazy: () => import('@/features/attendance/view/SessionDetailPage').then((module) => ({ Component: module.SessionDetailPage })),
                       },
+                      { path: 'news', lazy: () => import('@/features/news/view/NewsPage').then((module) => ({ Component: module.NewsPage })) },
                       { path: 'documents', lazy: () => import('@/features/document/view/DocumentsPage').then((module) => ({ Component: module.DocumentsPage })) },
                       {
                         path: 'recruitments',

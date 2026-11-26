@@ -7,6 +7,8 @@ import type { DepartmentMemberRow } from '../model/clubReportTypes'
 import type { AttendanceTally, TaskTally } from '../model/myReportTypes'
 import { periodErrorReasons } from './reportDisplay'
 import { useReportPeriodParams } from './useReportPeriodParams'
+import { useFileDownload } from '@/shared/hooks/useFileDownload'
+import type { ExportFormat } from '@/shared/lib/exportFormat'
 
 export type ClubReportTab = 'club' | 'department' | 'audit'
 
@@ -83,6 +85,7 @@ export function useClubReportsViewModel() {
     placeholderData: keepPreviousData,
   })
   const active = tab === 'department' ? departmentReport : clubReport
+  const exporter = useFileDownload('bao-cao')
   const reasons = periodErrorReasons(active.error)
   const update = (changes: Record<string, string | null>) => {
     const next = new URLSearchParams(searchParams)
@@ -117,6 +120,15 @@ export function useClubReportsViewModel() {
     error: reasons ? null : (active.error ?? departments.error),
     invalidReasons: reasons,
     refetch: () => void (departments.error ? departments.refetch() : active.refetch()),
+    /** FR-RPT-07: xuất báo cáo đang xem theo kỳ đang chọn. */
+    canExport: periodParams.ready && (tab === 'club' ? clubReport.data !== undefined : tab === 'department' && departmentReport.data !== undefined),
+    exportReport: (format: ExportFormat) =>
+      exporter.download(() =>
+        tab === 'department' && department
+          ? clubReportRepository.exportDepartmentReport(clubId, department.id, query, format)
+          : clubReportRepository.exportClubReport(clubId, query, format),
+      ),
+    exporting: exporter.pending,
   }
 }
 

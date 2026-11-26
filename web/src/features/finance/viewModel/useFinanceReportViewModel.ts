@@ -10,6 +10,8 @@ import { financeReportRepository } from '../model/financeReportRepository'
 import type { FinanceReportQuery } from '../model/financeReportTypes'
 import type { FinanceCategory } from '../model/financeTypes'
 import { financeQueryKeys } from './financeQueryKeys'
+import { useFileDownload } from '@/shared/hooks/useFileDownload'
+import type { ExportFormat } from '@/shared/lib/exportFormat'
 
 const LIST_SIZE = 5
 const FILTER_KEYS = ['category', 'eventId'] as const
@@ -71,7 +73,12 @@ export function useFinanceReportViewModel(enabled: boolean) {
   }
 
   const reasons = invalidReasons(report.error)
+  const exporter = useFileDownload('bao-cao-thu-chi')
   return {
+    /** FR-RPT-07: xuất báo cáo thu chi theo kỳ, hạng mục, sự kiện đang chọn. */
+    canExport: report.data !== undefined,
+    exportReport: (format: ExportFormat) => exporter.download(() => financeReportRepository.export(clubId, query, format)),
+    exporting: exporter.pending,
     periodParams,
     period,
     setPeriod: periodParams.setPeriod,

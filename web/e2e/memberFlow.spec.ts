@@ -239,4 +239,23 @@ test.describe('Thành viên', () => {
     await expect(page.getByRole('heading', { name: 'Đội Tình nguyện Xanh' })).toBeVisible()
     await snap(page, testInfo, 'clubDirectoryDark')
   })
+
+  test('ban chủ nhiệm xuất danh sách thành viên theo bộ lọc ra Excel (FR-MEM-11)', async ({ page }, testInfo) => {
+    await loginAs(page, 'anh.nguyen@demo.test')
+    await page.goto('/clubs/c-guitar/members')
+    await expect(page.getByRole('heading', { name: 'Thành viên', level: 1 })).toBeVisible()
+    await snap(page, testInfo, 'membersExport', { fullPage: false })
+    const download = page.waitForEvent('download')
+    await page.getByRole('button', { name: 'Xuất Excel' }).click()
+    const file = await download
+    expect(file.suggestedFilename()).toMatch(/^thanh-vien-gsv-\d{4}-\d{2}-\d{2}\.xlsx$/)
+    await expect(page.getByText('Đã tạo tệp, trình duyệt đang tải về.')).toBeVisible()
+  })
+
+  test('thành viên thường không có nút xuất danh sách', async ({ page }) => {
+    await loginAs(page, 'ha.le@demo.test')
+    await page.goto('/clubs/c-guitar/members')
+    await expect(page.getByRole('heading', { name: 'Thành viên', level: 1 })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Xuất Excel' })).toHaveCount(0)
+  })
 })

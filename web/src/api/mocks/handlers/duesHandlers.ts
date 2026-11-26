@@ -1,5 +1,5 @@
 import { http, HttpResponse } from 'msw'
-import type { DuesExemptionInput, OpenDuesRequest, RecordDuesPaymentRequest, SetExemptionRequest, UpdateDuesCampaignRequest } from '@/features/finance/model/duesTypes'
+import type { DuesExemptionInput, MyDuesItem, OpenDuesRequest, RecordDuesPaymentRequest, SetExemptionRequest, UpdateDuesCampaignRequest } from '@/features/finance/model/duesTypes'
 import { formatDate } from '@/shared/format/formatDate'
 import { formatMoney } from '@/shared/format/formatMoney'
 import { REASON_MAX, REASON_MIN } from '@/shared/lib/reasonRules'
@@ -80,7 +80,47 @@ function openErrors(body: Partial<OpenDuesRequest>, clubId: string): FieldError[
 const itemExemption = (exemption: { kind: 'EXEMPT' | 'REDUCED'; reason: string }, by: string) => ({ kind: exemption.kind, reason: exemption.reason.trim(), by, at: nowIso() })
 const dueAfterExemption = (kind: 'EXEMPT' | 'REDUCED' | 'NONE', amount: number | undefined, full: number) => (kind === 'EXEMPT' ? 0 : kind === 'REDUCED' ? (amount ?? full) : full)
 
+/** FR-FIN-13: một dòng của chính người gọi; không cần quyền xem đợt vì là dữ liệu của mình. */
+function toMyDuesItem(item: DbDuesItem): MyDuesItem | null {
+  const campaign = db.duesCampaigns.find((candidate) => candidate.id === item.campaignId)
+  if (!campaign) return null
+  const view = toDuesItem(item)
+  const remaining = owedOf(item)
+  return {
+    id: item.id,
+    campaign: {
+      id: campaign.id,
+      clubId: campaign.clubId,
+      clubName: db.clubs.find((club) => club.id === campaign.clubId)?.name ?? '',
+      name: campaign.name,
+      amount: campaign.amount,
+      dueOn: campaign.dueOn,
+      status: campaign.status,
+    },
+    amountDue: item.amountDue,
+    paidAmount: view.paidAmount,
+    remaining,
+    status: view.status,
+    overdue: campaign.status === 'OPEN' && remaining > 0 && campaign.dueOn < vnToday(),
+    exemption: item.exemption ? { kind: item.exemption.kind, reason: item.exemption.reason } : null,
+    payments: view.payments,
+  }
+}
+
 export const duesHandlers = [
+  http.get(`${API}/me/dues`, async ({ request }) => {
+    await networkDelay()
+    const user = currentUser()
+    if (!user.ok) return user.response
+    const clubId = new URL(request.url).searchParams.get('clubId')
+    const openedAt = (item: DbDuesItem) => db.duesCampaigns.find((campaign) => campaign.id === item.campaignId)?.openedAt ?? ''
+    const rows = db.duesItems
+      .filter((item) => item.userId === user.value.id && (!clubId || item.clubId === clubId))
+      .toSorted((a, b) => openedAt(b).localeCompare(openedAt(a)))
+      .flatMap((item) => toMyDuesItem(item) ?? [])
+    return HttpResponse.json(rows)
+  }),
+
   http.get(`${API}/clubs/:clubId/dues-campaigns`, async ({ request, params }) => {
     await networkDelay()
     const user = currentUser()

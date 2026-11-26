@@ -9,6 +9,7 @@ import {
   Flag,
   Megaphone,
   PencilLine,
+  Power,
   Settings2,
   SlidersHorizontal,
   UsersRound,
@@ -20,11 +21,14 @@ import { ClubMonogram } from '@/features/account/view/ClubMonogram'
 import { EventStatusBadge } from '@/features/event/view/EventMeta'
 import { formatEventTime } from '@/features/event/viewModel/eventDisplay'
 import { ComposeAnnouncementSheet } from '@/features/notification/view/ComposeAnnouncementSheet'
+import { clubStatusDisplay } from '../viewModel/clubStatusDisplay'
+import { ClubStatusDialog } from './ClubStatusDialog'
 import { DueLabel, TaskStatusBadge } from '@/features/task/view/TaskMeta'
 import { formatDate } from '@/shared/format/formatDate'
 import { cn } from '@/shared/lib/cn'
 import { duration, easeOut, itemVariants, listVariants } from '@/shared/motion/presets'
 import { AnimatedNumber } from '@/shared/ui/AnimatedNumber'
+import { Badge } from '@/shared/ui/Badge'
 import { Button } from '@/shared/ui/Button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/shared/ui/DropdownMenu'
 import { Skeleton } from '@/shared/ui/Skeleton'
@@ -84,6 +88,11 @@ export function ClubOverviewPage() {
               <p className="min-w-0 text-sm font-semibold opacity-90">
                 {club.field} · {club.shortName} · {club.currentTermName}
               </p>
+              {club.status !== 'ACTIVE' && (
+                <Badge tone={clubStatusDisplay[club.status].tone} dot>
+                  {clubStatusDisplay[club.status].label}
+                </Badge>
+              )}
             </div>
             {(vm.canSendAnnouncement || vm.canManageClub) && (
               <div className="flex flex-wrap gap-2">
@@ -104,14 +113,24 @@ export function ClubOverviewPage() {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent>
-                      <DropdownMenuItem onSelect={vm.openProfile}>
-                        <PencilLine aria-hidden />
-                        Sửa hồ sơ CLB
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onSelect={vm.openSettings}>
-                        <SlidersHorizontal aria-hidden />
-                        Tham số CLB
-                      </DropdownMenuItem>
+                      {vm.canEditClub && (
+                        <>
+                          <DropdownMenuItem onSelect={vm.openProfile}>
+                            <PencilLine aria-hidden />
+                            Sửa hồ sơ CLB
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onSelect={vm.openSettings}>
+                            <SlidersHorizontal aria-hidden />
+                            Tham số CLB
+                          </DropdownMenuItem>
+                        </>
+                      )}
+                      {vm.canChangeStatus && (
+                        <DropdownMenuItem onSelect={vm.openStatus}>
+                          <Power aria-hidden />
+                          Đổi trạng thái CLB
+                        </DropdownMenuItem>
+                      )}
                     </DropdownMenuContent>
                   </DropdownMenu>
                 )}
@@ -231,6 +250,7 @@ export function ClubOverviewPage() {
       <ClubProfileSheet open={vm.profileOpen} onClose={vm.closeProfile} />
       <ClubSettingsSheet open={vm.settingsOpen} onClose={vm.closeSettings} />
       <ComposeAnnouncementSheet open={vm.composeOpen} onClose={vm.closeCompose} />
+      <ClubStatusDialog open={vm.statusOpen} onClose={vm.closeStatus} />
     </div>
   )
 }

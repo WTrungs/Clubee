@@ -5,6 +5,9 @@ import type {
   ClubDirectoryEntry,
   ClubSettings,
   ClubSettingsValues,
+  ClubStatus,
+  ClubTransitionAction,
+  ClubTransitionRequest,
   CreateClubRequest,
   UpdateClubRequest,
   UpdateClubSettingsRequest,
@@ -29,6 +32,12 @@ import { canAssignStanding, canCreateTerm } from '../mockTerms'
 import { nowIso, vnToday } from '../mockTime'
 import { canRequestTransfer } from '../mockTransfers'
 import { reportDepartmentsOf } from '../mockClubReport'
+import { workloadScopesOf } from '../mockWorkload'
+import { audit } from '../mockAudit'
+import { canManageRecruitment } from '../mockRecruitments'
+import { clubStatusOf, lastStatusChangeOf } from '../mockClubStatus'
+import { eventFundOf } from '../mockFinance'
+import { clubTarget, notify } from '../mockNotifications'
 
 
 function clubActionsFor(userId: string, clubId: string): ClubAction[] {
@@ -50,10 +59,19 @@ function clubActionsFor(userId: string, clubId: string): ClubAction[] {
   if (canRequestTransfer(userId, clubId)) actions.push('REQUEST_PRESIDENCY_TRANSFER')
   if (isBoardMember(userId, clubId)) actions.push('VIEW_PERMISSIONS', 'VIEW_SHARED_EVENTS', 'VIEW_DUES', 'VIEW_FINANCE_REPORT')
   if (isBoardMember(userId, clubId) && keepsLedger(userId, clubId)) actions.push('OPEN_DUES')
-  if (isBoardMember(userId, clubId)) actions.push('VIEW_CLUB_REPORT', 'VIEW_AUDIT_LOG')
+  if (isBoardMember(userId, clubId)) actions.push('VIEW_CLUB_REPORT', 'VIEW_AUDIT_LOG', 'VIEW_HIDDEN_DOCUMENTS')
   if (reportDepartmentsOf(userId, clubId).length > 0) actions.push('VIEW_DEPARTMENT_REPORTS')
+  if (workloadScopesOf(userId, clubId).length > 0) actions.push('VIEW_WORKLOAD')
+  if (canManageRecruitment(userId, clubId)) actions.push('CREATE_RECRUITMENT')
+  if (isBoardMember(userId, clubId)) actions.push('CHANGE_CLUB_STATUS', 'MANAGE_NEWS', 'EXPORT_MEMBERS')
+  const status = clubStatusOf(clubId)
+  // ST-CLB: tạm ngừng thì không tạo hoạt động mới; giải thể thì chỉ còn quyền xem.
+  if (status === 'DISSOLVED') return actions.filter((action) => action.startsWith('VIEW_'))
+  if (status === 'SUSPENDED') return actions.filter((action) => !NEW_ACTIVITY_ACTIONS.has(action))
   return actions
 }
+
+const NEW_ACTIVITY_ACTIONS = new Set<ClubAction>(['CREATE_EVENT', 'PROPOSE_EVENT', 'CREATE_RECRUITMENT'])
 
 function toClubDetail(club: DbClub, viewerId: string): ClubDetail {
   const term = currentTermOf(club.id)
@@ -77,6 +95,8 @@ function toClubDetail(club: DbClub, viewerId: string): ClubDetail {
     allowedActions: clubActionsFor(viewerId, club.id),
     generalFundId: generalFundId(club.id),
     viewerRole: 'MEMBER',
+    status: club.status,
+    lastStatusChange: lastStatusChangeOf(club),
     version: club.version,
   }
 }
@@ -94,6 +114,8 @@ function toGuestClubDetail(club: DbClub): ClubDetail {
     allowedActions: [],
     generalFundId: '',
     viewerRole: 'EVENT_GUEST',
+    status: club.status,
+    lastStatusChange: null,
     version: club.version,
   }
 }
@@ -149,6 +171,44 @@ function editableClub(userId: string, clubId: string, what = 'sửa hồ sơ CLB
   return { ok: true, club }
 }
 
+/** ST-CLB: trạng thái đích của từng thao tác theo trạng thái hiện tại. */
+const CLUB_TRANSITIONS: Record<ClubStatus, Partial<Record<ClubTransitionAction, ClubStatus>>> = {
+  ACTIVE: { SUSPEND: 'SUSPENDED', DISSOLVE: 'DISSOLVED' },
+  SUSPENDED: { REACTIVATE: 'ACTIVE', DISSOLVE: 'DISSOLVED' },
+  DISSOLVED: {},
+}
+const TRANSITION_ACTIONS: ClubTransitionAction[] = ['SUSPEND', 'REACTIVATE', 'DISSOLVE']
+const STATUS_REASON_MIN = 5
+const STATUS_REASON_MAX = 500
+
+/** Sự kiện chặn giải thể: chưa Đã đóng, hoặc Đã hủy mà quỹ sự kiện chưa quyết toán. */
+export function openEventsOf(clubId: string): Array<{ id: string; name: string }> {
+  return db.events
+    .filter((event) => event.clubId === clubId)
+    .filter((event) => {
+      if (event.status === 'CLOSED') return false
+      if (event.status !== 'CANCELLED') return true
+      const fund = eventFundOf(event.id)
+      return fund !== undefined && fund.status !== 'SETTLED'
+    })
+    .map((event) => ({ id: event.id, name: event.name }))
+}
+
+const transitionNotice: Record<ClubTransitionAction, (club: DbClub) => string> = {
+  SUSPEND: (club) => `${club.name} tạm ngừng hoạt động`,
+  REACTIVATE: (club) => `${club.name} hoạt động trở lại`,
+  DISSOLVE: (club) => `${club.name} đã giải thể`,
+}
+
+/** Giải thể: yêu cầu gia nhập đang chờ bị từ chối vì CLB không còn nhận thành viên. */
+function rejectPendingJoinRequests(clubId: string, actorId: string) {
+  const reason = 'CLB đã giải thể.'
+  for (const membership of db.memberships.filter((candidate) => candidate.clubId === clubId && candidate.status === 'PENDING')) {
+    Object.assign(membership, { status: 'LEFT', leftOn: vnToday(), exitKind: 'REJECTED', leaveReason: reason, version: membership.version + 1 })
+    recordMembershipChange(membership, { actorId, fromStatus: 'PENDING', toStatus: 'LEFT', reason })
+  }
+}
+
 /** Các tham số sửa được, cùng thứ tự với form. */
 const SETTING_KEYS = [
   'probationStep',
@@ -159,6 +219,7 @@ const SETTING_KEYS = [
   'attendanceQrRotateSeconds',
   'attendanceEditHours',
   'taskReminderDays',
+  'taskOverloadThreshold',
   'expenseReceiptThreshold',
   'advanceSettleDays',
   'semester1Start',
@@ -176,6 +237,7 @@ function toClubSettings(club: DbClub): ClubSettings {
     attendanceQrRotateSeconds: club.attendanceQrRotateSeconds,
     attendanceEditHours: club.attendanceEditHours,
     taskReminderDays: club.taskReminderDays,
+    taskOverloadThreshold: club.taskOverloadThreshold,
     expenseReceiptThreshold: club.expenseReceiptThreshold,
     advanceSettleDays: club.advanceSettleDays,
     semester1Start: club.semester1Start,
@@ -237,13 +299,14 @@ export const clubHandlers = [
     const url = new URL(request.url)
     const keyword = url.searchParams.get('q')
     const rows: ClubDirectoryEntry[] = db.clubs
+      .filter((club) => club.status !== 'DISSOLVED' || membershipOf(user.value.id, club.id) !== undefined)
       .filter((club) => matchesKeyword(`${club.name} ${club.shortName} ${club.field}`, keyword))
       .toSorted((a, b) => a.name.localeCompare(b.name, 'vi'))
       .map((club) => ({
         ...publicClubInfo(club),
         myMembership: myMembershipIn(user.value.id, club.id),
         // BR-MEM-01: chỉ gửi được khi chưa có tư cách đang hoạt động ở CLB đó.
-        allowedActions: membershipOf(user.value.id, club.id) ? [] : ['REQUEST_TO_JOIN'],
+        allowedActions: membershipOf(user.value.id, club.id) || club.status === 'DISSOLVED' ? [] : ['REQUEST_TO_JOIN'],
       }))
     return HttpResponse.json(paginate(rows, url, 12))
   }),
@@ -271,6 +334,7 @@ export const clubHandlers = [
       contactUrl: null,
       rules: '',
       status: 'ACTIVE',
+      statusHistory: [],
       collectsStudentId: false,
       ...defaultClubSettings(),
       version: 1,
@@ -346,6 +410,48 @@ export const clubHandlers = [
     if (errors.length > 0) return problem(400, 'Hồ sơ CLB chưa hợp lệ.', 'VALIDATION', errors)
     Object.assign(target.club, { ...fields, collectsStudentId: body.collectsStudentId === true, version: target.club.version + 1 })
     return HttpResponse.json(toClubDetail(target.club, user.value.id))
+  }),
+
+  http.post(`${API}/clubs/:clubId/transitions`, async ({ request, params }) => {
+    await networkDelay()
+    const user = writer(request)
+    if (!user.ok) return user.response
+    const clubId = String(params.clubId)
+    const club = db.clubs.find((candidate) => candidate.id === clubId)
+    if (!club) return problem(404, 'Không tìm thấy CLB.', 'CLUB_NOT_FOUND')
+    if (!canAccessClub(user.value.id, clubId)) return problem(403, 'Bạn không phải thành viên của CLB này.', 'NOT_A_MEMBER')
+    if (!isBoardMember(user.value.id, clubId)) return problem(403, 'Chỉ ban chủ nhiệm đổi được trạng thái CLB.', 'FORBIDDEN')
+    const body = (await request.json()) as Partial<ClubTransitionRequest>
+    if (body.version !== club.version) return problem(409, 'CLB vừa được người khác cập nhật. Tải lại rồi thử lại.', 'VERSION_CONFLICT')
+    const action = TRANSITION_ACTIONS.find((candidate) => candidate === body.action)
+    const target = action ? CLUB_TRANSITIONS[club.status][action] : undefined
+    if (action && !target) return problem(422, 'CLB đang ở trạng thái không cho phép thao tác này.', 'INVALID_TRANSITION')
+    if (action === 'DISSOLVE') {
+      const open = openEventsOf(clubId)
+      if (open.length > 0) {
+        const names = open.map((event) => event.name).join(', ')
+        return problem(422, `Còn ${open.length} sự kiện chưa đóng nên chưa giải thể được CLB: ${names}.`, 'CLUB_HAS_OPEN_EVENTS')
+      }
+    }
+    const reason = (body.reason ?? '').trim()
+    const errors = [
+      ...(!action ? [{ field: 'action', message: 'Chọn thao tác.' }] : []),
+      ...(reason.length < STATUS_REASON_MIN || reason.length > STATUS_REASON_MAX ? [{ field: 'reason', message: `Lý do cần từ ${STATUS_REASON_MIN} đến ${STATUS_REASON_MAX} ký tự.` }] : []),
+    ]
+    if (!action || !target || errors.length > 0) return problem(400, 'Thông tin chưa hợp lệ.', 'VALIDATION', errors)
+    const from = club.status
+    const at = nowIso()
+    club.statusHistory.push({ from, to: target, at, by: user.value.id, reason })
+    club.status = target
+    club.version += 1
+    if (target === 'DISSOLVED') rejectPendingJoinRequests(clubId, user.value.id)
+    audit({ at, actorId: user.value.id, clubId, action: 'CHANGE_CLUB_STATUS', objectType: 'CLUB', objectId: clubId, objectLabel: club.name, before: { status: from }, after: { status: target }, reason })
+    const members = db.memberships.filter((membership) => membership.clubId === clubId && membership.status !== 'LEFT' && membership.status !== 'PENDING')
+    notify(
+      members.map((membership) => membership.userId),
+      { clubId, category: 'MEMBERSHIP', title: transitionNotice[action](club), body: `Lý do: ${reason}`, target: clubTarget(clubId), actorId: user.value.id },
+    )
+    return HttpResponse.json(toClubDetail(club, user.value.id))
   }),
 
   http.post(`${API}/clubs/:clubId/logo`, async ({ request, params }) => {

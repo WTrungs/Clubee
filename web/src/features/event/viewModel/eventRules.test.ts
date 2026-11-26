@@ -130,7 +130,8 @@ describe('organising committee (FR-EVT-04, 05)', () => {
   it('shows invite candidates with only name and department (FR-EVT-05)', async () => {
     signInAs('u-bao')
     const candidates = await eventRepository.staffCandidates('c-guitar', 'e-winter', 'trâm')
-    expect(candidates).toEqual([{ id: 'u-tram', fullName: 'Ngô Bảo Trâm', departmentName: 'Hậu cần' }])
+    // FR-TASK-09: kèm hoạt động chồng giờ (ở đây không có), không thêm thông tin cá nhân nào khác.
+    expect(candidates).toEqual([{ id: 'u-tram', fullName: 'Ngô Bảo Trâm', departmentName: 'Hậu cần', conflicts: [] }])
   })
 
   it('lets the event lead pick a lead for the first subcommittee of an event without any yet', async () => {

@@ -16,12 +16,17 @@ export interface DbNotification {
   createdAt: string
   /** Nhóm nhận của thông báo gửi tay; bản ghi cũ không có thì chỉ kiểm còn là thành viên CLB (BR-SEC-02). */
   audience?: AnnouncementAudienceRef
+  /** FR-NOT-05: người gửi ghim lên đầu hộp thư người nhận. */
+  pinned?: { by: string; at: string } | null
 }
 
 export interface DbNotificationRecipient {
   notificationId: string
   userId: string
   readAt: string | null
+  /** FR-ACC-07, FR-NOT-04: kênh máy chủ sẽ gửi thêm theo tùy chọn của người nhận lúc gửi; bản ghi mẫu không có. */
+  email?: boolean
+  push?: boolean
 }
 
 interface SeedSpec {

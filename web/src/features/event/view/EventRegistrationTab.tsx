@@ -17,6 +17,7 @@ import { cancelHint, cancelRegistrationText, reconfirmHint, seatInfo } from '../
 import type { EventDetailViewModel } from '../viewModel/useEventDetailViewModel'
 import { useEventRegistrationsViewModel } from '../viewModel/useEventRegistrationsViewModel'
 import { useRegistrationActionsViewModel } from '../viewModel/useRegistrationActionsViewModel'
+import { Badge } from '@/shared/ui/Badge'
 import { RegistrationBadge } from './EventMeta'
 
 function Confetti() {
@@ -173,7 +174,10 @@ function RegistrationList({ clubId, eventId }: { clubId: string; eventId: string
               <span className="w-6 text-right text-xs text-muted-foreground tabular-nums">{list.page * list.pageSize + index + 1}</span>
               <Avatar name={row.attendee.fullName} size="sm" />
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-sm font-semibold">{row.attendee.fullName}</span>
+                <span className="flex min-w-0 items-center gap-1.5">
+                  <span className="truncate text-sm font-semibold">{row.attendee.fullName}</span>
+                  {row.guest && <Badge tone="info">Khách mời</Badge>}
+                </span>
                 <span className="block text-xs text-muted-foreground">
                   {formatDateTime(row.registeredAt)}
                   {row.promotedAt && ` · được đôn lúc ${formatDateTime(row.promotedAt)}`}

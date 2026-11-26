@@ -1,4 +1,4 @@
-import { BadgeCheck, CalendarCheck, CalendarDays, CalendarRange, ClipboardList, Megaphone, UserPlus, Wallet, type LucideIcon } from 'lucide-react'
+import { BadgeCheck, CalendarCheck, CalendarDays, CalendarRange, ClipboardList, Megaphone, Pin, UserPlus, Wallet, type LucideIcon } from 'lucide-react'
 import { formatDateTime } from '@/shared/format/formatDate'
 import { cn } from '@/shared/lib/cn'
 import { toneVariants } from '@/shared/ui/tone'
@@ -39,6 +39,12 @@ export function NotificationItem({ item, onOpen }: { item: NotificationSummary; 
           {item.title}
         </span>
         <span className="mt-0.5 block text-xs text-muted-foreground">
+          {item.pinned && (
+            <span className="mr-1.5 inline-flex items-center gap-1 font-semibold text-primary">
+              <Pin aria-hidden className="size-3" />
+              Đã ghim ·
+            </span>
+          )}
           {display.label}
           {item.clubName ? ` · ${item.clubName}` : ''} · {formatDateTime(item.createdAt)}
         </span>

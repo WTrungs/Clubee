@@ -14,6 +14,7 @@ import { toneVariants } from '@/shared/ui/tone'
 import { scopeKeyOf } from '../viewModel/assignTaskSchema'
 import { PRIORITIES, taskPriorityDisplay } from '../viewModel/taskDisplay'
 import { useAssignTaskViewModel } from '../viewModel/useAssignTaskViewModel'
+import { WarningNote } from '@/shared/ui/WarningNote'
 
 const quickDue = [
   { days: 1, label: 'Ngày mai' },
@@ -95,6 +96,7 @@ export function AssignTaskSheet({ clubId, clubName, open, onOpenChange }: Assign
                   ))}
                 </NativeSelect>
               </FormField>
+              {vm.ownerWarning && <WarningNote>{vm.ownerWarning}</WarningNote>}
 
               {vm.collaboratorCandidates.length > 0 && (
                 <fieldset className="space-y-2">

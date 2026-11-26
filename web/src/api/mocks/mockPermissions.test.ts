@@ -119,7 +119,7 @@ describe('tasks read members and departments from the shared source', () => {
     const scopes = assignableScopes('u-anh', 'c-guitar')
     expect(scopes.map((scope) => scope.id)).not.toContain('d-photo')
     const media = scopes.find((scope) => scope.id === 'd-media')
-    expect(media?.members).toEqual(eligibleMembers('c-guitar', { departmentId: 'd-media' }))
+    expect(media?.members.map(({ id, fullName, departmentName }) => ({ id, fullName, departmentName }))).toEqual(eligibleMembers('c-guitar', { departmentId: 'd-media' }))
     expect(media?.members.map((member) => member.id)).not.toContain('u-yen')
   })
 

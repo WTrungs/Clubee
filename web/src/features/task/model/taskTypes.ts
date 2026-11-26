@@ -129,6 +129,8 @@ export interface CreateTaskRequest {
 
 export interface AssignableMember extends PersonRef {
   departmentName: string | null
+  /** FR-TASK-09: số việc đang làm chính của người này trong CLB. */
+  openTaskCount: number
 }
 
 /** Phạm vi người dùng được giao việc (BR-TASK-01) kèm người nhận hợp lệ. */
@@ -138,6 +140,8 @@ export interface AssignableScope {
   name: string
   eventName: string | null
   members: AssignableMember[]
+  /** Tham số CLB: giao thêm mà vượt số việc đang làm này thì cảnh báo, không chặn (FR-TASK-09). */
+  overloadThreshold: number
 }
 
 export interface TaskQuery {
@@ -155,4 +159,55 @@ export interface TaskQuery {
 export interface TaskFacets {
   clubs: Array<{ id: string; name: string }>
   events: Array<{ id: string; name: string; clubName: string }>
+}
+
+/** FR-TASK-08: phạm vi xem khối lượng việc: toàn CLB (ban chủ nhiệm), một ban, một sự kiện. */
+export type WorkloadScopeType = 'CLUB' | 'DEPARTMENT' | 'EVENT'
+
+export interface WorkloadScope {
+  type: WorkloadScopeType
+  /** Bằng `null` khi là toàn CLB. */
+  id: string | null
+  name: string
+}
+
+/** Một người trong phạm vi: việc làm chính còn mở (Mới giao, Đang làm, Chờ nghiệm thu), trong đó quá hạn, và việc phối hợp còn mở. */
+export interface WorkloadRow {
+  person: PersonRef
+  /** Ban chính, vai trong BTC, hoặc ghi chú người ngoài phạm vi còn giữ việc. */
+  detail: string | null
+  onLeave: boolean
+  open: number
+  overdue: number
+  collaborating: number
+}
+
+export interface Workload {
+  scope: WorkloadScope
+  rows: WorkloadRow[]
+}
+
+/** FR-TASK-07: người viết hoặc người giao ẩn được bình luận, không xóa. */
+export type TaskCommentAction = 'HIDE'
+
+export interface TaskComment {
+  id: string
+  author: PersonRef
+  /** null khi bình luận đã bị ẩn: nội dung và tệp không trả về nữa. */
+  body: string | null
+  attachments: FileRef[]
+  createdAt: string
+  hidden: { by: PersonRef; at: string } | null
+  allowedActions: TaskCommentAction[]
+}
+
+export interface TaskCommentList {
+  comments: TaskComment[]
+  /** Người giao, người chính, người phối hợp viết được khi việc chưa hủy và sự kiện chưa khóa. */
+  canComment: boolean
+}
+
+export interface CreateTaskCommentRequest {
+  body: string
+  attachmentIds: string[]
 }

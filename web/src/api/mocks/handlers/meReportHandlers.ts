@@ -1,11 +1,13 @@
 import { http, HttpResponse } from 'msw'
-import type { ClubHistoryEntry, MyAttendanceRow, MyDuesRow } from '@/features/report/model/myReportTypes'
+import type { ClubHistoryEntry, MyAttendanceRow, MyDuesRow, MyReport } from '@/features/report/model/myReportTypes'
+import type { ReportRange } from '@/features/report/model/reportPeriodTypes'
 import { db, type DbClub } from '../db'
 import { attendanceRecordsOf, tallyAttendance } from '../mockAttendanceStats'
 import { duesItemStatus, paidOf } from '../mockDues'
 import { API, currentUser, networkDelay, paginate, problem } from '../mockHttp'
 import { reportPeriods, resolveReportRange } from '../mockReportPeriods'
 import { taskTallyOf } from '../mockTaskStats'
+import { formatOf, myReportDocument, reportFileResponse } from '../mockReportExports'
 
 // FR-ATT-10, FR-RPT-02: lịch sử tham gia và báo cáo cá nhân; mỗi người chỉ xem dữ liệu của chính mình, kể cả ở CLB đã rời.
 
@@ -18,6 +20,30 @@ function clubFor(userId: string, url: URL): { ok: true; club: DbClub } | { ok: f
   const club = db.clubs.find((candidate) => candidate.id === clubId)
   if (!club || !everJoined(userId, clubId)) return { ok: false, response: problem(403, 'Bạn chưa từng là thành viên của CLB này.', 'NOT_A_MEMBER') }
   return { ok: true, club }
+}
+
+/** FR-RPT-02: chuyên cần, việc, đóng quỹ của một người trong kỳ; dùng chung cho xem và xuất. */
+function myReportOf(userId: string, club: DbClub, range: ReportRange): MyReport {
+  const records = attendanceRecordsOf(userId, club.id, range.from, range.to)
+  const dues: MyDuesRow[] = db.duesCampaigns
+    .filter((campaign) => campaign.clubId === club.id && campaign.dueOn >= range.from && campaign.dueOn <= range.to)
+    .flatMap((campaign) =>
+      db.duesItems
+        .filter((item) => item.campaignId === campaign.id && item.userId === userId)
+        .map((item) => ({ campaignId: campaign.id, name: campaign.name, dueOn: campaign.dueOn, amountDue: item.amountDue, paid: paidOf(item), status: duesItemStatus(item) })),
+    )
+    .toSorted((a, b) => b.dueOn.localeCompare(a.dueOn))
+  return {
+    club: { id: club.id, name: club.name },
+    range,
+    attendance: tallyAttendance(records.map(({ record }) => record.status)),
+    tasks: taskTallyOf(
+      db.tasks.filter((task) => task.clubId === club.id),
+      userId,
+      range,
+    ),
+    dues,
+  }
 }
 
 export const meReportHandlers = [
@@ -84,27 +110,21 @@ export const meReportHandlers = [
     if (!target.ok) return target.response
     const resolved = resolveReportRange(url, target.club)
     if (!resolved.ok) return problem(400, 'Kỳ chưa hợp lệ.', 'VALIDATION', resolved.errors)
-    const { range } = resolved
-    const club = target.club
-    const records = attendanceRecordsOf(userId, club.id, range.from, range.to)
-    const dues: MyDuesRow[] = db.duesCampaigns
-      .filter((campaign) => campaign.clubId === club.id && campaign.dueOn >= range.from && campaign.dueOn <= range.to)
-      .flatMap((campaign) =>
-        db.duesItems
-          .filter((item) => item.campaignId === campaign.id && item.userId === userId)
-          .map((item) => ({ campaignId: campaign.id, name: campaign.name, dueOn: campaign.dueOn, amountDue: item.amountDue, paid: paidOf(item), status: duesItemStatus(item) })),
-      )
-      .toSorted((a, b) => b.dueOn.localeCompare(a.dueOn))
-    return HttpResponse.json({
-      club: { id: club.id, name: club.name },
-      range,
-      attendance: tallyAttendance(records.map(({ record }) => record.status)),
-      tasks: taskTallyOf(
-        db.tasks.filter((task) => task.clubId === club.id),
-        userId,
-        range,
-      ),
-      dues,
-    })
+    return HttpResponse.json(myReportOf(userId, target.club, resolved.range))
+  }),
+
+  // FR-RPT-07: dữ liệu của chính người xuất nên không ghi nhật ký.
+  http.get(`${API}/me/report/export`, async ({ request }) => {
+    await networkDelay()
+    const user = currentUser()
+    if (!user.ok) return user.response
+    const url = new URL(request.url)
+    const target = clubFor(user.value.id, url)
+    if (!target.ok) return target.response
+    const format = formatOf(url)
+    if (format instanceof Response) return format
+    const resolved = resolveReportRange(url, target.club)
+    if (!resolved.ok) return problem(400, 'Kỳ chưa hợp lệ.', 'VALIDATION', resolved.errors)
+    return reportFileResponse(myReportDocument(myReportOf(user.value.id, target.club, resolved.range), user.value.fullName), format)
   }),
 ]

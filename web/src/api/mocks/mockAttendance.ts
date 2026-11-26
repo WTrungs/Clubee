@@ -157,7 +157,8 @@ export function eventActivity(event: DbEvent): AttendanceActivity {
     // Các ngày sau của sự kiện nhiều ngày bắt đầu cùng giờ với ngày đầu.
     startsAt: (day) => (day === null || day === days[0] ? event.startAt : `${day}T${toVnIso(Date.parse(event.startAt)).slice(11)}`),
     // Người Chờ xác nhận lại vẫn giữ chỗ tới hạn, và hạn có thể trùng giờ bắt đầu, sau lúc mở điểm danh.
-    expected: () => db.registrations.filter((registration) => registration.eventId === event.id && holdsSeat(registration)).map((registration) => registration.userId),
+    // Khách mời ghi có mặt riêng theo mã tham dự (FR-EVT-12), không nằm trong bảng điểm danh thành viên.
+    expected: () => db.registrations.flatMap((registration) => (registration.eventId === event.id && holdsSeat(registration) && registration.userId ? [registration.userId] : [])),
     // Xin phép vắng chỉ áp dụng cho buổi sinh hoạt; với sự kiện, người không đi được thì hủy đăng ký.
     excused: () => [],
     absenceOf: () => null,

@@ -14,6 +14,7 @@ import { Skeleton } from '@/shared/ui/Skeleton'
 import { ErrorState } from '@/shared/ui/StateViews'
 import type { TaskDetail } from '../model/taskTypes'
 import type { TaskEditViewModel } from '../viewModel/useTaskEditViewModel'
+import { WarningNote } from '@/shared/ui/WarningNote'
 
 const OUT_OF_SCOPE = 'không còn trong phạm vi'
 
@@ -56,6 +57,7 @@ function ReassignForm({ task, vm, formId }: { task: TaskDetail; vm: TaskEditView
           ))}
         </NativeSelect>
       </FormField>
+      {vm.ownerWarning && <WarningNote>{vm.ownerWarning}</WarningNote>}
       <fieldset className="space-y-2" aria-describedby={errors.collaboratorIds?.message ? collaboratorErrorId : undefined}>
         <legend className="text-sm font-semibold">Người phối hợp</legend>
         {vm.collaboratorOptions.length === 0 ? (

@@ -2,6 +2,8 @@ import type { PersonRef } from '@/api/commonTypes'
 import type { MemberStatus } from '@/features/account/model/accountTypes'
 import type { MembershipExit } from '@/features/member/model/memberTypes'
 import type { TermStatus } from '@/features/term/model/termTypes'
+import type { PublicEventSummary } from '@/features/event/model/eventTypes'
+import type { PublicNewsSummary } from '@/features/news/model/newsTypes'
 
 /** Hành động cấp CLB máy chủ cho phép người đang xem (quyền tính ở máy chủ, SRS 2.4). */
 export type ClubAction =
@@ -35,6 +37,38 @@ export type ClubAction =
   | 'VIEW_DEPARTMENT_REPORTS'
   /** FR-RPT-06: ban chủ nhiệm xem nhật ký thao tác. */
   | 'VIEW_AUDIT_LOG'
+  /** FR-DOC-04: ban chủ nhiệm xem và khôi phục tài liệu đã ẩn. */
+  | 'VIEW_HIDDEN_DOCUMENTS'
+  /** FR-TASK-08: ban chủ nhiệm, Trưởng ban, Phó ban, Trưởng BTC xem khối lượng việc theo người. */
+  | 'VIEW_WORKLOAD'
+  /** FR-CLB-04: ban chủ nhiệm tạm ngừng, cho hoạt động lại, giải thể CLB. */
+  | 'CHANGE_CLUB_STATUS'
+  /** FR-REC-01: mở đợt tuyển mới; CLB tạm ngừng thì không có (ST-CLB). */
+  | 'CREATE_RECRUITMENT'
+  /** FR-CLB-06: ban chủ nhiệm soạn, xuất bản, ẩn tin tức; thấy cả tin nháp và tin đã ẩn. */
+  | 'MANAGE_NEWS'
+  /** FR-MEM-11: ban chủ nhiệm xuất danh sách thành viên ra Excel. */
+  | 'EXPORT_MEMBERS'
+
+/** ST-CLB: Hoạt động ↔ Tạm ngừng; Hoạt động, Tạm ngừng → Giải thể. */
+export type ClubStatus = 'ACTIVE' | 'SUSPENDED' | 'DISSOLVED'
+
+export type ClubTransitionAction = 'SUSPEND' | 'REACTIVATE' | 'DISSOLVE'
+
+/** FR-CLB-04. */
+export interface ClubTransitionRequest {
+  action: ClubTransitionAction
+  reason: string
+  version: number
+}
+
+/** Lần đổi trạng thái gần nhất, hiện ở băng thông báo của CLB. */
+export interface ClubStatusChange {
+  status: ClubStatus
+  at: string
+  by: PersonRef
+  reason: string
+}
 
 /** Nhiệm kỳ đang phụ trách CLB: Đang chạy hoặc Đang bàn giao. */
 export interface TermSummary {
@@ -72,6 +106,8 @@ export interface ClubDetail extends ClubContacts {
   generalFundId: string
   /** Khách của sự kiện (CTV, nhân sự CLB đồng tổ chức) chỉ có thông tin công khai và mục Sự kiện. */
   viewerRole: ClubViewerRole
+  status: ClubStatus
+  lastStatusChange: ClubStatusChange | null
   version: number
 }
 
@@ -115,6 +151,8 @@ export interface ClubSettingsValues {
   rescheduleConfirmHours: number
   /** Nhắc việc trước hạn số ngày này; 0 là không nhắc. */
   taskReminderDays: number
+  /** FR-TASK-09: cảnh báo (không chặn) khi giao việc làm người nhận vượt số việc đang làm này. */
+  taskOverloadThreshold: number
   /** Hạn quyết toán tạm ứng gợi ý, tính từ ngày đề xuất. */
   advanceSettleDays: number
   /** Mốc bắt đầu học kỳ dạng `MM-DD`; `summerStart` null là không tách kỳ hè. */
@@ -157,4 +195,39 @@ export interface ClubDirectoryQuery {
   q?: string
   page?: number
   size?: number
+}
+
+/** Thẻ CLB ở danh bạ công khai (FR-CLB-05): chỉ thông tin ai cũng xem được theo SRS 3.5, khách chưa đăng nhập cũng xem. */
+export interface PublicClubCard extends ClubContacts {
+  id: string
+  name: string
+  shortName: string
+  field: string
+  description: string
+  logoUrl: string | null
+  openRecruitmentCount: number
+}
+
+export interface PublicClubQuery {
+  q?: string
+  field?: string
+  page?: number
+  size?: number
+}
+
+/** Đợt tuyển đang nhận đơn hiện ở trang công khai của CLB. */
+export interface PublicRecruitmentSummary {
+  id: string
+  name: string
+  closesAt: string
+  departments: Array<{ id: string; name: string; quota: number }>
+}
+
+/** Trang công khai của CLB: không có sĩ số, nội quy, cơ cấu hay người giữ chức vụ (SRS 3.5). */
+export interface PublicClubProfile extends PublicClubCard {
+  openRecruitments: PublicRecruitmentSummary[]
+  /** FR-CLB-07: 6 tin đã xuất bản mới nhất. */
+  news: PublicNewsSummary[]
+  /** FR-CLB-07: sự kiện mở cho khách đang nhận đăng ký. */
+  guestEvents: PublicEventSummary[]
 }

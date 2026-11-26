@@ -14,7 +14,7 @@ const english = () => {
   if (!found) throw new Error('Thiếu lời mời seed')
   return found
 }
-const member = (id: string, kind: StaffMember['kind']): StaffMember => ({ id, fullName: id, departmentName: null, kind, homeClubName: null })
+const member = (id: string, kind: StaffMember['kind']): StaffMember => ({ id, fullName: id, departmentName: null, kind, homeClubName: null, overQuota: false })
 
 describe('co-host display (ST-COH)', () => {
   it('names every state and explains the line under the club', () => {

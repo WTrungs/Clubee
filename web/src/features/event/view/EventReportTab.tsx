@@ -9,6 +9,7 @@ import { Skeleton } from '@/shared/ui/Skeleton'
 import { ErrorState } from '@/shared/ui/StateViews'
 import type { EventAttendanceDay, EventProgress, EventReport, EventStaffStats, TaskProgressCounts } from '../model/eventTypes'
 import { capacityLabel, donePercent, presentDaysLabel, progressSummary, staffRoleLabel, useEventReportViewModel } from '../viewModel/useEventReportViewModel'
+import { ExportMenu } from '@/shared/ui/ExportMenu'
 
 const icon = 'size-5 text-muted-foreground'
 const dayLabel = (day: string) => formatDate(`${day}T12:00:00+07:00`)
@@ -42,6 +43,11 @@ function Registrations({ stats }: { stats: EventReport['registrations'] }) {
         <Stat label="Chờ xác nhận lại" value={stats.reconfirmPending} tone={stats.reconfirmPending > 0 ? 'warning' : undefined} />
         <Stat label="Đã hủy" value={stats.cancelled} />
       </div>
+      {stats.guests > 0 && (
+        <p className="mt-3 text-sm text-muted-foreground">
+          Trong đó {stats.guests} khách mời, {stats.guestsCheckedIn} khách đã có mặt.
+        </p>
+      )}
     </ReportSection>
   )
 }
@@ -242,6 +248,9 @@ export function EventReportTab({ clubId, eventId }: { clubId: string; eventId: s
   const { report } = vm
   return (
     <div className="space-y-8">
+      <div className="-mb-4 flex justify-end">
+        <ExportMenu onExport={vm.exportReport} pending={vm.exporting} label="Xuất báo cáo" />
+      </div>
       <Registrations stats={report.registrations} />
       <Attendance days={report.attendance} />
       <Tasks progress={report.tasks} />

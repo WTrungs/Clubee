@@ -15,11 +15,16 @@ import type {
   RescheduleEventRequest,
   ScheduleChange,
   SetSubcommitteeLeadRequest,
+  InviteCandidate,
   StaffCandidate,
   Subcommittee,
   SubcommitteeAction,
 } from '@/features/event/model/eventTypes'
 import { db } from '../db'
+import { mailGuest } from '../mockGuests'
+import { scheduleConflictsOf } from '../mockScheduleConflicts'
+import { auditExport, eventReportDocument, formatOf, reportFileResponse } from '../mockReportExports'
+import { newActivityBlocked } from '../mockClubStatus'
 import { API, currentUser, matchesKeyword, networkDelay, newId, paginate, problem, writer } from '../mockHttp'
 import { canAccessClub, departmentNameOf, eligibleMembers, isActiveMember, membershipOf, personRef as person } from '../mockMembers'
 import { normalizeEmail } from '../mockInvitations'
@@ -106,6 +111,7 @@ function eventActions(userId: string, event: DbEvent): EventAction[] {
   if (CANCELLABLE.includes(event.status) && can(userId, event.clubId, 'CREATE_EVENT')) actions.push('CANCEL')
   if (closable(event) && runs) actions.push('CLOSE')
   if (STAFF_ACTIVE.includes(event.status) && can(userId, event.clubId, 'MANAGE_EVENT_STAFF', eventScope(event))) actions.push('MANAGE_SUBCOMMITTEES')
+  if (lead) actions.push('DECIDE_STAFF_REQUESTS')
   if (registrationOpen(event) && isActiveMember(userId, event.clubId) && !myRegistration(userId, event)) actions.push('REGISTER')
   // Ban chủ nhiệm CLB đồng tổ chức xem cơ cấu và báo cáo, không xem danh sách tham dự (FR-EVT-09, FR-RPT-05).
   if (canViewStaff(userId, event)) actions.push('VIEW_STAFF', 'VIEW_REPORT')
@@ -149,6 +155,7 @@ function toDetail(event: DbEvent, userId: string): EventDetail {
     approver: event.approverId ? person(event.approverId) : null,
     rejectionReason: event.rejectionReason,
     cancellationReason: event.cancellationReason,
+    staffSignupOpen: event.staffSignupOpen,
     allowedActions: eventActions(userId, event),
     version: event.version,
     createdAt: event.createdAt,
@@ -183,6 +190,7 @@ function toSubcommittee(subcommittee: DbSubcommittee, event: DbEvent, userId: st
       departmentName: departmentNameOf(member.userId, member.homeClubId ?? event.clubId),
       kind: member.kind,
       homeClubName: member.kind === 'CO_HOST' && member.homeClubId ? clubNameOf(member.homeClubId) : null,
+      overQuota: member.overQuota === true,
     }))
   const leadId = positionHolderOf('SUBCOMMITTEE_LEAD', subcommittee.id, historyOnly(event))
   const active = STAFF_ACTIVE.includes(event.status)
@@ -233,10 +241,19 @@ function organizerIds(event: DbEvent): string[] {
 
 /** Người cần biết sự kiện bị hủy: người đăng ký còn hiệu lực, nhân sự BTC, Trưởng BTC (FR-EVT-15); lấy trước khi chức vụ hết hiệu lực. */
 function cancellationRecipients(event: DbEvent): string[] {
-  return [...activeRegistrations(event.id).map((registration) => registration.userId), ...organizerIds(event)]
+  return [...activeRegistrations(event.id).flatMap((registration) => (registration.userId ? [registration.userId] : [])), ...organizerIds(event)]
+}
+
+/** Khách mời nhận thư thay cho thông báo trong hệ thống (FR-EVT-12). */
+function mailGuestsOf(event: DbEvent, subject: string, body: string): void {
+  for (const registration of activeRegistrations(event.id)) if (registration.guest) mailGuest(registration, subject, body)
 }
 
 const RESCHEDULABLE: EventStatus[] = ['APPROVED', 'REGISTRATION_OPEN']
+
+/** Khách mời không có tài khoản: dùng mã đăng ký làm `id` và họ tên khách khai. */
+const attendeeOf = (registration: DbRegistration) =>
+  registration.guest ? { id: registration.id, fullName: registration.guest.fullName } : person(registration.userId ?? '')
 const reasonOk = (reason: string) => reason.length >= REASON_MIN && reason.length <= REASON_MAX
 
 /** Kiểm giờ mới khi dời (FR-EVT-14); hạn đăng ký không gửi thì giữ hạn cũ nên vẫn phải kiểm với giờ bắt đầu mới. */
@@ -370,6 +387,8 @@ export const eventHandlers = [
       ...(body.format !== 'ONLINE' && !(body.location ?? '').trim() ? [{ field: 'location', message: 'Nhập địa điểm tổ chức.' }] : []),
       ...(!leadOk ? [{ field: 'leadUserId', message: 'Trưởng BTC phải là thành viên Thử việc hoặc Chính thức của CLB.' }] : []),
     ]
+    const blocked = newActivityBlocked(clubId)
+    if (blocked) return blocked
     if (errors.length > 0) return problem(400, 'Thông tin sự kiện chưa hợp lệ.', 'VALIDATION', errors)
     const createdAt = nowIso()
     const event: DbEvent = {
@@ -385,6 +404,7 @@ export const eventHandlers = [
       capacity: body.capacity ?? null,
       registrationDeadline: body.registrationDeadline ?? null,
       openToGuests: Boolean(body.openToGuests),
+      staffSignupOpen: false,
       status: creates ? 'APPROVED' : 'DRAFT',
       statusBeforeCancel: null,
       proposerId: user.value.id,
@@ -475,6 +495,7 @@ export const eventHandlers = [
           target: eventTarget(event.clubId, event.id),
           actorId: user.value.id,
         })
+        mailGuestsOf(event, `Sự kiện ${event.name} đã bị hủy`, `Lý do: ${reason}`)
         event.statusBeforeCancel = event.status
         event.status = 'CANCELLED'
         event.cancellationReason = reason
@@ -510,6 +531,23 @@ export const eventHandlers = [
       return problem(403, 'Chỉ ban tổ chức, ban chủ nhiệm và ban chủ nhiệm CLB đồng tổ chức xem được báo cáo sự kiện.', 'FORBIDDEN')
     }
     return HttpResponse.json(eventReport(event, user.value.id))
+  }),
+
+  http.get(`${API}/clubs/:clubId/events/:eventId/report/export`, async ({ request, params }) => {
+    await networkDelay()
+    const user = currentUser()
+    if (!user.ok) return user.response
+    const event = findEvent(params)
+    if (!event || !canViewEvent(user.value.id, event)) return problem(404, 'Không tìm thấy sự kiện.', 'EVENT_NOT_FOUND')
+    if (!eventActions(user.value.id, event).includes('VIEW_REPORT')) {
+      return problem(403, 'Chỉ ban tổ chức, ban chủ nhiệm và ban chủ nhiệm CLB đồng tổ chức xem được báo cáo sự kiện.', 'FORBIDDEN')
+    }
+    const format = formatOf(new URL(request.url))
+    if (format instanceof Response) return format
+    const report = eventReport(event, user.value.id)
+    // Có thống kê theo từng nhân sự thì là dữ liệu cá nhân, ghi nhật ký ở CLB chủ trì.
+    if (report.staff) auditExport(user.value.id, event.clubId, `Báo cáo sự kiện ${event.name}`, format, report.staff.length)
+    return reportFileResponse(eventReportDocument(report, event.name), format)
   }),
 
   http.get(`${API}/clubs/:clubId/events/:eventId/subcommittees`, async ({ params }) => {
@@ -579,14 +617,17 @@ export const eventHandlers = [
     const keyword = url.searchParams.get('q')
     const coHostId = url.searchParams.get('coHostId')
     // Trưởng tiểu ban (kể cả nhân sự CLB đồng tổ chức) được mời thành viên CLB chủ trì nên thấy tên và ban của họ (SRS 3.1, 3.5); không thấy gì khác của CLB (BR-SEC-01).
-    if (!coHostId) return HttpResponse.json(memberCandidates(event.clubId, keyword))
+    // FR-TASK-09: kèm hoạt động chồng giờ với sự kiện để người mời cân nhắc; chỉ cảnh báo, không chặn.
+    const withConflicts = (candidates: StaffCandidate[]): InviteCandidate[] =>
+      candidates.map((candidate) => ({ ...candidate, conflicts: scheduleConflictsOf(candidate.id, { startAt: event.startAt, endAt: event.endAt, excludeEventId: event.id }, event.clubId) }))
+    if (!coHostId) return HttpResponse.json(withConflicts(memberCandidates(event.clubId, keyword)))
     // Nhân sự CLB đồng tổ chức chỉ người có quyền ở cả sự kiện thêm được (FR-EVT-08).
     if (!can(user.value.id, event.clubId, 'MANAGE_EVENT_STAFF', eventScope(event))) {
       return forbidden(event.clubId, 'MANAGE_EVENT_STAFF', 'thêm nhân sự CLB đồng tổ chức', eventScope(event))
     }
     const coHost = acceptedCoHost(event.id, coHostId)
     if (!coHost) return problem(422, 'CLB này không còn đồng tổ chức sự kiện.', 'CO_HOST_NOT_ACTIVE')
-    return HttpResponse.json(coHostCandidates(event, coHost, keyword))
+    return HttpResponse.json(withConflicts(coHostCandidates(event, coHost, keyword)))
   }),
 
   http.post(`${API}/clubs/:clubId/events/:eventId/subcommittees/:subcommitteeId/members`, async ({ request, params }) => {
@@ -708,11 +749,12 @@ export const eventHandlers = [
     const keyword = url.searchParams.get('q')
     const order = (registration: DbRegistration) => (holdsSeat(registration) ? 0 : 1)
     const rows: Registration[] = activeRegistrations(event.id)
-      .filter((registration) => matchesKeyword(person(registration.userId).fullName, keyword))
+      .filter((registration) => matchesKeyword(attendeeOf(registration).fullName, keyword))
       .sort((a, b) => order(a) - order(b) || Date.parse(a.registeredAt) - Date.parse(b.registeredAt))
       .map((registration) => ({
         id: registration.id,
-        attendee: person(registration.userId),
+        attendee: attendeeOf(registration),
+        guest: registration.guest !== null,
         status: registration.status,
         waitlistPosition: waitlistPosition(registration),
         registeredAt: registration.registeredAt,
@@ -742,6 +784,7 @@ export const eventHandlers = [
       cancelKind: null,
       promotedAt: null,
       reconfirmDeadline: null,
+      guest: null,
     }
     db.registrations.push(registration)
     return HttpResponse.json(toMyRegistration(event, registration), { status: 201 })
@@ -798,6 +841,7 @@ export const eventHandlers = [
     Object.assign(event, { startAt: change.toStartAt, endAt: change.toEndAt, registrationDeadline: deadline })
     const { seated, deadline: confirmBy } = requireReconfirmation(event, user.value.id)
     notifyReschedule(event, change, seated, confirmBy)
+    mailGuestsOf(event, `Sự kiện ${event.name} đổi thời gian`, `Thời gian mới: ${formatDateTime(change.toStartAt)}. Chỗ của bạn vẫn giữ nguyên.`)
     event.version += 1
     return HttpResponse.json(toDetail(event, user.value.id))
   }),

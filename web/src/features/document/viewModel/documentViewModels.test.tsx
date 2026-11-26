@@ -7,7 +7,7 @@ import { createTestWrapper, signInAs } from '@/testUtils'
 import { documentFormSchema, parseTags, scopeKeyOf, toUploadRequest, type DocumentFormValues } from './documentFormSchema'
 import { documentQueryKeys, useDocumentsViewModel, useUploadDocumentViewModel } from './useDocumentsViewModel'
 
-vi.mock('@/features/club/viewModel/clubContext', () => ({ useCurrentClub: () => ({ clubId: 'c-guitar' }) }))
+vi.mock('@/features/club/viewModel/clubContext', () => ({ useCurrentClub: () => ({ clubId: 'c-guitar', club: { allowedActions: [] } }) }))
 
 afterEach(() => vi.restoreAllMocks())
 

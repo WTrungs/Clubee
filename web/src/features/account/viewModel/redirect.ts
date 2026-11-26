@@ -4,7 +4,7 @@ export const DEFAULT_AFTER_LOGIN = '/clubs'
 export const ADMIN_HOME = '/admin'
 
 /** Trang Admin cũng mở được (SRS 3.4); các trang còn lại thuộc người dùng CLB. */
-const ADMIN_PATHS = ['/admin', '/me/profile', '/notifications']
+const ADMIN_PATHS = ['/admin', '/me/profile', '/me/notification-settings', '/notifications']
 const isAdminPath = (path: string) => ADMIN_PATHS.some((prefix) => path === prefix || path.startsWith(`${prefix}/`) || path.startsWith(`${prefix}?`))
 
 export const homeOf = (accountType: AccountType) => (accountType === 'ADMIN' ? ADMIN_HOME : DEFAULT_AFTER_LOGIN)

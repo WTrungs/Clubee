@@ -3,6 +3,7 @@ import { useEffect, useMemo } from 'react'
 import { Link, Navigate, Outlet, useLocation, useParams } from 'react-router'
 import { Button } from '@/shared/ui/Button'
 import { rememberLastClubId } from '@/features/account/viewModel/lastClub'
+import { ClubStatusBanner } from '@/features/club/view/ClubStatusBanner'
 import { ClubContext } from '@/features/club/viewModel/clubContext'
 import { useClubDetail } from '@/features/club/viewModel/useClubDetail'
 import { Skeleton } from '@/shared/ui/Skeleton'
@@ -68,6 +69,7 @@ export function ClubLayout() {
 
   return (
     <ClubContext.Provider value={value}>
+      <ClubStatusBanner club={value.club} />
       <Outlet />
     </ClubContext.Provider>
   )

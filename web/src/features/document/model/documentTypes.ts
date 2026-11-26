@@ -13,6 +13,16 @@ export interface DocumentOwner {
   name: string
 }
 
+/** Thao tác máy chủ cho phép: tải phiên bản mới (FR-DOC-03), ẩn, khôi phục (FR-DOC-04). */
+export type DocumentAction = 'UPLOAD_VERSION' | 'HIDE' | 'RESTORE'
+
+/** Tài liệu đã ẩn: chỉ ban chủ nhiệm thấy; họ tên người ẩn chụp lúc ẩn. */
+export interface DocumentHidden {
+  by: PersonRef
+  at: string
+  reason: string
+}
+
 export interface DocumentSummary {
   id: string
   title: string
@@ -26,10 +36,40 @@ export interface DocumentSummary {
   /** Họ tên chụp lúc tải lên; người tải rời CLB thì tài liệu vẫn còn (BR-DATA-02). */
   uploadedBy: PersonRef
   uploadedAt: string
+  /** Số bản hiện hành; tệp, người tải, lúc tải ở trên là của bản này. */
+  currentVersion: number
+  allowedActions: DocumentAction[]
+  hidden: DocumentHidden | null
+  version: number
+}
+
+/** Một phiên bản tài liệu (FR-DOC-03); họ tên người tải chụp lúc tải. */
+export interface DocumentVersion {
+  number: number
+  fileName: string
+  fileSize: number
+  contentType: string
+  note: string
+  uploadedBy: PersonRef
+  uploadedAt: string
+  current: boolean
 }
 
 export interface DocumentDetail extends DocumentSummary {
   description: string
+  /** Mọi phiên bản, mới nhất trước. */
+  versions: DocumentVersion[]
+}
+
+export interface HideDocumentRequest {
+  reason: string
+  version: number
+}
+
+export interface UploadVersionRequest {
+  file: File
+  note: string
+  version: number
 }
 
 /** Nơi người dùng được tải lên (quyền `MANAGE_DOCUMENTS` theo phạm vi). */
@@ -51,6 +91,8 @@ export interface DocumentQuery {
   termId?: string
   ownerType?: DocumentOwnerType
   ownerId?: string
+  /** Chỉ ban chủ nhiệm: xem danh sách tài liệu đã ẩn. */
+  hidden?: boolean
   page?: number
 }
 

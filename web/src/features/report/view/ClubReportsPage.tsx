@@ -18,6 +18,7 @@ import { departmentTotals, useClubReportsViewModel, type ClubReportsViewModel } 
 import { AttendanceStats, ReportSection, Stat } from './ReportBlocks'
 import { AuditLogPanel } from './AuditLogPanel'
 import { ReportPeriodPicker } from './ReportPeriodPicker'
+import { ExportMenu } from '@/shared/ui/ExportMenu'
 
 const icon = 'size-5 text-muted-foreground'
 const dayLabel = (day: string) => formatDate(`${day}T12:00:00+07:00`)
@@ -289,6 +290,11 @@ export function ClubReportsPage() {
                 </FormField>
               )}
             </ReportPeriodPicker>
+          )}
+          {vm.canExport && (
+            <div className="flex justify-end">
+              <ExportMenu onExport={vm.exportReport} pending={vm.exporting} label="Xuất báo cáo" />
+            </div>
           )}
           <Body vm={vm} />
         </div>

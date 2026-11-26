@@ -38,6 +38,11 @@ export const memberRepository = {
         size: query.size,
       },
     }),
+  /** FR-MEM-11: tệp Excel theo bộ lọc đang chọn, chỉ trường người xuất được xem; máy chủ ghi nhật ký. */
+  exportList: (clubId: string, query: MemberQuery) =>
+    httpClient.download(`${club(clubId)}/members/export`, {
+      query: { format: 'xlsx', q: query.q, status: query.status, departmentId: query.departmentId, role: query.role, joinYear: query.joinYear },
+    }),
   facets: (clubId: string) => httpClient.get<MemberFacets>(`${club(clubId)}/members/facets`),
   get: (clubId: string, membershipId: string) => httpClient.get<MemberDetail>(member(clubId, membershipId)),
   /** FR-MEM-05: chức danh hiển thị, ghi chú nội bộ, MSSV, ngày gia nhập. */

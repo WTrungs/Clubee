@@ -21,10 +21,18 @@ export function useClubOverviewViewModel() {
   const [profileOpen, setProfileOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [composeOpen, setComposeOpen] = useState(false)
+  const [statusOpen, setStatusOpen] = useState(false)
+  const canEditClub = club.allowedActions.includes('EDIT_CLUB')
+  const canChangeStatus = club.allowedActions.includes('CHANGE_CLUB_STATUS')
   return {
     club,
-    /** FR-CLB-02, 03: menu Quản lý CLB chỉ hiện khi máy chủ trả `EDIT_CLUB`. */
-    canManageClub: club.allowedActions.includes('EDIT_CLUB'),
+    /** FR-CLB-02, 03, 04: menu Quản lý CLB hiện khi máy chủ trả `EDIT_CLUB` hoặc `CHANGE_CLUB_STATUS`. */
+    canManageClub: canEditClub || canChangeStatus,
+    canEditClub,
+    canChangeStatus,
+    statusOpen,
+    openStatus: () => setStatusOpen(true),
+    closeStatus: () => setStatusOpen(false),
     profileOpen,
     openProfile: () => setProfileOpen(true),
     closeProfile: () => setProfileOpen(false),

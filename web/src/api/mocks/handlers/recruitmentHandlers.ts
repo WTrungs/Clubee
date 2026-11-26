@@ -12,6 +12,7 @@ import { REASON_MAX, REASON_MIN } from '@/shared/lib/reasonRules'
 import { ROUND_NOTE_MAX, ROUND_SCORE_MAX, ROUND_SCORE_MIN } from '@/shared/lib/recruitmentRules'
 import { matchesKeyword } from '@/shared/lib/searchText'
 import { db, type DbRecruitment } from '../db'
+import { dissolvedProblem, isClubDissolved, newActivityBlocked } from '../mockClubStatus'
 import { forbidden } from '../mockAccess'
 import { API, currentUser, networkDelay, newId, paginate, problem, writer } from '../mockHttp'
 import {
@@ -87,6 +88,8 @@ export const recruitmentHandlers = [
     const clubId = String(params.clubId)
     if (!canAccessClub(user.value.id, clubId)) return notMember()
     if (!canManageRecruitment(user.value.id, clubId)) return forbidden(clubId, 'MANAGE_MEMBERS', 'mở đợt tuyển')
+    const blocked = newActivityBlocked(clubId)
+    if (blocked) return blocked
     const body = (await request.json()) as Partial<RecruitmentRequest>
     const { value, errors } = parseRecruitment(clubId, body)
     if (errors.length > 0) return problem(400, 'Thông tin đợt tuyển chưa hợp lệ.', 'VALIDATION', errors)
@@ -308,6 +311,7 @@ export const recruitmentHandlers = [
     if (application.status !== 'ADMITTED') return problem(422, 'Chỉ trả lời được khi đơn đang Trúng tuyển.', 'APPLICATION_NOT_ADMITTED')
     if (!canRespond(application)) return problem(422, 'Đã quá hạn nhận kết quả.', 'RESPONSE_EXPIRED')
     if (body.decision !== 'ACCEPT' && body.decision !== 'DECLINE') return problem(400, 'Chọn Nhận hoặc Từ chối.', 'VALIDATION', [{ field: 'decision', message: 'Chọn Nhận hoặc Từ chối.' }])
+    if (body.decision === 'ACCEPT' && isClubDissolved(application.clubId)) return dissolvedProblem()
     if (body.decision === 'ACCEPT') {
       const blocked = admissionBlocker(application)
       if (blocked) return problem(422, blocked.message, blocked.code)
@@ -322,7 +326,7 @@ export const recruitmentHandlers = [
     if (!user.ok) return user.response
     const url = new URL(request.url)
     const rows = db.recruitments
-      .filter((recruitment) => recruitmentStatusOf(recruitment) === 'OPEN')
+      .filter((recruitment) => recruitmentStatusOf(recruitment) === 'OPEN' && !isClubDissolved(recruitment.clubId))
       .map(toOpenRecruitment)
       .filter((row) => matchesKeyword(`${row.name} ${row.club.name}`, url.searchParams.get('q')))
       .toSorted((a, b) => a.closesAt.localeCompare(b.closesAt))
@@ -348,6 +352,7 @@ export const recruitmentHandlers = [
     if (!recruitment || recruitmentStatusOf(recruitment) === 'UPCOMING') return problem(404, 'Không tìm thấy đợt tuyển.', 'RECRUITMENT_NOT_FOUND')
     if (applicationOf(recruitment.id, user.value.id)) return problem(409, 'Bạn đã nộp đơn cho đợt tuyển này (kể cả đơn đã rút).', 'ALREADY_APPLIED')
     if (hasCurrentMembership(user.value.id, recruitment.clubId)) return problem(422, ALREADY_MEMBER_MESSAGE, 'ALREADY_MEMBER')
+    if (isClubDissolved(recruitment.clubId)) return dissolvedProblem()
     if (recruitmentStatusOf(recruitment) !== 'OPEN') return problem(422, 'Đợt tuyển đã hết thời gian nhận đơn.', 'RECRUITMENT_NOT_OPEN')
     const body = (await request.json()) as Partial<SubmitApplicationRequest>
     const { value, errors } = parseApplication(recruitment, body)

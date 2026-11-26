@@ -12,6 +12,7 @@ import { EmptyState } from '@/shared/ui/StateViews'
 import { memberStatusDisplay } from '../viewModel/memberStatus'
 import { useMyClubsViewModel } from '../viewModel/useMyClubsViewModel'
 import { CreateClubSheet } from '@/features/club/view/CreateClubSheet'
+import { clubStatusDisplay } from '@/features/club/viewModel/clubStatusDisplay'
 import { ClubMonogram } from './ClubMonogram'
 
 export function MyClubsPage() {
@@ -94,6 +95,7 @@ export function MyClubsPage() {
                       <Badge tone={status.tone} dot>
                         {status.label}
                       </Badge>
+                      {membership.clubStatus !== 'ACTIVE' && <Badge tone={clubStatusDisplay[membership.clubStatus].tone}>CLB {clubStatusDisplay[membership.clubStatus].label.toLowerCase()}</Badge>}
                       {membership.positionTitles.map((title) => (
                         <Badge key={title} tone="progress">
                           {title}

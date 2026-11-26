@@ -1,3 +1,5 @@
+import type { ClubStatus } from '@/features/club/model/clubTypes'
+
 /** ST-MEM: Chờ duyệt, Thử việc, Chính thức, Tạm nghỉ, Đã rời. */
 export type MemberStatus = 'PENDING' | 'PROBATION' | 'ACTIVE' | 'ON_LEAVE' | 'LEFT'
 
@@ -11,6 +13,7 @@ export interface ClubMembershipSummary {
   departmentName: string | null
   positionTitles: string[]
   memberCount: number
+  clubStatus: ClubStatus
 }
 
 /** Sự kiện người dùng đang làm BTC ở CLB mà họ không là thành viên (FR-ACC-06). */
@@ -80,5 +83,19 @@ export interface EmailChangeReceipt {
 
 export interface ChangePasswordRequest {
   currentPassword: string
+  newPassword: string
+}
+
+/** FR-ACC-03: liên kết dùng một lần; đã dùng hoặc đã có liên kết mới hơn thì là `USED`. */
+export type PasswordResetLinkStatus = 'VALID' | 'EXPIRED' | 'USED'
+
+export interface PasswordResetLink {
+  status: PasswordResetLinkStatus
+  /** Email đã che bớt, ví dụ `an***@demo.test`. */
+  emailHint: string
+  expiresAt: string
+}
+
+export interface CompletePasswordResetRequest {
   newPassword: string
 }

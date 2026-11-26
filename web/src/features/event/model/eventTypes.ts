@@ -26,6 +26,8 @@ export type EventCapability =
   | 'VIEW_REGISTRATIONS'
   | 'VIEW_FUND'
   | 'VIEW_ATTENDANCE'
+  /** FR-EVT-06: Trưởng BTC duyệt, từ chối yêu cầu vào tiểu ban vượt chỉ tiêu (BR-EVT-07). */
+  | 'DECIDE_STAFF_REQUESTS'
 
 export type EventAction = EventTransitionAction | EventCapability
 
@@ -79,6 +81,8 @@ export interface EventDetail extends EventSummary {
   cancellationReason: string | null
   /** Trạng thái cuối cùng đạt được trước khi hủy, để hiện tiến trình. */
   statusBeforeCancel: EventStatus | null
+  /** FR-EVT-06: BTC mở cho thành viên tự đăng ký vào tiểu ban. */
+  staffSignupOpen: boolean
   allowedActions: EventAction[]
   version: number
   createdAt: string
@@ -116,6 +120,9 @@ export interface EventRegistrationStats {
   waitlisted: number
   reconfirmPending: number
   cancelled: number
+  /** Khách mời còn đăng ký (FR-EVT-12) và số khách đã được ghi có mặt ít nhất một ngày. */
+  guests: number
+  guestsCheckedIn: number
 }
 
 /** Điểm danh một ngày của sự kiện; `expected` là người giữ chỗ, sau khi chốt là người có bản ghi. */
@@ -174,6 +181,8 @@ export interface StaffMember extends PersonRef {
   kind: StaffKind
   /** CLB gốc của nhân sự CLB đồng tổ chức; null với thành viên CLB chủ trì và CTV. */
   homeClubName: string | null
+  /** Vào tiểu ban vượt chỉ tiêu nhờ Trưởng BTC duyệt ngoại lệ (BR-EVT-07). */
+  overQuota: boolean
 }
 
 /**
@@ -266,9 +275,16 @@ export interface StaffCandidate extends PersonRef {
   departmentName: string | null
 }
 
+/** Ứng viên mời vào tiểu ban kèm hoạt động chồng giờ với sự kiện (FR-TASK-09). */
+export interface InviteCandidate extends StaffCandidate {
+  conflicts: ScheduleConflict[]
+}
+
 export interface Registration {
   id: string
+  /** Khách mời không có tài khoản: `id` là mã đăng ký, `fullName` là họ tên khách khai. */
   attendee: PersonRef
+  guest: boolean
   status: RegistrationStatus
   waitlistPosition: number | null
   registeredAt: string
@@ -321,4 +337,128 @@ export interface EventQuery {
   termId?: string
   page?: number
   size?: number
+}
+
+/** FR-CLB-07, FR-EVT-12: sự kiện mở cho khách trên trang công khai; không có BTC, quỹ, danh sách người đăng ký. */
+export interface PublicEventSummary {
+  id: string
+  clubId: string
+  clubName: string
+  name: string
+  startAt: string
+  endAt: string
+  format: EventFormat
+  location: string | null
+  capacity: number | null
+  /** `null` khi không giới hạn chỗ; 0 thì đăng ký mới vào danh sách chờ. */
+  seatsLeft: number | null
+  registrationDeadline: string | null
+}
+
+export interface PublicEventDetail extends PublicEventSummary {
+  description: string
+  clubShortName: string
+  clubLogoUrl: string | null
+  /** Đang Mở đăng ký và chưa quá hạn (BR-EVT-02). */
+  registrationOpen: boolean
+}
+
+/** FR-EVT-12: khách mời đăng ký trên trang công khai. */
+export interface GuestRegistrationRequest {
+  fullName: string
+  email?: string
+  phone?: string
+}
+
+export type GuestPassAction = 'CANCEL'
+
+/** Vé của khách: mở bằng mã tham dự trong email, không cần đăng nhập. */
+export interface GuestPass {
+  code: string
+  fullName: string
+  emailHint: string | null
+  phoneHint: string | null
+  status: RegistrationStatus
+  waitlistPosition: number | null
+  registeredAt: string
+  /** Ngày (yyyy-mm-dd) BTC đã ghi có mặt. */
+  checkedInDays: string[]
+  event: PublicEventSummary
+  allowedActions: GuestPassAction[]
+}
+
+/** Dòng khách mời cho BTC tra cứu và ghi có mặt (FR-ATT-07); liên hệ đã che bớt. */
+export interface GuestRegistrationRow {
+  id: string
+  fullName: string
+  emailHint: string | null
+  phoneHint: string | null
+  code: string
+  status: RegistrationStatus
+  checkedIn: boolean
+  checkedInAt: string | null
+}
+
+/** FR-EVT-06: tiểu ban thành viên tự đăng ký được. */
+export interface SignupSubcommittee {
+  id: string
+  name: string
+  description: string
+  quota: number | null
+  memberCount: number
+  /** Đủ chỉ tiêu: đăng ký thành yêu cầu vượt chỉ tiêu chờ Trưởng BTC duyệt. */
+  full: boolean
+}
+
+export type StaffSignupRequestStatus = 'PENDING' | 'APPROVED' | 'REJECTED'
+
+export interface MyStaffSignupRequest {
+  id: string
+  subcommitteeName: string
+  status: StaffSignupRequestStatus
+  note: string
+  reason: string | null
+  createdAt: string
+}
+
+/** Thông tin cho thành viên CLB chủ trì: BTC đang mở đăng ký nhân sự không, tôi đã ở tiểu ban nào, yêu cầu gần nhất. */
+export interface StaffSignupInfo {
+  open: boolean
+  subcommittees: SignupSubcommittee[]
+  mySubcommitteeName: string | null
+  myRequest: MyStaffSignupRequest | null
+  canSignUp: boolean
+  /** FR-TASK-09: hoạt động của chính mình chồng giờ với sự kiện. */
+  conflicts: ScheduleConflict[]
+}
+
+export interface StaffSignupRequest {
+  subcommitteeId: string
+  note?: string
+}
+
+export interface StaffSignupSetting {
+  open: boolean
+  version: number
+}
+
+/** Yêu cầu vượt chỉ tiêu chờ Trưởng BTC xử lý. */
+export interface PendingStaffSignup {
+  id: string
+  person: PersonRef
+  departmentName: string | null
+  subcommitteeId: string
+  subcommitteeName: string
+  quota: number | null
+  memberCount: number
+  note: string
+  createdAt: string
+}
+
+/** FR-TASK-09: hoạt động chồng giờ của một người; hoạt động ở CLB khác không lộ tên (`title` null). */
+export interface ScheduleConflict {
+  kind: 'SESSION' | 'EVENT'
+  title: string | null
+  startAt: string
+  endAt: string
 }

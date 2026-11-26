@@ -3,6 +3,7 @@ import { ArrowLeft, CalendarClock, CalendarCog, Eye, Lock, Send, ShieldCheck, Sh
 import type { ReactNode } from 'react'
 import { Link } from 'react-router'
 import { AttendancePanel } from '@/features/attendance/view/AttendancePanel'
+import { GuestCheckInSection } from './GuestCheckInSection'
 import { FundPanel } from '@/features/finance/view/FundPanel'
 import { duration, easeOut } from '@/shared/motion/presets'
 import { Button } from '@/shared/ui/Button'
@@ -154,7 +155,10 @@ export function EventDetailPage() {
         </TabsContent>
         {vm.canViewAttendance && (
           <TabsContent value="attendance" className="pt-5">
-            <AttendancePanel activity={{ type: 'EVENT', clubId: vm.clubId, id: event.id }} />
+            <AttendancePanel
+              activity={{ type: 'EVENT', clubId: vm.clubId, id: event.id }}
+              extra={event.openToGuests ? (day, canMark) => <GuestCheckInSection clubId={vm.clubId} eventId={event.id} day={day} canMark={canMark} /> : undefined}
+            />
           </TabsContent>
         )}
         {vm.fundId && (
